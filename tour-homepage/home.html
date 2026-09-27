@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,minimum-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="renderer" content="webkit">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>game.joho.cn · 古城志</title>
+<meta name="description" content="古城镇旅游场景 · 汉字塔防 · 汉字自走棋 · 三国合成塔防 · 武侠江湖 — 8 款小游戏随时开玩">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#f5f3ee;color:#2d2a26;line-height:1.5;-webkit-tap-highlight-color:transparent}
+.wrap{max-width:480px;margin:0 auto;background:#fff;min-height:100vh}
+
+/* ===== HERO ===== */
+.a-hero{position:relative;aspect-ratio:16/10;background:linear-gradient(135deg,#8b5a2b 0%,#d4a574 40%,#6b4423 100%);overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding:20px 20px 24px;text-decoration:none;color:inherit;display:block}
+.a-hero::before{content:'';position:absolute;inset:0;background:radial-gradient(ellipse at 70% 30%,rgba(255,255,255,.15) 0%,transparent 60%)}
+.a-hero::after{content:'🏯';position:absolute;top:14px;right:18px;font-size:46px;opacity:.85;filter:drop-shadow(0 2px 6px rgba(0,0,0,.2))}
+.a-hero-title{position:relative;font-size:26px;font-weight:900;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.4);letter-spacing:2px}
+.a-hero-sub{position:relative;font-size:13px;color:rgba(255,255,255,.9);margin-top:4px;letter-spacing:1px}
+.a-hero-meta{position:relative;margin-top:12px;display:flex;gap:8px}
+.a-chip{font-size:11px;padding:4px 10px;border-radius:14px;background:rgba(255,255,255,.22);backdrop-filter:blur(4px);color:#fff;border:1px solid rgba(255,255,255,.3)}
+
+/* ===== SECTION 标题 ===== */
+.a-section{padding:22px 16px 4px}
+.a-section-title{font-size:16px;font-weight:800;color:#1a1815;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+.a-section-title::before{content:'';display:inline-block;width:4px;height:16px;background:#c8a670;border-radius:2px}
+.a-section-sub{font-size:12px;color:#9a9590;margin-bottom:14px;padding-left:10px}
+
+/* ===== 游戏卡片 ===== */
+.game-card{text-decoration:none;color:inherit;display:block;border-radius:16px;overflow:hidden;background:#fff;border:1px solid #ece6db;transition:transform .15s}
+.game-card:active{transform:scale(.97)}
+.game-thumb{aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:900;letter-spacing:4px}
+.game-info{padding:12px 14px 14px}
+.game-title{font-size:15px;font-weight:700;color:#1a1815;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.game-tag{font-size:10px;font-weight:500;padding:2px 6px;border-radius:4px;background:#f5ebd6;color:#a8752c;border:1px solid #e8dcc8}
+.game-desc{font-size:12px;color:#8a8580;margin-top:4px;line-height:1.4}
+.badge-new{background:#ff6b6b;color:#fff;font-size:10px;padding:2px 6px;border-radius:10px;margin-left:auto;font-weight:600}
+.a-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:0 16px 6px}
+.a-featured{grid-column:span 2}
+
+/* ===== 8 种配色 ===== */
+.a-color-tour .game-thumb{background:linear-gradient(135deg,#e8d5b7,#c9a96e);color:#6b4423}
+.a-color-tower .game-thumb{background:linear-gradient(135deg,#f5deb3,#8b4513);color:#2d1810}
+.a-color-chess .game-thumb{background:linear-gradient(135deg,#d4c5a9,#6b5b3a);color:#2a2010}
+.a-color-sanguo .game-thumb{background:linear-gradient(135deg,#e8a87c,#a83232);color:#2a0808}
+.a-color-jianghu .game-thumb{background:linear-gradient(135deg,#9ba3b0,#3a4553);color:#f8f5f0}
+.a-color-jianghu1 .game-thumb{background:linear-gradient(135deg,#a8d8a8,#2d5a2d);color:#1a2d1a}
+.a-color-xxl .game-thumb{background:linear-gradient(135deg,#ffc9de,#ff80a8);color:#8b1a3a}
+.a-color-ddz .game-thumb{background:linear-gradient(135deg,#d4efdf,#1e8449);color:#0a2d1a}
+
+/* ===== FOOTER ===== */
+.a-footer{padding:24px 20px 32px;text-align:center;font-size:11px;color:#9a9590;line-height:1.8}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- HERO → 古城镇旅游场景 -->
+<a class="a-hero" href="./index.html">
+  <div class="a-hero-title">古城镇</div>
+  <div class="a-hero-sub">一座城 · 一段故事 · 一场游戏</div>
+  <div class="a-hero-meta">
+    <span class="a-chip">🏯 游览</span>
+    <span class="a-chip">⚔️ 策略</span>
+    <span class="a-chip">📖 江湖</span>
+  </div>
+</a>
+
+<!-- 游览体验 -->
+<div class="a-section">
+  <div class="a-section-title">游览体验</div>
+  <div class="a-section-sub">LayaAir 2D · 可走可逛可互动</div>
+</div>
+<div class="a-grid">
+  <a class="game-card a-featured a-color-tour" href="./index.html">
+    <div class="game-thumb">TOUR</div>
+    <div class="game-info">
+      <div class="game-title">古城镇 · 旅游场景<span class="badge-new">HOT</span></div>
+      <div class="game-desc">NPC 对话 · 砍树搭桥 · 任务链 · 存档背包</div>
+    </div>
+  </a>
+</div>
+
+<!-- 策略游戏 -->
+<div class="a-section">
+  <div class="a-section-title">策略游戏</div>
+  <div class="a-section-sub">北山汉字 · 合成塔防 + 自走棋</div>
+</div>
+<div class="a-grid">
+  <a class="game-card a-color-tower" href="./tower.html">
+    <div class="game-thumb">TWR</div>
+    <div class="game-info">
+      <div class="game-title">汉字塔防<span class="game-tag">塔防</span></div>
+      <div class="game-desc">弓·守·旗·鼓 四兵种 A* 寻路 5 波攻防</div>
+    </div>
+  </a>
+  <a class="game-card a-color-chess" href="./chess.html">
+    <div class="game-thumb">CHS</div>
+    <div class="game-info">
+      <div class="game-title">汉字自走棋<span class="game-tag">自走棋</span></div>
+      <div class="game-desc">三合一升星 · 双羁绊 · 移动作战</div>
+    </div>
+  </a>
+  <a class="game-card a-featured a-color-sanguo" href="./sanguo.html">
+    <div class="game-thumb">SG</div>
+    <div class="game-info">
+      <div class="game-title">三国 · 合成塔防<span class="badge-new">新上线</span></div>
+      <div class="game-desc">刀枪骑弓克制环 · 赵云集字召唤 · 5 波军令守护</div>
+    </div>
+  </a>
+</div>
+
+<!-- 江湖叙事 -->
+<div class="a-section">
+  <div class="a-section-title">江湖叙事</div>
+  <div class="a-section-sub">文字冒险 + 地图打卡册</div>
+</div>
+<div class="a-grid">
+  <a class="game-card a-color-jianghu" href="../jianghu/">
+    <div class="game-thumb">JH1</div>
+    <div class="game-info">
+      <div class="game-title">游吉林市北上<span class="game-tag">文字</span></div>
+      <div class="game-desc">武侠文字冒险 · Vue SPA</div>
+    </div>
+  </a>
+  <a class="game-card a-color-jianghu1" href="../jianghu1/">
+    <div class="game-thumb">JH2</div>
+    <div class="game-info">
+      <div class="game-title">江湖录 · 行脚图<span class="game-tag">地图</span></div>
+      <div class="game-desc">Demo A · 古风地图打卡册</div>
+    </div>
+  </a>
+</div>
+
+<!-- 休闲小游戏 -->
+<div class="a-section">
+  <div class="a-section-title">休闲小游戏</div>
+  <div class="a-section-sub">即将上线 · 敬请期待</div>
+</div>
+<div class="a-grid">
+  <a class="game-card a-color-xxl" href="./xxl.html">
+    <div class="game-thumb">XXL</div>
+    <div class="game-info">
+      <div class="game-title">消消乐<span class="badge-new">新上线</span></div>
+      <div class="game-desc">Match3 · LayaAir 休闲消除</div>
+    </div>
+  </a>
+  <a class="game-card a-color-ddz" href="#">
+    <div class="game-thumb">DDZ</div>
+    <div class="game-info">
+      <div class="game-title">斗地主<span class="badge-new">即将上线</span></div>
+      <div class="game-desc">经典扑克 · 三人对战</div>
+    </div>
+  </a>
+</div>
+
+<!-- FOOTER -->
+<div class="a-footer">
+  game.joho.cn · johocn · 2026<br>
+  所有游戏均可直接在浏览器游玩 · 无需下载
+</div>
+
+</div>
+</body>
+</html>
