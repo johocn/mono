@@ -1,0 +1,55 @@
+/**
+ * 游戏经济口径（spec §5.4）：开局资金 / 经过起点奖励 / 破产线 / 建造价与租金 / 回合上限。
+ * `PRICE_BY_LEVEL` 与 `RENT_BY_LEVEL` 的唯一真源是 `board.ts` 的展示表
+ * （Task 19/20 的橱窗与三级对照卡已消费它），此处只做对外的口径再导出，避免数值两处漂移。
+ */
+import { PRICE_BY_LEVEL, RENT_BY_LEVEL } from './board';
+
+export { PRICE_BY_LEVEL, RENT_BY_LEVEL };
+
+/** 开局资金 ￥3,000 */
+export const START_CASH = 3000;
+/** 经过起点（含正好落在起点）一次 +￥200 */
+export const PASS_START_BONUS = 200;
+/** 破产分界：现金 < 0 且无可变卖地产 → 破产 */
+export const BANKRUPT_CASH_LINE = 0;
+/** 建筑最高层级 */
+export const MAX_LEVEL = 3;
+/** 升级施工工期：升级当回合起 1 个回合内不可收租 */
+export const BUILD_TURNS = 1;
+/** 变卖价 = 该地块累计投入的一半（向下取整） */
+export const SELL_RATIO = 0.5;
+/**
+ * 回合上限（轮）= 胜负兜底。
+ * 租金是玩家之间的零和转移，不会自行收敛；若只按「仅剩 1 名未破产」判胜，
+ * 经济稳态下整局可能永不结束（spec §5.4 只给了破产线，未给时间上限）。
+ * 故补一条硬规则：跑满 ROUND_LIMIT 轮后按净资产（现金 + 地产投入）排名定胜者。
+ */
+export const ROUND_LIMIT = 60;
+
+/** 第 level 级的建造 / 升级价（0 级 = 空地，不可建） */
+export function buyPrice(level: number): number {
+  return PRICE_BY_LEVEL[level] ?? 0;
+}
+
+/** 第 level 级的路过租金 */
+export function rentOf(level: number): number {
+  return RENT_BY_LEVEL[level] ?? 0;
+}
+
+/** 下一层级（3 级封顶） */
+export function nextLevel(level: number): number {
+  return Math.min(level + 1, MAX_LEVEL);
+}
+
+/** 只有已成楼（≥1 级）且未封顶才可升级 */
+export function canUpgrade(level: number): boolean {
+  return level >= 1 && level < MAX_LEVEL;
+}
+
+/** 变卖价：1 级 ￥30 / 2 级 ￥120 / 3 级 ￥330 */
+export function sellValue(level: number): number {
+  let invested = 0;
+  for (let l = 1; l <= Math.min(level, MAX_LEVEL); l++) invested += buyPrice(l);
+  return Math.floor(invested * SELL_RATIO);
+}
