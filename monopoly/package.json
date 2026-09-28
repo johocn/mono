@@ -13,6 +13,7 @@
     "lint": "eslint src tools",
     "lint:skin": "node tools/gen-registry-ids.mjs && node tools/lint-skin.mjs",
     "perf": "node local/mono-perf.mjs",
+    "perf:android": "node local/mono-perf-android.mjs",
     "shots:m5": "node local/mono-shots-m5.mjs",
     "shots:m6": "node local/mono-shots-m6.mjs",
     "deploy": "node ../scripts/deploy-mono.mjs",
