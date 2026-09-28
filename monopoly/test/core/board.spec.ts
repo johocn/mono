@@ -22,8 +22,8 @@ describe('board 数据（spec §4）', () => {
     expect(typeAt(0)).toBe('core');
     expect(typeAt(12)).toBe('jail');
     expect(typeAt(19)).toBe('stock');
-    expect(nameAt(0)).toBe('优美惠市集生鲜超市');
-    expect(shortAt(0)).toBe('优美惠超市');
+    expect(nameAt(0)).toBe('鹿乡特色小镇');
+    expect(shortAt(0)).toBe('鹿乡小镇');
   });
 
   it('命运卡 5 格 / 机会卡 5 格（与 v5 样张 TYPES 分布一致）', () => {

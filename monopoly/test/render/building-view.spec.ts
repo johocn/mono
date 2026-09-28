@@ -65,7 +65,7 @@ describe('BuildingView · 楼与店招', () => {
     const p = sign.overrides?.['building.s18.sign'] as { preset: string; params: Record<string, unknown> };
     expect(p.preset).toBe('sign');
     expect(p.params.levels).toBe(3);
-    expect(p.params.brand).toBe('火锅店');
+    expect(p.params.brand).toBe(TILE_BRAND[18]);
   });
 });
 
@@ -98,7 +98,7 @@ describe('BuildingView · 挂件', () => {
     const b = banners.find((s) => s.slot === 26);
     const p = b?.overrides?.['prop.banner'] as { preset: string; params: Record<string, unknown> };
     expect(p.preset).toBe('banner');
-    expect(p.params.text).toBe('酒厂');
+    expect(p.params.text).toBe(SLOT_BANNER[26]);
   });
 
   it('挂件带 slot（抬升交给注册表 + 管线），且不自己写覆盖', () => {

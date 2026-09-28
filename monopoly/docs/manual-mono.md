@@ -152,17 +152,63 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 
 **环境偏差（精确记录）**：① 脚本步骤 1 在 Windows 上经 `powershell.exe -NoProfile -Command "npm run build"` 调起（等价 `npm run build`）——经 `cmd.exe` 间接 spawn npm 时 vite 6.4 抛 `[vite:html-inline-proxy] No matching HTML proxy module found`（已实测复现），改走 PowerShell 即稳；② 远程校验用 Node 内置 `fetch` 替代计划里的 `curl | wc -c`（Windows 无 `wc`、`curl` 为 PowerShell 别名），字节数比对等价。服务器侧始终只 `cp`/`tar -x`，绝无 `npm`/`vite`/`node`。
 
+### M8 微信分享 / 裂变入口
+
+**定位**：M1–M7 完成后新增的**独立分享层**（`src/ui/share.ts` + `src/data/share.ts`），不依赖券/积分/认领等商业闭环决策。可见像素全在 **DOM/CSS 层**（按 M1–M7 约定：只有画在画布上的可见像素才走注册表 + `skin.json`），故 `src/render/**` 零改动、`npm run lint`（禁写死 gate）不受影响。
+
+| # | 步骤 | 期望 | 截图 |
+|---|---|---|---|
+| M8-1 | 打开 `mono.html?play=1&seed=20260928&nofx=1` | 左上角顶栏留白带出现金色药丸「分享」CTA（`#mono-share button[data-action="share"]`，台位 `{left:8, top:5, w:78, h:26}`），不压底部操作坞 / 手牌浮层 / 中部橱窗 / 棋盘 / 右上角 `?debug=1` 切换器 | `mono-share-01-cta.png` |
+| M8-2 | 点「分享」 | 底部弹出分享浮层：标题「分享给街坊」+ 分享卡预览（标题 / 描述）+ 按钮「复制链接」「关闭」；点「复制链接」得「标题\\n描述\\n<无 `#` 的页面 URL>」 | `mono-share-02-result.png` |
+| M8-3 | 控制台 `__monoMain.sim()` 终局后再点「分享」 | 浮层多出「复制战绩」按钮，文案为「我在双阳邻里大富翁里赢麻了 / 被街坊们收了租（净资产 ￥X）」，随胜负切换 | 同上 |
+| M8-4 | **非微信**环境打开 | `window.__monoShareStatus === 'skipped'`；页头 `og:*` / `twitter:*` meta 就位；无控制台报错 | — |
+| M8-5 | 微信 UA + 签名端点**未配置**（返回空签名）打开 | `window.__monoShareStatus === 'fallback'`；不加载 SDK、静默降级到「复制链接」兜底；**无控制台报错 / 无未捕获异常** | `mono-share-03-fallback.png` |
+| M8-6 | 跑 `node local/mono-share-check.mjs` | 13 项 `gate` 全 `true`、`errors=[]`、退出码 0 | 上述全部 |
+
+**分享卡参数**（改文案只动 `src/data/share.ts`，**不在渲染代码里写死**）：
+
+| 项 | 值 |
+|---|---|
+| `og:title` | 双阳邻里大富翁 · 掷骰逛遍 32 家街坊好店 |
+| `og:description` | 吉林双阳的邻里商业版大富翁：买地、升级、收租、炒股，一局打完看谁是街坊首富。 |
+| `og:image` | `<页面同源>/share/share-card.png?v=<SHARE_VERSION>`（绝对 URL，`?v=` 破微信缓存） |
+| `og:url` | `<页面 URL 去掉 # 之后>`（微信签名/卡片要求不含 `#`） |
+| 尺寸 | 800×640（5:4，`summary_large_image`） |
+
+**分享缩略图生成**：`node tools/gen-share-card.mjs`——Playwright 打开本地 dev（默认 `http://127.0.0.1:52300`）隐藏 UI 后截真棋盘 dpr2 主视觉，再合成 800×640 品牌卡（标题 / 副标题 / 城市徽标），写 `public/share/share-card.png`；产物体积 > 300KB 即 `exit(1)`（微信对大图不友好）。当前产物 **800×640 · 274903 bytes（268.5 KB）**。该图随 `npm run build` 复制进 `release/` 被 deploy 整包带上线。
+
+**微信 JS-SDK 签名契约（复用 zhao-sso，勿另造）**：
+
+- 端点：`POST https://h.joho.cn/api/zhao-sso/v1/auth/jssdk-signature`（`game.joho.cn` 自身 nginx **无** `/api/` 代理，故客户端**跨域**直连 `h.joho.cn`；Strapi CORS 反射 `Origin`，已实测 `Access-Control-Allow-Origin: https://game.joho.cn`）。
+- 请求体：`{ "url": "<不含 # 的页面 URL>", "appType": "official_account" }`。
+- 响应体：`{ appId, timestamp, nonceStr, signature }`（`signature` = `jsapi_ticket=..&noncestr=..&timestamp=..&url=..` 的 SHA1）。
+- 服务端 `access_token` / `jsapi_ticket` **已缓存**（`tokenCache` / `ticketCache`，TTL 提前 60s 过期），不会触发微信接口频率限制。
+- 客户端拿到签名后：加载 `res.wx.qq.com` JS-SDK → `wx.config` → `wx.ready` 调 `updateAppMessageShareData` / `updateTimelineShareData` 推卡；任一步失败（非微信 / 无签名 / SDK 不可用 / config 抛错 / ready 超时 4s）一律收口到 `fallback`，**绝不抛错**。
+
+**⚠️ 上线前置条件（须公众号管理员在微信公众平台操作，代码侧无法自证）**：把 **`game.joho.cn`** 加入该公众号的「**JS 接口安全域名**」（同一公众号的该名单可配多个域名，本项目与 zhao-sso 各商城**共用同一签名接口**）。**未配置前**，微信内 `wx.config` 会返回 `invalid signature` → 本模块按设计降级为 `fallback`（复制链接兜底，功能不坏、卡片不生效）。
+
+**线上记录**（本地构建 → tar → scp → 服务器仅解压，ts `20260929-031606`；备份 `tour.bak-20260929-031606`）：
+- `https://game.joho.cn/tour/mono.html` → **200** ✅；`js/mono.js` 线上/本地 = **481671 / 481671 bytes** ✅；`skins/photo/skin.json` → **200** ✅
+- 线上 `og:image` = `https://game.joho.cn/tour/share/share-card.png?v=v1` → **200 · `image/png` · 274903 bytes（= 本地 `public/share/share-card.png`）** ✅；线上 `mono.html` 静态 `<head>` 内 `og:type/site_name/title/description/image/width/height/url` 全部就位 ✅
+- `node local/mono-prod-check.mjs` → 退出码 **0**、`gate` 全 `true`、`errors=[]`（元素计数 32/4/2/5；`sim()` 胜者 4、`round=61`；`?skin=photo` `missingAssets=0`）
+- `node local/mono-e2e-playthrough.mjs` → 退出码 **0**、`gate` 全 `true`、`errors=[]`（**973 次真实点击**跑到 `over=true`，CTA 不拦截任何点击）
+
+**未在真机微信内自测（诚实声明）**：`bound`（`wx.config` 成功 + 推卡生效）**从未在真实微信客户端验证**——需先完成上面的「JS 接口安全域名」配置；本地闸门只能证明 `skipped`（非微信）与 `fallback`（微信内但签名/SDK 不可用）两条降级链**零报错**，以及签名端点**可达且返回合法签名**（本轮已用 `curl` 实测过端点响应）。真机微信内分享卡片观感（标题 / 缩略图 / 描述）保留人工核对 ☐。
+
+**环境偏差**：`?perf=1` 的性能覆盖层（`left:4, top:4`）与 CTA（`left:8, top:5`）同在左上角，**仅调试开关下**会轻微重叠；正常访问（不带 `?perf=1`）无冲突。若后续要并存，可把 CTA 右移或把覆盖层下移。
+
 ### 最终验收（对照 spec §11 硬性标准）
 
 | # | spec §11 条目 | 证据 |
 |---|---|---|
-| 1 | 手机视口截图（390×844 dpr2） | M1–M7 全部 `docs/verify/mono-*.png`（M7 新增线上 `mono-prod-01..03`；M7-4 真实点击整局另出 `mono-e2e-01..07`——首末 `mono-e2e-01-start` / `07-final`，973 次点击跑到 `over=true`） |
-| 2 | `src/core` + `src/skin` 单测全覆盖 | `npx vitest run` → **43 文件 / 334 例全绿**（含骰子分布/移动越界/租金/升级互斥/卡牌效果/破产/胜负/回退链） |
+| 1 | 手机视口截图（390×844 dpr2） | M1–M8 全部 `docs/verify/mono-*.png`（M7 新增线上 `mono-prod-01..03`；M7-4 真实点击整局另出 `mono-e2e-01..07`——首末 `mono-e2e-01-start` / `07-final`，973 次点击跑到 `over=true`；M8 新增 `mono-share-01-cta` / `02-result` / `03-fallback`） |
+| 2 | `src/core` + `src/skin` 单测全覆盖 | `npx vitest run` → **44 文件 / 353 例全绿**（含骰子分布/移动越界/租金/升级互斥/卡牌效果/破产/胜负/回退链；M8 新增 `test/ui/share.spec.ts` 19 例） |
 | 3 | 视觉回归与 v5 样张对齐 | M2-1..4 / M3-1..3 目视结论 |
 | 4 | 可换素材（`?skin=photo` 零改代码、缺素材走回退） | M3-5 / M7-2；线上 `missingAssets === []`、image 实例 8 |
 | 5 | 性能（中端安卓 60fps、首屏 <3s） | **每帧渲染**（60fps 判定口径）：4× CDP 节流代理 `npm run perf:android` 空闲 p95 4.4–10.0 ms、动效中 p95 3.1–14.7 ms **<16.7ms 帧预算 ✅**；首屏 1.27–1.36s **<3s ✅**；状态切换 `paint()` p95 42–56 ms 属**一次性卡顿**（≈掉 2–3 帧/动作，整局 ≈928 次，架构常态非缺陷）。真机人工勾选 ☐ |
 | 6 | 规则化实例化（无裸值、只改注册表 + skin.json、`?debug=1` 可定位） | `npm run lint` 0 错 / `npm run lint:skin` → `[skin:default] OK`、`[skin:photo] OK` / `?debug=1` 面板 |
 | 7 | 部署（本地构建 → scp → 服务器仅解压） | M7-1 七步输出 |
+| 8 | **M8 微信分享入口（本任务新增，超出 spec §11）** | `node local/mono-share-check.mjs` 13 项 gate 全 true / 退出码 0；线上 `og:image` 200 · `image/png` · 274903 bytes；`local/mono-prod-check.mjs` + `local/mono-e2e-playthrough.mjs` 均退出码 0（详见 M8 节） |
 
 **§11.5 性能实测**（两种成本分开测；`node local/mono-perf.mjs` 桌面代理 + `npm run perf:android` CDP 节流代理；受本机负载影响会抖动，同机连测 3 次的区间如下）：
 - 首屏可交互：桌面 default 235–255 ms / photo 1739–1784 ms；4× 节流代理 1.27–1.36 s（门槛 <3000 ✅）
@@ -195,7 +241,12 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 
 ## 4. 替换为真实双阳商家数据
 
-现状：32 格沿用 v5 样张的**占位 / 派生**商家名与楼层（spec §12 待办项 1「真实双阳商家清单与租金数值」）。本节给出一次性替换指引，**只改数据、不动代码逻辑**。
+> ⚠️ **授权状态：候选清单 · 待确认（禁止公开部署）**
+> `src/data/board.ts` 的 32 格名称已由 v5 样张的**占位 / 派生**名替换为**双阳本地候选真名**（spec §12 待办项 1）。
+> 这些名称依据**公开资料 / 委托方实地核查清单**整理，**尚未取得任何商家授权，亦未经业主核准**。
+> 在商家书面授权 + 业主确认之前，**线上必须沿用占位名、不得部署**（不要执行 `node d:\zhao\scripts\deploy-mono.mjs`）。
+> 本节的对照表与预览截图供业主**离线核对**，确认后方可放行部署。数据层文件头另有一段同样的授权告警（`src/data/board.ts` 顶部）。
+> 本次仅**改数据**，未改任何代码逻辑、未改棋盘结构 / 格数 / 索引 / 类型序列；经济数值**未**改动（见 §4.5「建议分级价目 · 待平衡」）。
 
 ### 4.1 改哪个文件、哪些字段
 
@@ -203,7 +254,7 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 
 | 数组（`TileDef` 字段） | 含义 / 消费点 |
 |---|---|
-| `TILE_NAMES`（`name`） | 商家**全名**（如「双阳鹿产品特产店」）；当前渲染未读全名，作主表保留（导出 `nameAt(index)`） |
+| `TILE_NAMES`（`name`） | 商家**全名**（如「金鹿源参茸经销处」）；当前渲染未读全名，作主表保留（导出 `nameAt(index)`） |
 | `TILE_SHORT`（`short`） | **棋盘 32 格地名字牌**文字（`LabelView.drawLabels` 直画；`labelTextOf → shortAt`） |
 | `TILE_BRAND`（`brand`） | **店招 / 楼体 / 橱窗信息条**文字（`building.s*.sign`、`building.s*.l{1,2,3}`、`showcase.*` 均取它） |
 | `TILE_TYPES`（`type`） | 格子功能，取值 `core / shop / chance / fate / bonus / jail / stock`；决定地砖元素 ID `board.tile.<type>` |
@@ -211,44 +262,49 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 
 **租金 / 建造价不是逐格字段**：全局按级 `RENT_BY_LEVEL = [0, 15, 45, 105]`、`PRICE_BY_LEVEL = [0, 60, 180, 420]`（同在 `board.ts`），经 `src/data/economy.ts` 的 `rentOf(level)` / `buyPrice(level)` 消费。**维持现有三级经济模型时，换商家无需改它们**；若要让**每格租金差异化**，须先扩 `TileDef` 与 economy 口径（属功能变更，另立任务）。
 
-**32 格现占位名单**（`index`：`name` / `short` / `brand` / `type` / `level`）：
+**32 格对照表**（格号 | 现占位名 | 候选真名（棋盘字牌 `short`） | 类型 | 依据 / 来源 | 待授权）：
 
-| # | name | short | brand | type | level |
+| 格号 | 现占位名 | 候选真名（`name`／`short`） | 类型 | 依据 / 来源 | 待授权 |
 |---|---|---|---|---|---|
-| 0 | 优美惠市集生鲜超市 | 优美惠超市 | 优美惠 | core | 3 |
-| 1 | 双阳鹿产品特产店 | 鹿产品特产 | 鹿特产 | shop | 1 |
-| 2 | 命运卡 | 命运卡 | 命运 | fate | 0 |
-| 3 | 双阳本地农家果蔬店 | 农家果蔬 | 果蔬店 | shop | 1 |
-| 4 | 太平温泉 | 太平温泉 | 太平温泉 | shop | 2 |
-| 5 | 机会卡 | 机会卡 | 机会 | chance | 0 |
-| 6 | 双阳特色烧烤店 | 特色烧烤 | 烧烤店 | shop | 2 |
-| 7 | 福利中心 | 福利中心 | 福利 | bonus | 0 |
-| 8 | 农家杂粮店 | 农家杂粮 | 杂粮店 | shop | 1 |
-| 9 | 命运卡 | 命运卡 | 命运 | fate | 0 |
-| 10 | 双阳民宿小院 | 民宿小院 | 民宿 | shop | 2 |
-| 11 | 双阳糕点面食铺 | 糕点面食 | 面食铺 | shop | 1 |
-| 12 | 监狱 | 监狱 | 监狱 | jail | 0 |
-| 13 | 山泉饮用水门店 | 山泉水 | 山泉水 | shop | 2 |
-| 14 | 机会卡 | 机会卡 | 机会 | chance | 0 |
-| 15 | 双阳本地松子特产店 | 松子特产 | 松子 | shop | 1 |
-| 16 | 农家采摘园 | 采摘园 | 采摘园 | shop | 1 |
-| 17 | 命运卡 | 命运卡 | 命运 | fate | 0 |
-| 18 | 双阳火锅店 | 火锅店 | 火锅店 | shop | 3 |
-| 19 | 股票交易所 | 股票所 | 股票所 | stock | 0 |
-| 20 | 双阳露营基地 | 露营基地 | 露营 | shop | 2 |
-| 21 | 机会卡 | 机会卡 | 机会 | chance | 0 |
-| 22 | 粮油米面店 | 粮油米面 | 粮油 | shop | 1 |
-| 23 | 命运卡 | 命运卡 | 命运 | fate | 0 |
-| 24 | 双阳洗衣生活馆 | 洗衣馆 | 洗衣馆 | shop | 1 |
-| 25 | 机会卡 | 机会卡 | 机会 | chance | 0 |
-| 26 | 乡村酒厂 | 乡村酒厂 | 酒厂 | shop | 2 |
-| 27 | 福利中心 | 福利中心 | 福利 | bonus | 0 |
-| 28 | 双阳照相馆 | 照相馆 | 照相馆 | shop | 1 |
-| 29 | 命运卡 | 命运卡 | 命运 | fate | 0 |
-| 30 | 农家乐饭店 | 农家乐 | 农家乐 | shop | 3 |
-| 31 | 机会卡 | 机会卡 | 机会 | chance | 0 |
+| 0 | 优美惠市集生鲜超市 | 鹿乡特色小镇（鹿乡小镇） | core · 起点 | 鹿乡镇「中国梅花鹿第一乡」（存栏 20 万只 / 占全国 1/6）· 鹿乡特色小镇 | 地点名 · 待业主核准 |
+| 1 | 双阳鹿产品特产店 | 金鹿源参茸经销处（金鹿源） | shop | 鹿乡镇金水街 | 待商家授权 |
+| 2 | 命运卡 | 命运卡 | fate | 功能格（非商家），沿用占位命名 | — |
+| 3 | 双阳本地农家果蔬店 | 长峰土特产品商店（长峰特产） | shop | 鹿乡镇（李长吉） | 待商家授权 |
+| 4 | 太平温泉 | 国信南山温泉酒店（国信温泉） | shop | 国信南山温泉（长清公路 16 公里） | 待商家授权 |
+| 5 | 机会卡 | 机会卡 | chance | 功能格（非商家），沿用占位命名 | — |
+| 6 | 双阳特色烧烤店 | 御龙温泉度假村（御龙温泉） | shop | 御龙温泉度假村（平湖街道杨家村） | 待商家授权 |
+| 7 | 福利中心 | 福利中心 | bonus | 功能格（非商家），沿用占位命名 | — |
+| 8 | 农家杂粮店 | 吉吉土特产品商店（吉吉特产） | shop | 鹿乡镇 | 待商家授权 |
+| 9 | 命运卡 | 命运卡 | fate | 功能格（非商家），沿用占位命名 | — |
+| 10 | 双阳民宿小院 | 国玉庄园（国玉庄园） | shop | 国玉庄园（鹿乡镇鹿缘社区） | 待商家授权 |
+| 11 | 双阳糕点面食铺 | 王连申鹿膏／王氏古法熬制鹿膏（王氏鹿膏） | shop | 2025 长春市非遗 · 第四代传承人王姗 · 铜锅百年 | 待商家授权 |
+| 12 | 监狱 | 监狱 | jail | 功能格（非商家），沿用占位命名 | — |
+| 13 | 山泉饮用水门店 | 鹿产品一条街（鹿品街） | shop | 鹿乡镇「鹿产品一条街」 | 地点名 · 待业主核准 |
+| 14 | 机会卡 | 机会卡 | chance | 功能格（非商家），沿用占位命名 | — |
+| 15 | 双阳本地松子特产店 | 刘氏鹿茸炮制技艺（刘氏鹿茸） | shop | 市级非遗 · 第五代传承人刘昊 | 待商家授权 |
+| 16 | 农家采摘园 | 守鏊仁煎饼（守鏊仁） | shop | 守鏊仁煎饼（鹿乡镇方家村） | 待商家授权 |
+| 17 | 命运卡 | 命运卡 | fate | 功能格（非商家），沿用占位命名 | — |
+| 18 | 双阳火锅店 | 双阳鹿茸交易市场（鹿茸市场） | shop | 鹿茸交易市场（凌晨开市 · 全国 23 省采购商） | 地点名 · 待业主核准 |
+| 19 | 股票交易所 | 股票交易所 | stock | 功能格（非商家），沿用占位命名 | — |
+| 20 | 双阳露营基地 | 梅花鹿博物馆（鹿博物馆） | shop | 双阳梅花鹿博物馆 | 地点名 · 待业主核准 |
+| 21 | 机会卡 | 机会卡 | chance | 功能格（非商家），沿用占位命名 | — |
+| 22 | 粮油米面店 | 广生村农产品（广生农产） | shop | 齐家镇广生村 · 销售点鹿城中央区 | 待商家授权 |
+| 23 | 命运卡 | 命运卡 | fate | 功能格（非商家），沿用占位命名 | — |
+| 24 | 双阳洗衣生活馆 | 黑鱼葡萄采摘园（黑鱼葡萄） | shop | 黑鱼村（金霞／老王头／广东葡萄园） | 待商家授权 |
+| 25 | 机会卡 | 机会卡 | chance | 功能格（非商家），沿用占位命名 | — |
+| 26 | 乡村酒厂 | 东龙度假村（东龙度假） | shop | 东龙度假村（齐家镇双顶村） | 待商家授权 |
+| 27 | 福利中心 | 福利中心 | bonus | 功能格（非商家），沿用占位命名 | — |
+| 28 | 双阳照相馆 | 绿色巨农采摘园（巨农采摘） | shop | 绿色巨农采摘园（齐家镇郭家村） | 待商家授权 |
+| 29 | 命运卡 | 命运卡 | fate | 功能格（非商家），沿用占位命名 | — |
+| 30 | 农家乐饭店 | 神鹿峰旅游度假区（神鹿峰） | shop | 神鹿峰旅游度假区（山河街道旅游路 18888 号） | 待商家授权 |
+| 31 | 机会卡 | 机会卡 | chance | 功能格（非商家），沿用占位命名 | — |
 
-**配套映射（按需同步）**：`SLOT_BANNER`（竖幌子文字，仅 0 / 4 / 6 / 18 / 26）、`SLOT_LANTERN_CHAR`（灯笼字，仅 4 / 6 / 18 / 26）、`DEMO_OWNER`（演示归属）、`OWNER_HUE`（归属色相）——均在 `board.ts`。
+> **统计**：18 栋可建楼（17 `shop` + 1 `core`/起点）**全部**填入上述有据可查的真名；**0 格**需要「待核对」的兜底命名。
+> **功能格**（2/5/7/9/12/14/17/19/21/23/25/27/29/31 共 14 格）为命运 / 机会 / 福利 / 监狱 / 股票，非商家，**沿用占位命名不变**。
+> **备选（未录取）**：曙光朝鲜族民俗饭店（齐家镇曙光村）——与已录取名单同为有据真名，留作后续替换备选。
+> 所有商家名在取得**书面授权**前一律「待授权」；地点 / 公共设施名（鹿乡特色小镇、鹿茸交易市场、鹿产品一条街、梅花鹿博物馆）为**地名**，需业主核准命名而非商家授权。
+
+**配套映射（本次已同步）**：`SLOT_BANNER`（竖幌子文字，仍仅 0 / 4 / 6 / 18 / 26，取值随候选商家改为`鹿乡／温泉／御龙／鹿茸／东龙`）、`SLOT_LANTERN_CHAR`（灯笼字，仍仅 4 / 6 / 18 / 26，改为`汤／泉／鹿／龙`）、`DEMO_OWNER`（演示归属）、`OWNER_HUE`（归属色相）——均在 `board.ts`。格位与键集合**未变**，仅文字随商家同步。
 
 ### 4.2 命运 / 机会牌堆
 
@@ -262,7 +318,9 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 - **灯笼字**：`prop.lantern` / `showcase.lantern`，字取 `SLOT_LANTERN_CHAR`。
 - **楼体 shop**：`building.s*.l{1,2,3}` / `showcase.shop`，`brand` 取 `TILE_BRAND`、`hue` 取 `OWNER_HUE[owner]`。
 
-### 4.4 重建 + 部署 + 线上回归
+### 4.4 重建 + 部署 + 线上回归（**获授权后**才可执行）
+
+> ⛔ **未取得商家书面授权 + 业主核准前，禁止执行下面的部署命令**（线上继续显示占位名，属有意为之）。
 
 ```powershell
 # 本地构建 → tar 整包 → scp → 服务器仅解压（绝不在服务器构建）
@@ -271,3 +329,30 @@ node d:\zhao\scripts\deploy-mono.mjs
 # 线上回归（打真实 URL；gate 全 true、exit 0）
 node local/mono-prod-check.mjs
 ```
+
+### 4.5 建议分级价目（**待平衡** · 未接入）
+
+现状：租金 / 建造价是**全局按级**（`RENT_BY_LEVEL` / `PRICE_BY_LEVEL`），并非逐格，无法体现「核心商圈地价高、乡镇地价低」。下表按 **核心商圈 / 文旅 / 乡镇** 三档给出**建议乘数与价目**（相对现网基线 `RENT [0,15,45,105]` / `PRICE [0,60,180,420]`），供业主与策划拍板：
+
+| 分档 | 建议乘数 | 建议租金 `rent[L0..L3]` | 建议建造价 `price[L0..L3]` | 归属格号 |
+|---|---|---|---|---|
+| 核心商圈 | ×1.4 | 0 / 20 / 60 / 150 | 0 / 80 / 240 / 600 | 0 / 1 / 3 / 8 / 11 / 13 / 15 / 18 / 22 |
+| 文旅 | ×1.2 | 0 / 18 / 54 / 126 | 0 / 72 / 216 / 504 | 4 / 6 / 10 / 20 / 26 / 30 |
+| 乡镇 | ×0.8 | 0 / 12 / 36 / 84 | 0 / 48 / 144 / 336 | 16 / 24 / 28 |
+
+该提案已导出为 `src/data/board.ts` 的 `PROPOSED_RENT_TIER_PLAN`（含 `status: '待平衡'` 与基线对照）与 `PROPOSED_TILE_TIER`（格号 → 分档），**仅供引用、未接入 economy，游戏数值保持原样未被静默改动**。
+若要真正启用「逐格差异化」，属**功能变更**（须另立任务）：① `TileDef` 增 `tier` 字段；② `economy.ts` 的 `rentOf / buyPrice` 改为 `(index, level)` 口径按 `tier` 查表；③ 同步橱窗 / 对照卡 / 结算调用点。
+
+### 4.6 上屏预览留证（不部署也能看）
+
+在本地 dev（`npm run dev` → `http://127.0.0.1:52300`）跑 `node local/mono-shots-real-shops.mjs`，产出 **390×844 @dpr2** 三张（均入 `docs/verify/`），业主**无需部署**即可核对候选名单上屏效果：
+
+| 文件 | 内容 |
+|---|---|
+| `docs/verify/mono-real-01-board.png` | 整块棋盘（`?show=0`，含 32 张汉字字牌） |
+| `docs/verify/mono-real-02-labels.png` | 棋盘区放大切图（字牌可读性核对） |
+| `docs/verify/mono-real-03-showcase-b.png` | B 版式橱窗（样板地块 slot 4 = 国信南山温泉酒店） |
+
+脚本自带闸门：32 张字牌、含新名（鹿乡小镇 / 国信温泉 / 鹿茸市场 / 神鹿峰）、不含任何旧占位名、`errors=[]`。
+
+**✅ 授权放行的一句话**（业主对助手说）：`双阳商家名单已获授权，按 §4.4 部署到线上`——收到后助手才执行 `node d:\zhao\scripts\deploy-mono.mjs` 并跑线上回归。

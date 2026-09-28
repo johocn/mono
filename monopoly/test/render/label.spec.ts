@@ -18,7 +18,7 @@ describe('label 标签（v5 样张 line 312–314）', () => {
   });
 
   it('labelTextOf 用短名', () => {
-    expect(labelTextOf(4)).toBe('太平温泉');
-    expect(labelTextOf(0)).toBe('优美惠超市');
+    expect(labelTextOf(4)).toBe('国信温泉');
+    expect(labelTextOf(0)).toBe('鹿乡小镇');
   });
 });
