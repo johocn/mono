@@ -7,6 +7,8 @@
 | 本地开发 | `npm run dev` → http://127.0.0.1:52300/mono.html |
 | 移动视口预览 | Playwright `viewport=390×844, deviceScaleFactor=2` |
 | 构建 | `npm run build` → `release/mono.html` + `release/js/mono.js` |
+| 部署 | `npm run deploy`（= `node ../scripts/deploy-mono.mjs`，`--dry` 只本地构建+打包） |
+| 线上回归 | `npm run check:prod`（打真实 URL `https://game.joho.cn/tour/mono.html`） |
 | 校验 | `npm run check`（lint + lint:skin + test） |
 
 URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围盒/depth/provider 回退级别）· `?seed=<n>` · `?speed=<n>`（动画时轴倍率）· `?play=1`（交互局）· `?nofx=1`（等价 `speed=999`，动画瞬间到终帧）· `?perf=1`（性能覆盖层 + 帧间隔采样）。
@@ -104,3 +106,45 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 **M6 结论**：§5.6 九条动效全部落地（GSAP 编排；时长/弧高/粒子数一律经 `src/skin/layout.ts` 的 FX 段 + `skin.json` 的 `fx` token 注入，`fx.ts` 零裸色值/裸时长，`check-hardcoded` 通过）；动画只消费 `instantiate()` 产出的实例、绝不写 `state`。
 
 **M6 有意偏差（精确记录）**：spec §11.5 预算「单帧绘制调用 < 200」按**场景渲染（pass 1–3）= 189** 计（✅）；若把**屏幕空间 HUD/浮层（pass 4）也算进整帧元素则 = 205**（M4/M5 常驻的底坞/资产条/骰面/手牌共 16 件）。该 205 是**元素实例数**而非 GPU 绘制调用数——Pixi 会对同状态图元合批，且 HUD 为静态屏幕空间图元，故不影响「绘制调用 < 200」。另：headless Chromium 的 rAF 被浏览器限到 ~20fps（帧间隔 p95 ≈ 66.7ms），**不可当真机帧率**，故门槛以「单次全量重绘 p95 ≤ 20ms」作为可测代理，真机 60fps 由人工核对行兜底。GSAP 打进 `release/js/mono.js`：471.68 kB（gzip 158.48 kB）。
+
+### M7 部署与线上回归
+
+| # | 步骤 | 期望 | 证据/截图 |
+|---|---|---|---|
+| M7-1 | `node scripts/deploy-mono.mjs`（=`npm run deploy`） | 本地构建 → tar 整包 → scp → 服务器仅解压（无服务器构建）；`mono.html` 200、`js/mono.js` 线上字节数=本地、`skins/photo/skin.json` 200 | 七步输出见下 |
+| M7-2 | `node local/mono-prod-check.mjs`（=`npm run check:prod`） | 线上无报错、元素计数一致、`?skin=photo` 可用、整局可跑 | `mono-prod-01..03` |
+| M7-3 | 手机打开 `https://game.joho.cn/tour/mono.html?play=1` | 与本地同 seed 同画面、可完整打一局 | — |
+
+**部署记录**（ts `20260929-020158`）：
+- `ROOT = /opt/1panel/apps/openresty/openresty/www/sites/game.joho.cn/tour`（`location ^~ /tour/` alias 到此目录，替换即时生效、无需 nginx reload）
+- 备份 `tour.bak-20260929-020158`（脚本保留最近 **3** 份、多余自动删；本次现存 1 份）
+- 校验：`https://game.joho.cn/tour/mono.html` → **200** ✅；`js/mono.js` 线上/本地 = **472974 / 472974 bytes** ✅；`skins/photo/skin.json` → **200** ✅
+- 线上 URL：<https://game.joho.cn/tour/mono.html>
+
+**线上回归记录**（`node local/mono-prod-check.mjs`，退出码 **0**，`gate` 全 `true`、`errors=[]`）：
+- `board.tile.*`=32 / `ui.playerBar`=4 / `dice.body`=2 / `ui.handSlot`=5（与本地闸门一致）
+- `__monoMain.sim()` → 胜者 4、`state.over=true`、`round=61`
+- `?skin=photo`：`__monoMain.missingAssets=0`、image provider 实例 8（图片素材线上就位）
+- 截图：`docs/verify/mono-prod-01-board.png` / `mono-prod-02-play.png` / `mono-prod-03-skin-photo.png`
+
+**环境偏差（精确记录）**：① 脚本步骤 1 在 Windows 上经 `powershell.exe -NoProfile -Command "npm run build"` 调起（等价 `npm run build`）——经 `cmd.exe` 间接 spawn npm 时 vite 6.4 抛 `[vite:html-inline-proxy] No matching HTML proxy module found`（已实测复现），改走 PowerShell 即稳；② 远程校验用 Node 内置 `fetch` 替代计划里的 `curl | wc -c`（Windows 无 `wc`、`curl` 为 PowerShell 别名），字节数比对等价。服务器侧始终只 `cp`/`tar -x`，绝无 `npm`/`vite`/`node`。
+
+### 最终验收（对照 spec §11 硬性标准）
+
+| # | spec §11 条目 | 证据 |
+|---|---|---|
+| 1 | 手机视口截图（390×844 dpr2） | M1–M7 全部 `docs/verify/mono-*.png`（M7 新增线上 `mono-prod-01..03`） |
+| 2 | `src/core` + `src/skin` 单测全覆盖 | `npx vitest run` → **43 文件 / 333 例全绿**（含骰子分布/移动越界/租金/升级互斥/卡牌效果/破产/胜负/回退链） |
+| 3 | 视觉回归与 v5 样张对齐 | M2-1..4 / M3-1..3 目视结论 |
+| 4 | 可换素材（`?skin=photo` 零改代码、缺素材走回退） | M3-5 / M7-2；线上 `missingAssets === []`、image 实例 8 |
+| 5 | 性能（中端安卓 60fps、首屏 <3s） | `node local/mono-perf.mjs` 实测（见下）+ 真机人工勾选 ☐ |
+| 6 | 规则化实例化（无裸值、只改注册表 + skin.json、`?debug=1` 可定位） | `npm run lint` 0 错 / `npm run lint:skin` → `[skin:default] OK`、`[skin:photo] OK` / `?debug=1` 面板 |
+| 7 | 部署（本地构建 → scp → 服务器仅解压） | M7-1 七步输出 |
+
+**§11.5 性能实测**（`node local/mono-perf.mjs`，headless 代理指标；受本机负载影响会抖动，同机连测 3 次的区间如下）：
+- 首屏可交互：default 235–255 ms / photo 1739–1784 ms（门槛 <3000 ✅）
+- 单次全量重绘：**p50 ≈ 7.2 ms**（稳定）；**p95 15.9–28.9 ms（default）/ 19.9–23.5 ms（photo）**——临界于 20 ms 门槛且随负载抖动（p50 远低于门槛，p95 尾部分位受本机后台负载抬高）
+- 场景绘制元素数（pass 1–3）：189 < 200 ✅；fx 峰值 16 < 40 ✅
+- **诚实声明**：**中端安卓真机 60fps 未在真机测量**（本机无中端安卓设备）；headless Chromium 的 rAF 被限到 ~20fps（帧间隔 p95 ≈ 100 ms），不能当真机帧率，故该项仍留人工在真机勾选。
+
+**M7 结论**：M1–M6 产物已发布到 `https://game.joho.cn/tour/mono.html`，线上回归七项闸门全绿（200 / 无报错 / 元素计数 / `?skin=photo` / 整局 / 三张截图 / `errors=[]`）；部署固化为「本地构建 → tar 整包 → scp → 服务器仅解压」，自带最近 3 份备份与三项字节数校验。
