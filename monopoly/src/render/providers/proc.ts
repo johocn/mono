@@ -1,7 +1,9 @@
 import { Graphics } from 'pixi.js';
+import type { Texture } from 'pixi.js';
 import type { Geo } from '../iso';
 import { dia } from '../iso';
 import { ptsToPoly } from '../paint';
+import type { Box, ProviderSpec } from '../../skin/types';
 import { fountain } from './proc-fountain';
 import { pawn } from './proc-pawn';
 
@@ -17,9 +19,20 @@ export interface TextRequest {
   align?: 'center' | 'left';
 }
 
+/** preset 的图片输出请求（Graphics 画不了位图，统一交给 Scene 新建 Sprite 落地） */
+export interface SpriteRequest {
+  texture: Texture;
+  x: number;                              // 锚点所在的舞台绝对坐标
+  y: number;
+  w: number;                              // 目标宽（= box.w × ctx.s）
+  h: number;                              // 目标高（= box.h × ctx.s）
+  anchor?: [number, number];              // 0–1，缺省居中 [0.5, 0.5]
+  rotate?: number;                        // 角度（度）
+}
+
 export interface ProcCtx {
   geo: Geo;
-  box: { w: number; d: number; h: number };
+  box: Box;
   cx: number;      // 已含管线 lift 的地面锚点
   cy: number;
   s: number;       // 缩放（1 = 占满一格）
@@ -28,6 +41,12 @@ export interface ProcCtx {
   params: Record<string, unknown>;
   state: Record<string, unknown>;
   text?: (req: TextRequest) => void;
+  /** 原始 provider 规格（image provider 需从中读 src / anchor） */
+  spec?: ProviderSpec;
+  /** 素材装载通道（Scene 注入）：包内相对路径 → 已装载纹理；未装载 → null */
+  asset?: (rel: string) => Texture | null;
+  /** 图片输出通道：与 text 同级的「唯一出图口」 */
+  sprite?: (req: SpriteRequest) => void;
 }
 
 export type ProcPreset = (g: Graphics, ctx: ProcCtx) => void;
@@ -98,6 +117,7 @@ const builtin: ProcPreset = (g, ctx) => {
 
 import { shop, sign } from './proc-building';
 import { antenna, awning, banner, lamp, lantern, rooftopBox, signTower, tree } from './proc-props';
+import { showcaseGround, showcaseHud, showcaseMini, showcasePanel, showcaseSky, showcaseSkyline } from './proc-showcase';
 
 export const PROC_PRESETS: Record<string, ProcPreset> = {
   tile,
@@ -117,6 +137,12 @@ export const PROC_PRESETS: Record<string, ProcPreset> = {
   antenna,
   tree,
   lamp,
+  showcasePanel,
+  showcaseSky,
+  showcaseSkyline,
+  showcaseGround,
+  showcaseHud,
+  showcaseMini,
 };
 
 export function procPreset(name: string): ProcPreset {

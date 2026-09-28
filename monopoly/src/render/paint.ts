@@ -1,7 +1,7 @@
-import { Text } from 'pixi.js';
+import { Sprite, Text } from 'pixi.js';
 import type { Geo, Pt } from './iso';
 import { dia, win, up } from './iso';
-import type { TextRequest } from './providers/proc';
+import type { SpriteRequest, TextRequest } from './providers/proc';
 
 /** [x,y][] → Pixi 扁平数组 */
 export function ptsToPoly(pts: Pt[]): number[] {
@@ -48,4 +48,16 @@ export function makeText(req: TextRequest): Text {
   t.position.set(req.x, req.y);
   t.rotation = ((req.rotate ?? 0) * Math.PI) / 180;
   return t;
+}
+
+/** 按 provider 的图片请求创建 Pixi Sprite（唯一建精灵处） */
+export function makeSprite(req: SpriteRequest): Sprite {
+  const sp = new Sprite(req.texture);
+  const [ax, ay] = req.anchor ?? [0.5, 0.5];
+  sp.anchor.set(ax, ay);
+  sp.position.set(req.x, req.y);
+  sp.width = req.w;
+  sp.height = req.h;
+  sp.rotation = ((req.rotate ?? 0) * Math.PI) / 180;
+  return sp;
 }

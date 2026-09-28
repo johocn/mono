@@ -106,3 +106,28 @@ export const SLOT_BANNER: Record<number, string> = {
 export const SLOT_LANTERN_CHAR: Record<number, string> = {
   4: '汤', 6: '烤', 18: '锅', 26: '酒',
 };
+
+/** 路过租金按楼层（v5 样张 line 62：`RENT = [0, 15, 45, 105]`） */
+export const RENT_BY_LEVEL = [0, 15, 45, 105];
+
+/** 演示玩家名（v5 样张 line 59 `ONM`） */
+export const PLAYER_NAME = ['你', '老王', '丽丽', '小赵'];
+
+/** 橱窗演示文案（v5 optB line 444–447；M4 接入 i18n 字典后改由字典取，本任务先集中在此便于一处替换） */
+export const SHOWCASE_TEXT = {
+  kind: '商铺', holder: '持有者', floors: '层建筑', rent: '路过租金',
+  upgradeTo: '升级到', maxLevel: '已是最高等级 · 不再涨价', pay: '支付',
+  noOwner: '无主', fallbackBrand: '门店',
+  miniBanner: '市集',
+};
+
+/** 三级建筑名（v5 optC line 450–452 标签：L1 摊位 / L2 门店 / L3 商超楼） */
+export const LEVEL_NAME = ['', '摊位', '门店', '商超楼'];
+
+/** 三级建造价（v5 optC line 450–452 标签：￥60 / ￥180 / ￥420） */
+export const PRICE_BY_LEVEL = [0, 60, 180, 420];
+
+/** 三级对照卡标签：`L{lv} {名} · ￥{价}`（v5 optC line 450–452；M4 接 i18n 后由字典取） */
+export function levelCaption(lv: number): string {
+  return `L${lv} ${LEVEL_NAME[lv] ?? ''} · ￥${PRICE_BY_LEVEL[lv] ?? 0}`;
+}

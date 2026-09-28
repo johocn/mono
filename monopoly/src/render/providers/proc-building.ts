@@ -65,6 +65,15 @@ const D = fb({
   signInU1: 0.05, signInU2: 0.95, signInV1: 0.14, signInV2: 0.86,
   signInSat: 58, signInLit: 30, signInAlpha: 0.55,
   signBox: '#141414', signText: '#ffe08a', signFs: 0.66, signMx: 0.5, signMy: 0.5,
+  /* 温泉池（v5 line 252–256） */
+  poolFy: 1.7, poolRx0: 0.8, poolRy0: 0.62, poolRx1: 0.68, poolRy1: 0.5,
+  poolShX: 0.2, poolShY: 0.1, poolShRx: 0.3, poolShRy: 0.2,
+  poolRim: '#3b3a33', poolWater: '#2c6a80', poolShine: 'rgba(160,230,255,.28)',
+  /* 温泉蒸汽（v5 line 129–137 steam()） */
+  steamN: 3, steamDx: 9, steamDy: 2, steamUp: 6,
+  steamRx0: 5, steamRy0: 3, steamRyK: 0.6,
+  steamDx2: 2, steamUp2: 9, steamDy2: 3, steamRx1: 4, steamRy1: 2.4, steamRyK2: 0.5,
+  steam1: 'rgba(255,255,255,.13)', steam2: 'rgba(255,255,255,.09)',
 });
 
 export function shop(g: Graphics, ctx: ProcCtx): void {
@@ -182,6 +191,23 @@ export function shop(g: Graphics, ctx: ProcCtx): void {
     g.poly(ptsToPoly([L2, B2, R2, F2])).stroke({ color: S('parapet'), width: G('parapetW') * s });
     if (levels === 3) {
       g.poly(ptsToPoly([L2, B2, R2, F2])).stroke({ color: S('neon'), width: G('neonW') * s, alpha: G('neonAlpha') });
+    }
+  }
+
+  /* ⑨ 温泉池 + 蒸汽（v5 line 252–258）：只给 showcase 的温泉馆，棋盘楼不带 */
+  if (p.pool === true || state.pool === true) {
+    const py = cy + d * G('poolFy');
+    g.ellipse(cx, py, w * G('poolRx0'), d * G('poolRy0')).fill({ color: S('poolRim') });
+    g.ellipse(cx, py, w * G('poolRx1'), d * G('poolRy1')).fill({ color: S('poolWater') });
+    g.ellipse(cx - w * G('poolShX'), py - d * G('poolShY'), w * G('poolShRx'), d * G('poolShRy')).fill({ color: S('poolShine') });
+  }
+  if (p.steam === true || state.steam === true) {
+    for (let i = 0; i < G('steamN'); i++) {
+      const sx = cx + (i - 1) * G('steamDx') * s;
+      const sy = cy - h - G('steamUp') * s - i * G('steamDy') * s;
+      g.ellipse(sx, sy, (G('steamRx0') + i) * s, (G('steamRy0') + i * G('steamRyK')) * s).fill({ color: S('steam1') });
+      g.ellipse(sx + G('steamDx2') * s, sy - G('steamUp2') * s - i * G('steamDy2') * s,
+        (G('steamRx1') + i) * s, (G('steamRy1') + i * G('steamRyK2')) * s).fill({ color: S('steam2') });
     }
   }
 }

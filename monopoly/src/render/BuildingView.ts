@@ -25,12 +25,12 @@ export interface BuildingOpts {
   brandOf?: (index: number) => string;
 }
 
-function proc(preset: string, params: Record<string, unknown>): ProviderSpec {
+export function proc(preset: string, params: Record<string, unknown>): ProviderSpec {
   return { kind: 'proc', preset, params };
 }
 
 /** 元素级覆盖（回退链第 ① 级）：只覆盖本 spec 自己的 id，不动皮肤包 */
-function only(id: string, p: ProviderSpec): Record<string, ProviderSpec> {
+export function only(id: string, p: ProviderSpec): Record<string, ProviderSpec> {
   return { [id]: p };
 }
 

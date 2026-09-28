@@ -14,6 +14,7 @@ describe('ids', () => {
       'card.fate.back', 'card.fate.face3',
       'fx.coin', 'fx.scaffold',
       'ui.button.primary', 'ui.panel', 'ui.icon.stock',
+      'showcase.panel', 'showcase.sky', 'showcase.mini',
     ]) expect(isElementId(id), id).toBe(true);
   });
 
@@ -32,7 +33,7 @@ describe('ids', () => {
   it('NAMESPACES 全覆盖 spec §3.6.1 表', () => {
     expect(NAMESPACES).toEqual([
       'token', 'board.tile', 'board.inner', 'board.center',
-      'building', 'prop', 'piece', 'dice', 'card', 'fx', 'ui',
+      'building', 'prop', 'piece', 'dice', 'card', 'fx', 'ui', 'showcase',
     ]);
   });
 

@@ -200,5 +200,17 @@
   "fx.shine",
   "ui.button.primary",
   "ui.panel",
-  "ui.icon.stock"
+  "ui.icon.stock",
+  "showcase.panel",
+  "showcase.sky",
+  "showcase.skyline",
+  "showcase.ground",
+  "showcase.hud",
+  "showcase.shop",
+  "showcase.sign",
+  "showcase.lantern",
+  "showcase.banner",
+  "showcase.tree",
+  "showcase.lamp",
+  "showcase.mini"
 ]

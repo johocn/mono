@@ -12,9 +12,25 @@ const proc: ProviderImpl = {
     procPreset(preset)(g, ctx);
   },
 };
-const image: ProviderImpl = { draw: () => { /* Task 20 实现 */ } };
-const atlas: ProviderImpl = { draw: () => { /* Task 20 实现 */ } };
-const frames: ProviderImpl = { draw: () => { /* Task 20 实现 */ } };
+const image: ProviderImpl = {
+  draw: (_g, ctx) => {
+    if (!ctx.sprite || !ctx.asset) return;
+    const spec = ctx.spec;
+    if (!spec || spec.kind !== 'image') return;
+    const texture = ctx.asset(spec.src);
+    if (!texture) return;
+    ctx.sprite({
+      texture,
+      x: ctx.cx,
+      y: ctx.cy,
+      w: ctx.box.w * ctx.s,
+      h: ctx.box.h * ctx.s,
+      anchor: spec.anchor,
+    });
+  },
+};
+const atlas: ProviderImpl = { draw: () => { /* M5（图集取帧） */ } };
+const frames: ProviderImpl = { draw: () => { /* M5（序列帧） */ } };
 
 export const PROVIDERS: Record<string, ProviderImpl> = { proc, image, atlas, frames };
 

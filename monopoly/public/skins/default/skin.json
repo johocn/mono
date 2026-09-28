@@ -84,6 +84,19 @@
     "prop.signTower": { "kind": "proc", "preset": "signTower", "params": {} },
     "prop.antenna": { "kind": "proc", "preset": "antenna", "params": {} },
     "prop.tree": { "kind": "proc", "preset": "tree", "params": { "trScale": 0.62 } },
-    "prop.lamp": { "kind": "proc", "preset": "lamp", "params": { "lpScale": 0.9 } }
+    "prop.lamp": { "kind": "proc", "preset": "lamp", "params": { "lpScale": 0.9 } },
+
+    "showcase.panel": { "kind": "proc", "preset": "showcasePanel", "params": { "fill": "#0f1a18", "edge": "hsla(45,70%,55%,.5)", "radius": 16, "edgeW": 1 } },
+    "showcase.sky": { "kind": "proc", "preset": "showcaseSky", "params": { "gy": 0.6, "bands": 24, "t1": 0.6, "t2": 0.85, "top": "#0d1b2a", "mid": "#16302f", "bottom": "#1e2f2a", "moonX": 0.855, "moonY": 0.3, "moonR": 13, "moon": "#e8f0ff", "moonA": 0.85, "haloF": 1.69, "haloA": 0.1 } },
+    "showcase.skyline": { "kind": "proc", "preset": "showcaseSkyline", "params": { "gy": 0.6, "fill": "#131f1c", "win": "rgba(255,214,130,.5)" } },
+    "showcase.ground": { "kind": "proc", "preset": "showcaseGround", "params": { "gy": 0.6, "fill": "#1b2622", "slab": "#2a3830", "slabEdge": "rgba(255,255,255,.05)", "slabIn": "#33423a", "cyMax": 44, "cyF": 0.92, "slabDy": -4 } },
+    "showcase.hud": { "kind": "proc", "preset": "showcaseHud", "params": { "pillBg": "rgba(6,12,10,.8)", "pillTx": "#ffffff", "subTx": "#9fb3a8", "barBg": "rgba(6,12,10,.85)", "barTx": "#ffffff", "gold": "#f5c451", "goldTx": "#1b1b1b" } },
+    "showcase.shop": { "kind": "proc", "preset": "shop", "params": { "levels": 2, "hue": 32, "brand": "太平温泉", "pool": true, "steam": true } },
+    "showcase.sign": { "kind": "proc", "preset": "sign", "params": { "levels": 2, "brand": "太平温泉" } },
+    "showcase.lantern": { "kind": "proc", "preset": "lantern", "params": {} },
+    "showcase.banner": { "kind": "proc", "preset": "banner", "params": { "text": "温泉" } },
+    "showcase.tree": { "kind": "proc", "preset": "tree", "params": { "trScale": 1.45 } },
+    "showcase.lamp": { "kind": "proc", "preset": "lamp", "params": { "lpScale": 1.3 } },
+    "showcase.mini": { "kind": "proc", "preset": "showcaseMini", "params": { "gy": 0.62, "radius": 12, "fill": "#101a17", "skyline": "#16221e", "ground": "#1b2622", "slab": "#2a3830", "capTx": "#e8e4d8" } }
   }
 }

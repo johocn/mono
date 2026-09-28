@@ -26,6 +26,8 @@ export interface RegistryEntry {
   mount: Mount;
   attach?: { host: string; atV: number };
   providerKinds: ProviderKind[];
+  /** 定格台位缩放（缺省 1）：给不在建筑网格档位上的元素用（如内环装饰楼 0.5） */
+  scale?: number;
 }
 
 export interface ElementState {
@@ -35,4 +37,6 @@ export interface ElementState {
   processing?: boolean;
   dim?: boolean;
   facing?: 'left' | 'right';
+  /** 视图层附加的展示字段（如橱窗文案 brand / sub / line1 / caption）：不参与规则判定 */
+  [k: string]: unknown;
 }

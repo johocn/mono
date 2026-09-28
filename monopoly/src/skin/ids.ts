@@ -1,6 +1,6 @@
 export const NAMESPACES = [
   'token', 'board.tile', 'board.inner', 'board.center',
-  'building', 'prop', 'piece', 'dice', 'card', 'fx', 'ui',
+  'building', 'prop', 'piece', 'dice', 'card', 'fx', 'ui', 'showcase',
 ] as const;
 
 export type Namespace = (typeof NAMESPACES)[number];

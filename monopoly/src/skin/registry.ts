@@ -43,12 +43,13 @@ for (const t of TILE_TYPES) {
   reg[`board.tile.${t}.edge`] = tileEdge(t);
 }
 
-// —— 内环装饰楼（8 栋，压暗）与中心喷泉 ——
+// —— 内环装饰楼（8 栋，压暗；v5 样张以 0.5 缩放画在内环第二排，故 scale 由注册表给，渲染层不写死） ——
 for (const d of INNER_DECOS) {
   reg[`board.inner.${d}`] = {
     id: `board.inner.${d}`,
     box: { w: 42, d: 21, h: BUILDING_HEIGHTS[2] },
     anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image'],
+    scale: 0.5,
   };
 }
 reg['board.inner.deco'] = {
@@ -132,6 +133,24 @@ for (const f of FX) {
 reg['ui.button.primary'] = { id: 'ui.button.primary', box: { w: 98, d: 1, h: 46 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image', 'atlas'] };
 reg['ui.panel'] = { id: 'ui.panel', box: { w: 370, d: 1, h: 268 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image'] };
 reg['ui.icon.stock'] = { id: 'ui.icon.stock', box: { w: 100, d: 1, h: 26 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image', 'atlas'] };
+
+// —— 地块橱窗（B 版式）：全部 ground 挂载，台位由 ElementSpec.fixed 给（不走 resolvePlacement） ——
+const showcaseEntry = (id: string, box: { w: number; d: number; h: number }): RegistryEntry => ({
+  id, box, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image'],
+});
+const SC_PANEL = { w: 370, d: 1, h: 300 };
+reg['showcase.panel'] = showcaseEntry('showcase.panel', SC_PANEL);
+reg['showcase.sky'] = showcaseEntry('showcase.sky', { w: 370, d: 1, h: 180 });
+reg['showcase.skyline'] = showcaseEntry('showcase.skyline', { w: 370, d: 1, h: 180 });
+reg['showcase.ground'] = showcaseEntry('showcase.ground', { w: 370, d: 1, h: 120 });
+reg['showcase.hud'] = showcaseEntry('showcase.hud', SC_PANEL);
+reg['showcase.shop'] = showcaseEntry('showcase.shop', { w: 42, d: 21, h: BUILDING_HEIGHTS[2] });
+reg['showcase.sign'] = showcaseEntry('showcase.sign', { w: 30, d: 2, h: 8 });
+reg['showcase.lantern'] = showcaseEntry('showcase.lantern', { w: 10, d: 2, h: 14 });
+reg['showcase.banner'] = showcaseEntry('showcase.banner', { w: 10, d: 2, h: 30 });
+reg['showcase.tree'] = showcaseEntry('showcase.tree', { w: 14, d: 8, h: 30 });
+reg['showcase.lamp'] = showcaseEntry('showcase.lamp', { w: 8, d: 4, h: 28 });
+reg['showcase.mini'] = showcaseEntry('showcase.mini', { w: 160, d: 1, h: 210 });
 
 export const REGISTRY: Record<string, RegistryEntry> = reg;
 

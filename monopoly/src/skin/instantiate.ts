@@ -14,6 +14,10 @@ export interface ElementSpec {
   overrides?: Record<string, ProviderSpec> | null;
   /** 棋子同格错开用（`piece.*` 第三遍）：第 i 枚 → Scene 交给 resolvePlacement 算 cx */
   pawnIndex?: number;
+  /** 绘制遍覆盖（1 地面 / 2 标签 / 3 棋子 / 4 覆盖层 fx）；缺省由 Scene.passOf(id) 决定 */
+  pass?: 1 | 2 | 3 | 4;
+  /** 舞台定格台位（地块橱窗）：跳过 resolvePlacement，直接用绝对屏幕坐标与缩放 */
+  fixed?: { cx: number; cy: number; s?: number };
 }
 
 export interface InstantiateDeps {
@@ -37,6 +41,8 @@ export interface Instance {
   lift: number;
   c: number;
   r: number;
+  /** 注册表给定的定格缩放（缺省 1）：resolvePlacement 用它当「非建筑网格」元素的基准 s */
+  scale: number;
   state: ElementState;
   source: string;
   draw: (g: unknown, params: Record<string, unknown>) => void;
@@ -90,6 +96,7 @@ export function instantiate(spec: ElementSpec, deps: InstantiateDeps): Instance 
     lift,
     c: spec.c,
     r: spec.r,
+    scale: entry.scale ?? 1,
     state: { level, ...(spec.state ?? {}) },
     source,
     draw: (g, params) => deps.onDraw?.(inst, params),

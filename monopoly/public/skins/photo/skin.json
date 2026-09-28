@@ -1,0 +1,13 @@
+{
+  "id": "photo",
+  "meta": { "name": "图片素材皮肤示例（零代码换风格验证）" },
+  "geo": { "hw": 21, "hh": 10.5, "ox": 195, "oy": 96 },
+  "tokens": {},
+  "elements": {
+    "board.center.fountain": { "kind": "image", "src": "tex/fountain.png", "anchor": [0.5, 1] },
+    "prop.tree": { "kind": "image", "src": "tex/tree.png", "anchor": [0.5, 1] },
+    "prop.lamp": { "kind": "image", "src": "tex/lamp.png", "anchor": [0.5, 1] },
+    "piece.p1": { "kind": "image", "src": "tex/pawn1.png", "anchor": [0.5, 1] },
+    "showcase.mini": { "kind": "image", "src": "tex/card.png", "anchor": [0, 0] }
+  }
+}

@@ -6,16 +6,19 @@ import { boardTileSpecs } from './render/BoardView';
 import { innerSpecs, fountainSpec } from './render/InnerView';
 import { PAWN_COUNT, pawnSpecs } from './render/PieceView';
 import { buildingSpecs, slotLevelsOf, streetPropSpecs } from './render/BuildingView';
+import { showcaseSpecs } from './render/ShowcaseView';
 import { drawLabels } from './render/LabelView';
 import { DEMO_OWNER } from './data/board';
 import { DEFAULT_GEO } from './skin/layout';
+import { preloadSkinAssets } from './render/assets';
+import type { ElementSpec } from './skin/instantiate';
 
 export const VERSION = '0.1.0';
 
 /** 兜底底色（真色值在 M2 起从 skins/<id>/skin.json 的 tokens 读取） */
 const BG_FALLBACK = 0x0c1513;
 
-export interface UrlOptions { skin: string; debug: boolean; seed: number; speed: number }
+export interface UrlOptions { skin: string; debug: boolean; seed: number; speed: number; show: string }
 
 /** v5 样张 line 63：当前格 index 4（太平温泉）在 (5,9)，四枚棋子同格 */
 const CURRENT_INDEX = 4;
@@ -32,6 +35,7 @@ export function parseOptions(search: string): UrlOptions {
     debug: q.get('debug') === '1',
     seed: num('seed', 1),
     speed: num('speed', 1),
+    show: q.get('show') || 'b',
   };
 }
 
@@ -45,6 +49,12 @@ export async function boot(): Promise<void> {
   const geo = skin?.geo ?? defaultSkin?.geo ?? DEFAULT_GEO;
   const tokens = { ...(defaultSkin?.tokens ?? {}), ...(skin?.tokens ?? {}) };
 
+  /* 图片素材必须同步可用：render() 是同步的，故在此把所有素材先装载进纹理表 */
+  const missingAssets = [
+    ...(await preloadSkinAssets(defaultSkin, './skins')),
+    ...(skin && skin !== defaultSkin ? await preloadSkinAssets(skin, './skins') : []),
+  ];
+
   const stage = await createStage(canvas, { bg: BG_FALLBACK, dpr: window.devicePixelRatio || 2 });
   const scene = new Scene({
     layers: stage.layers,
@@ -52,6 +62,8 @@ export async function boot(): Promise<void> {
     bg: { color: tokens.bgBottom ?? '#0c1513', alpha: 1 },
     instantiateDeps: { skin, defaultSkin, overrides: null, slotLevels: slotLevelsOf() },
     placement: { pawnGap: 9.6, pawnFrontDy: 1.45, pawnScale: 0.62, buildingScale: 0.72, buildingYOffset: 1 },
+    assetBase: './skins',
+    skinIds: [...new Set([skin?.id, defaultSkin?.id].filter((v): v is string => Boolean(v)))],
   });
 
   const ownerOf = (i: number): number | null => DEMO_OWNER[i] ?? null;
@@ -61,14 +73,17 @@ export async function boot(): Promise<void> {
     index, c: CURRENT_CELL[0], r: CURRENT_CELL[1],
   }));
 
-  scene.addMany([
+  const views: ElementSpec[] = [
     ...boardTileSpecs(CURRENT_INDEX, ownerOf),
     ...innerSpecs(),
     fountainSpec(),
     ...buildingSpecs({ ownerOf }),
     ...streetPropSpecs(),
     ...pawnSpecs(demoPawns),
-  ]);
+  ];
+  if (opts.show === 'b') views.push(...showcaseSpecs({ slot: CURRENT_INDEX, owner: ownerOf(CURRENT_INDEX) }));
+  else if (opts.show === 'c') views.push(...showcaseSpecs({ variant: 'c' }));
+  scene.addMany(views);
   scene.render();
 
   drawLabels(stage.layers.labels, geo, {
@@ -78,8 +93,16 @@ export async function boot(): Promise<void> {
     ownerOf,
   }, { dy: 0.46, fs: 6.2, padX: 5, padTop: 6.6, h: 9.4, rx: 3.2 });
 
-  if (opts.debug) createDebugPanel().mount(document.body);
-  (window as unknown as Record<string, unknown>).__monoMain = { stage, scene, opts, geo, skin, VERSION };
+  if (opts.debug) {
+    const panel = createDebugPanel();
+    panel.mount(document.body);
+    panel.mountViews(opts.show, (v) => {
+      const next = new URL(location.href);
+      next.searchParams.set('show', v);
+      location.href = next.toString();
+    });
+  }
+  (window as unknown as Record<string, unknown>).__monoMain = { stage, scene, opts, geo, skin, missingAssets, VERSION };
 }
 
 if (typeof document !== 'undefined') void boot();
