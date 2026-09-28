@@ -294,7 +294,10 @@ export async function boot(): Promise<void> {
       perf.intervals.push(dt);
       const st = scene.stats();
       if (st.total > perf.maxDraw) perf.maxDraw = st.total;
-      overlay.textContent = `fps ${Math.round(1000 / dt)} · draw ${st.total}`;
+      /* scene = pass 1–3 场景绘制元素数（< 200 预算口径）；total = 含 pass 4 屏幕空间 HUD/浮层
+         的整帧元素实例数（非 GPU draw call，Pixi 会同状态合批），单列避免与预算口径混淆 */
+      const sceneDraw = st.perPass[1] + st.perPass[2] + st.perPass[3];
+      overlay.textContent = `fps ${Math.round(1000 / dt)} · scene ${sceneDraw} · total ${st.total}`;
       if (perf.intervals.length < FX_FRAMES) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
