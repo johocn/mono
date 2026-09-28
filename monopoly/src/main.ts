@@ -21,7 +21,8 @@ import { FATE_DECK, type ItemCardKind } from './data/cards';
 import { DEMO_OWNER } from './data/board';
 import { STOCK_TILE_INDEX } from './data/stocks';
 import { DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED } from './skin/layout';
-import { preloadSkinAssets } from './render/assets';
+import { SHOP_DEFAULTS, parseShopConfig, type ShopConfig } from './skin/shop-config';
+import { preloadRelative, preloadSkinAssets } from './render/assets';
 import { createFx, motionFor, timeScaleFrom, type FxContext, type FxHandle, type FxKind } from './render/fx';
 import type { ElementSpec } from './skin/instantiate';
 
@@ -63,6 +64,20 @@ export function parseOptions(search: string): UrlOptions {
   };
 }
 
+/**
+ * 商家配置（商业闭环·阶段一）：相对路径读取，缺失 / 404 / 坏 JSON 一律回退 `SHOP_DEFAULTS`
+ * —— 零变化、不抛错（design §6.3/§6.4）。
+ */
+async function loadShopConfig(): Promise<ShopConfig> {
+  try {
+    const res = await fetch('./config/shops.json', { cache: 'no-cache' });
+    if (!res.ok) return SHOP_DEFAULTS;
+    return parseShopConfig(await res.json());
+  } catch {
+    return SHOP_DEFAULTS;
+  }
+}
+
 export async function boot(): Promise<void> {
   const canvas = document.getElementById('stage') as HTMLCanvasElement | null;
   if (!canvas) throw new Error('[mono] #stage not found');
@@ -79,15 +94,23 @@ export async function boot(): Promise<void> {
     ...(skin && skin !== defaultSkin ? await preloadSkinAssets(skin, './skins') : []),
   ];
 
+  /* —— 商家配置（商业闭环·阶段一「静态认领」）：overrides 落回退链第 1 级 + 文案注入 —— */
+  const shops = await loadShopConfig();
+  /* 商家图片与皮肤包同源解析（相对皮肤包目录），必须在建场景前按同一套 skinIds 预装载；
+     缺失只在 missingAssets 留痕，绝不抛错（缺素材逐级回退） */
+  const skinPackIds = [...new Set([skin?.id, defaultSkin?.id].filter((v): v is string => Boolean(v)))];
+  const missingShopImages = await preloadRelative(shops.images, skinPackIds, './skins');
+  missingAssets.push(...missingShopImages.map((rel) => `./skins/*/${rel}`));
+
   const stage = await createStage(canvas, { bg: BG_FALLBACK, dpr: window.devicePixelRatio || 2 });
   const scene = new Scene({
     layers: stage.layers,
     geo,
     bg: { color: tokens.bgBottom ?? '#0c1513', alpha: 1 },
-    instantiateDeps: { skin, defaultSkin, overrides: null, slotLevels: slotLevelsOf() },
+    instantiateDeps: { skin, defaultSkin, overrides: shops.overrides, slotLevels: slotLevelsOf() },
     placement: { pawnGap: 9.6, pawnFrontDy: 1.45, pawnScale: 0.62, buildingScale: 0.72, buildingYOffset: 1 },
     assetBase: './skins',
-    skinIds: [...new Set([skin?.id, defaultSkin?.id].filter((v): v is string => Boolean(v)))],
+    skinIds: skinPackIds,
   });
 
   /* —— M6 动效层：只回放视觉，绝不写 state；一切参数经 skin.fx / layout 注入 —— */
@@ -123,12 +146,12 @@ export async function boot(): Promise<void> {
       ...boardTileSpecs(CURRENT_INDEX, ownerOf),
       ...innerSpecs(),
       fountainSpec(),
-      ...buildingSpecs({ ownerOf }),
+      ...buildingSpecs({ ownerOf, brandOf: shops.brandAt }),
       ...streetPropSpecs(),
       ...pawnSpecs(demoPawns),
     ];
-    if (opts.show === 'b') out.push(...showcaseSpecs({ slot: CURRENT_INDEX, owner: ownerOf(CURRENT_INDEX) }));
-    else if (opts.show === 'c') out.push(...showcaseSpecs({ variant: 'c' }));
+    if (opts.show === 'b') out.push(...showcaseSpecs({ slot: CURRENT_INDEX, owner: ownerOf(CURRENT_INDEX), brandOf: shops.brandAt }));
+    else if (opts.show === 'c') out.push(...showcaseSpecs({ variant: 'c', brandOf: shops.brandAt }));
     return out;
   };
 
@@ -140,11 +163,13 @@ export async function boot(): Promise<void> {
       ...boardTileSpecs(currentPlayer(g.state).pos, ownedOf),
       ...innerSpecs(),
       fountainSpec(),
-      ...buildingSpecs({ ownerOf: ownedOf }),
+      ...buildingSpecs({ ownerOf: ownedOf, brandOf: shops.brandAt }),
       ...streetPropSpecs(),
       ...pawnSpecs(alive.map((p) => ({ index: p.id - 1, c: cells[p.pos].c, r: cells[p.pos].r }))),
       /* spec §6 版式 A：中部 = 当前玩家落点地块的橱窗（复用 B 版式构图；随 paint() 同步） */
-      ...showcaseSpecs({ slot: currentPlayer(g.state).pos, owner: ownedOf(currentPlayer(g.state).pos), play: true }),
+      ...showcaseSpecs({
+        slot: currentPlayer(g.state).pos, owner: ownedOf(currentPlayer(g.state).pos), play: true, brandOf: shops.brandAt,
+      }),
       ...hudSpecs(g.state, fxPending || fx.busy()),
       /* M5 浮层：手牌 5 槽常驻 + 抽卡翻牌 / 股票盘 / 结算面板（未触发时为空） */
       ...panelSpecs(g.state),
@@ -165,6 +190,7 @@ export async function boot(): Promise<void> {
       text: tokens.labelText ?? '#d8e4dc',
       ownedText: tokens.labelOwnedText ?? '#ffffff',
       ownerOf: ownedOf,
+      textOf: shops.shortAt,
     }, LABEL_PARAMS);
     hud?.update();
     panels?.update();
@@ -323,7 +349,7 @@ export async function boot(): Promise<void> {
   perf.firstInteractiveMs = performance.now();
 
   (window as unknown as Record<string, unknown>).__monoMain = {
-    stage, scene, opts, geo, skin, missingAssets, game, paint, sim, fx, fxPreview, perf, VERSION,
+    stage, scene, opts, geo, skin, missingAssets, game, paint, sim, fx, fxPreview, perf, shops, VERSION,
   };
 }
 

@@ -94,6 +94,17 @@ describe('instantiate 单一入口', () => {
     inst.draw({} as never, { fill: '#2f4238' });
     expect(seen).toEqual(['board.tile.shop:#2f4238']);
   });
+
+  it('商家配置（deps.overrides）优先于渲染层自带的 spec.overrides（同元素覆盖）', () => {
+    const d = deps();
+    d.overrides = { 'building.s4.sign': { kind: 'image', src: 'shop/s4-sign.png' } };
+    const inst = instantiate({
+      id: 'building.s4.sign', slot: 4, c: 5, r: 9, level: 2,
+      overrides: { 'building.s4.sign': { kind: 'proc', preset: 'sign', params: { brand: '通用' } } },
+    }, d);
+    expect(inst.level).toBe(1);
+    expect(inst.provider).toMatchObject({ kind: 'image', src: 'shop/s4-sign.png' });
+  });
 });
 
 describe('hostHeightOf', () => {

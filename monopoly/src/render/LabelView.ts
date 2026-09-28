@@ -31,14 +31,18 @@ export function labelTextOf(index: number): string {
 export function drawLabels(
   layer: Container,
   geo: { hw: number; hh: number; ox: number; oy: number },
-  params: { bg: string; text: string; ownedText: string; ownerOf: (i: number) => number | null },
+  params: {
+    bg: string; text: string; ownedText: string; ownerOf: (i: number) => number | null;
+    /** 字牌文字来源（商家配置注入；缺省用 `TILE_SHORT`） */
+    textOf?: (i: number) => string;
+  },
   label: LabelParams,
 ): void {
   layer.removeChildren();
   ringPath(BOARD_COLS, BOARD_ROWS).forEach(([c, r], index) => {
     const [x, y] = ipos(c, r, geo);
     const p = labelPlacement(x, y, geo, label);
-    const text = labelTextOf(index);
+    const text = params.textOf ? params.textOf(index) : labelTextOf(index);
     const w = p.widthFor(text);
     const bg = new Graphics();
     bg.roundRect(p.cx - w / 2, p.cy - label.padTop, w, label.h, label.rx)

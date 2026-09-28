@@ -69,6 +69,27 @@ describe('ShowcaseView · 无主 / 无幌子地块', () => {
   });
 });
 
+describe('ShowcaseView · 商家配置文案注入（brandOf）', () => {
+  it('B 版式：brandOf(slot) 覆盖店招/楼体/信息条文字', () => {
+    const specs = showcaseSpecs({ slot: 4, owner: 2, brandOf: (i) => `商${i}` });
+    const shop = by(specs, 'showcase.shop')[0].overrides!['showcase.shop'] as { params: Record<string, unknown> };
+    const sign = by(specs, 'showcase.sign')[0].overrides!['showcase.sign'] as { params: Record<string, unknown> };
+    expect(shop.params.brand).toBe('商4');
+    expect(sign.params.brand).toBe('商4');
+    expect(by(specs, 'showcase.hud')[0].state!.brand).toBe('商4');
+  });
+
+  it('C 版式：brandOf(0) 注入，缺省仍回退 TILE_BRAND[0]', () => {
+    const withInjection = showcaseSpecs({ variant: 'c', brandOf: () => '注入牌' });
+    const shop = withInjection.find((s) => s.id === 'showcase.shop')!.overrides!['showcase.shop'] as { params: Record<string, unknown> };
+    expect(shop.params.brand).toBe('注入牌');
+
+    const fallback = showcaseSpecs({ variant: 'c' });
+    const shop0 = fallback.find((s) => s.id === 'showcase.shop')!.overrides!['showcase.shop'] as { params: Record<string, unknown> };
+    expect(shop0.params.brand).toBe(TILE_BRAND[0]);
+  });
+});
+
 describe('ShowcaseView · C 版式（三级对照，v5 optC line 449–455）', () => {
   const specs = showcaseSpecs({ variant: 'c' });
 

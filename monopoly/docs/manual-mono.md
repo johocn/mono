@@ -202,13 +202,14 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 | # | spec §11 条目 | 证据 |
 |---|---|---|
 | 1 | 手机视口截图（390×844 dpr2） | M1–M8 全部 `docs/verify/mono-*.png`（M7 新增线上 `mono-prod-01..03`；M7-4 真实点击整局另出 `mono-e2e-01..07`——首末 `mono-e2e-01-start` / `07-final`，973 次点击跑到 `over=true`；M8 新增 `mono-share-01-cta` / `02-result` / `03-fallback`） |
-| 2 | `src/core` + `src/skin` 单测全覆盖 | `npx vitest run` → **44 文件 / 353 例全绿**（含骰子分布/移动越界/租金/升级互斥/卡牌效果/破产/胜负/回退链；M8 新增 `test/ui/share.spec.ts` 19 例） |
+| 2 | `src/core` + `src/skin` 单测全覆盖 | `npx vitest run` → **45 文件 / 365 例全绿**（含骰子分布/移动越界/租金/升级互斥/卡牌效果/破产/胜负/回退链；M8 新增 `test/ui/share.spec.ts` 19 例；阶段一新增 `test/skin/shop-config.spec.ts` 9 例 + `instantiate` 覆盖优先级 1 例） |
 | 3 | 视觉回归与 v5 样张对齐 | M2-1..4 / M3-1..3 目视结论 |
 | 4 | 可换素材（`?skin=photo` 零改代码、缺素材走回退） | M3-5 / M7-2；线上 `missingAssets === []`、image 实例 8 |
 | 5 | 性能（中端安卓 60fps、首屏 <3s） | **每帧渲染**（60fps 判定口径）：4× CDP 节流代理 `npm run perf:android` 空闲 p95 4.4–10.0 ms、动效中 p95 3.1–14.7 ms **<16.7ms 帧预算 ✅**；首屏 1.27–1.36s **<3s ✅**；状态切换 `paint()` p95 42–56 ms 属**一次性卡顿**（≈掉 2–3 帧/动作，整局 ≈928 次，架构常态非缺陷）。真机人工勾选 ☐ |
 | 6 | 规则化实例化（无裸值、只改注册表 + skin.json、`?debug=1` 可定位） | `npm run lint` 0 错 / `npm run lint:skin` → `[skin:default] OK`、`[skin:photo] OK` / `?debug=1` 面板 |
 | 7 | 部署（本地构建 → scp → 服务器仅解压） | M7-1 七步输出 |
 | 8 | **M8 微信分享入口（本任务新增，超出 spec §11）** | `node local/mono-share-check.mjs` 13 项 gate 全 true / 退出码 0；线上 `og:image` 200 · `image/png` · 274903 bytes；`local/mono-prod-check.mjs` + `local/mono-e2e-playthrough.mjs` 均退出码 0（详见 M8 节） |
+| 9 | **商业闭环·阶段一「静态认领」配置加载（本任务新增，超出 spec §11）** | `node local/mono-shots-shops.mjs` 8 项 gate 全 true / 退出码 0；4 张 390×844 @dpr2 截图（`docs/verify/mono-shops-01..04`）；`npm run check` 45 文件 / 365 例（详见 §5） |
 
 **§11.5 性能实测**（两种成本分开测；`node local/mono-perf.mjs` 桌面代理 + `npm run perf:android` CDP 节流代理；受本机负载影响会抖动，同机连测 3 次的区间如下）：
 - 首屏可交互：桌面 default 235–255 ms / photo 1739–1784 ms；4× 节流代理 1.27–1.36 s（门槛 <3000 ✅）
@@ -356,3 +357,48 @@ node local/mono-prod-check.mjs
 脚本自带闸门：32 张字牌、含新名（鹿乡小镇 / 国信温泉 / 鹿茸市场 / 神鹿峰）、不含任何旧占位名、`errors=[]`。
 
 **✅ 授权放行的一句话**（业主对助手说）：`双阳商家名单已获授权，按 §4.4 部署到线上`——收到后助手才执行 `node d:\zhao\scripts\deploy-mono.mjs` 并跑线上回归。
+
+## 5. 商家配置加载（商业闭环 · 阶段一「静态认领」）
+
+> 对应立项文档 `docs/superpowers/specs/2026-09-29-monopoly-shuangyang-business-loop-design.md` §6.3 / §6.4 与 §7.1 阶段一验收 ①③。
+> **本机制只为「获授权后改配置即可上屏」服务**：授权前 `public/config/shops.json` 保持 `shops: []`，线上零变化。
+> 阶段一验收 ②「出码 → 店员核销」走积分 `verify/{qrcode,scan,manual}`，属**服务端/商家侧**，不在本工程内（见立项文档 §3.2）。
+
+### 5.1 怎么用（运营）
+
+- 唯一配置文件 `public/config/shops.json`（构建后 = 线上 `/tour/config/shops.json`）；文件内 `_readme` / `_schema` 自带字段说明。
+- 逐条字段：`slot`（0..31 必填）· `merchantName`（全名，展示用）· `short`（**字牌** ≤5 字）· `brand`（**店招 / 楼体 / 橱窗信息条**文字）· `sign:{src}`（店招图）· `building:{src|null}`（楼体图）· `couponTemplateId` / `validDays`（阶段二券联动用，本阶段不消费）。
+- 图片 `src` 是**相对皮肤包目录**的路径：`shop/s4-sign.png` → `skins/default/shop/s4-sign.png`（放在任一已加载包 `skins/default/` 或 `skins/photo/` 内均可；启动时按配置即时预装，**无需**写进 `skin.json`）。
+- 只列出的地块才被覆盖，其余逐格回退内建名单。
+
+### 5.2 生效链路（工程）
+
+| 环节 | 位置 |
+|---|---|
+| 读取（相对路径 `fetch`；404 / 坏 JSON → 零配置 `SHOP_DEFAULTS`） | `main.ts` → `loadShopConfig()` |
+| 宽松解析 + 回退（纯函数，绝不抛错、不改写入参） | `src/skin/shop-config.ts` → `parseShopConfig()` |
+| 图片素材预装（多包逐个尝试，全落空才记 `missingAssets`） | `src/render/assets.ts` → `preloadRelative()` |
+| 合成 `overrides` → **回退链第 1 级**（商家覆盖优先于渲染层自带 proc） | `src/skin/instantiate.ts` → `instantiate()` |
+| 文案注入（字牌 / 店招 / 橱窗） | `LabelView.drawLabels(textOf)` · `BuildingView(brandOf)` · `ShowcaseView(brandOf)` |
+
+**回退链**（不动渲染代码，符合上游 §3.6/§3.7 硬约束）：商家 `overrides` → 皮肤包 `skin.json` → 全局默认皮肤 → 内建兜底。
+配了但缺素材时：该元素回退皮肤 / 内建外观，仅在 `__monoMain.missingAssets` 留痕，**不报错**。
+
+### 5.3 验证（不部署也能看）
+
+```powershell
+npm run dev                          # http://127.0.0.1:52300
+node local/mono-shots-shops.mjs      # 8 项 gate 全 true、exit 0
+```
+
+截图（**390×844 @dpr2**，均入 `docs/verify/`）：
+
+| 文件 | 内容 |
+|---|---|
+| `mono-shops-01-board.png` | 注入演示清单后棋盘：字牌「示例甲 / 示例乙」替换默认名 |
+| `mono-shops-02-showcase-b.png` | B 版式橱窗：店招 / 信息条文案取自配置 |
+| `mono-shops-03-photo-sign.png` | `?skin=photo` + 图片店招：`sign.src` 覆盖生效、`missingAssets = []` |
+| `mono-shops-04-board-zero-config.png` | **零配置**（不拦截、走 shipped 空清单）→ 与内建默认逐格一致 |
+
+gate 8 项：32 张字牌 / 字牌含注入名 / 默认名已被替换 / `building.s18.sign` 映射为 image / `missingAssets` 为空 / 零配置无 overrides / 零配置字牌为内建默认 / `errors = []`。
+> 脚本用 Playwright 拦截 `config/shops.json` 注入**演示名（非真实商家）**，全程不触碰授权问题，也**不部署**。

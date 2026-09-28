@@ -78,7 +78,11 @@ export function instantiate(spec: ElementSpec, deps: InstantiateDeps): Instance 
   const atV = entry.attach?.atV ?? 0;
   const lift = liftOf(mount, host, atV);
 
-  const r: Resolved = resolve(spec.id, deps.skin, deps.defaultSkin, spec.overrides ?? deps.overrides ?? null);
+  /* 元素级覆盖（回退链第 1 级）合并：商家配置（deps.overrides）优先于渲染层自带的通用 proc
+     —— 商家素材要能替换「同一元素」的通用外观（如 `building.s4.sign` 的店招图），
+     故 deps 覆盖写在 spec 覆盖之后（design §6.3「商家素材落 overrides 层」）。 */
+  const merged = { ...(spec.overrides ?? null), ...(deps.overrides ?? null) };
+  const r: Resolved = resolve(spec.id, deps.skin, deps.defaultSkin, Object.keys(merged).length > 0 ? merged : null);
   const skinId = (r.level === 3 || r.level === 4 ? deps.defaultSkin?.id : deps.skin?.id) ?? 'builtin';
 
   const source = `[mono] ${spec.id} @slot=${slot === null ? 'null' : slot} provider=${r.provider.kind} ← L${r.level}`;

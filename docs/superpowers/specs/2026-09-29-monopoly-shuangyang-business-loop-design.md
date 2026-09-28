@@ -258,7 +258,7 @@
 | ⑤ | 内建兜底（纯色块+文字） | level 4 | 否（缺素材时兜底） |
 
 > **证据**：`resolve()` 的回退链是 ①`overrides` → ②`skin` → ③`defaultSkin` → ④`builtin`，其中 `overrides` 以 `elementId` 为键（`src/skin/resolve.ts:83–92`）；`src/render/BuildingView.ts` 已在用「按 slot 的 override」（第 64 行 `override?: ProviderSpec`）。
-> **待补齐**：`src/main.ts:82` 目前传 `overrides: null`，**游戏尚无运行时配置加载**——从「配置文件 → overrides」的读取需新增（阶段一工作量）。
+> **已补齐（2026-09-29 阶段一·游戏侧配置加载）**：原 `src/main.ts` 传 `overrides: null` 的缺口已消除 —— 新增纯模块 `src/skin/shop-config.ts`（宽松解析 `public/config/shops.json` → `overrides` + `shortAt/brandAt`），`main.ts` 于 boot 读取并注入 `instantiateDeps.overrides`（`instantiate()` 中商家覆盖优先于渲染层自带 proc）与 `LabelView/BuildingView/ShowcaseView` 文案；图片素材经 `assets.ts:preloadRelative` 多包预装，缺失只记 `missingAssets` 不报错。验收：`node local/mono-shots-shops.mjs` 8 项 gate 全 true + 4 张 390×844@dpr2 截图，见 `docs/manual-mono.md` §5。
 
 ### 6.4 商家素材清单（阶段一最小）
 

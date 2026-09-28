@@ -20,6 +20,8 @@ export interface ShowcaseInput {
    * 元素 ID / preset / 构图与 B 版式完全一致，不另造美术。
    */
   play?: boolean;
+  /** 店招 / 楼体 / 信息条文字来源（商家配置注入；缺省用 `TILE_BRAND`） */
+  brandOf?: (index: number) => string;
 }
 
 /** 定格台位：橱窗元素不在棋盘网格上，直接给绝对屏幕坐标（Scene 见 fixed 即短路 resolvePlacement） */
@@ -34,11 +36,11 @@ function sc(id: string, fixed: { cx: number; cy: number; s?: number }, extra: Pa
 
 /** B 版式：地块橱窗（v5 `showcase()` + optB 叠层 line 443–449） */
 export function showcaseSpecs(input: ShowcaseInput): ElementSpec[] {
-  if (input.variant === 'c') return miniSpecs();
+  if (input.variant === 'c') return miniSpecs(input.brandOf);
   const slot = input.slot ?? 0;
   const owner = input.owner ?? null;
   const lv = (TILE_LEVEL[slot] || 2) as 1 | 2 | 3;
-  const brand = TILE_BRAND[slot] || T.fallbackBrand;
+  const brand = input.brandOf?.(slot) ?? (TILE_BRAND[slot] || T.fallbackBrand);
   const hue = OWNER_HUE[owner ?? 2] ?? OWNER_HUE[2];
   const px = W.x;
   const py = input.play ? PLAY_SHOWCASE_Y : W.y;
@@ -111,12 +113,12 @@ export function showcaseSpecs(input: ShowcaseInput): ElementSpec[] {
 }
 
 /** C 版式：三张迷你卡并排（v5 optC line 449–455 `miniShop(160, 210, lv)` ×3） */
-function miniSpecs(): ElementSpec[] {
+function miniSpecs(brandOf?: (index: number) => string): ElementSpec[] {
   const levels: Array<1 | 2 | 3> = [1, 2, 3];
   const s = W.miniCardScale;
   const cw = W.miniW * s;
   const x0 = (STAGE_W - (levels.length * cw + (levels.length - 1) * W.miniGap)) / 2;
-  const brand = TILE_BRAND[0] || T.fallbackBrand;
+  const brand = brandOf?.(0) ?? (TILE_BRAND[0] || T.fallbackBrand);
   const out: ElementSpec[] = [];
 
   levels.forEach((lv, i) => {

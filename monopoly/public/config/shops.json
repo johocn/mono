@@ -1,0 +1,14 @@
+{
+  "_readme": "商家素材清单（商业闭环·阶段一「静态认领」）。运营在此按「地块 slot → 商家素材」填写，游戏启动读入并合成为元素级覆盖（回退链第 1 级）与字牌/店招文案，**无需改动渲染代码**。字段与验收见 docs/manual-mono.md §5 与 docs/superpowers/specs/2026-09-29-monopoly-shuangyang-business-loop-design.md §6.4。⚠️ **取得商家书面授权前，请保持 shops 为空数组**，线上沿用皮肤包内的占位店名。",
+  "_schema": {
+    "slot": "0..31 地块序号（必填，越界条目静默忽略）",
+    "merchantName": "商家全名（展示/对账用，不直接上屏）",
+    "short": "字牌短名（≤5 字，压在格前沿）；缺省回退 TILE_SHORT",
+    "brand": "店招/楼体/橱窗文字；缺省回退 TILE_BRAND",
+    "sign": "店招图片：{\"src\":\"shop/s4-sign.png\"}，路径相对皮肤包目录（如 ./skins/default/）",
+    "building": "楼体图片：{\"src\":\"shop/s4-building.png\"} 或 null（null = 沿用 proc 楼体）",
+    "couponTemplateId": "阶段二券系统联动用（本阶段仅落配置，不消费）",
+    "validDays": "阶段二券有效期（天）"
+  },
+  "shops": []
+}
