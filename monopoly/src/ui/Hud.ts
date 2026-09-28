@@ -61,14 +61,14 @@ export function buyOffer(state: GameState): { price: number; enabled: boolean } 
   return { price, enabled: p.cash >= price };
 }
 
-/** 当前玩家的升级报价；不在 settled / 非自有 / 已封顶 → null */
+/** 当前玩家的升级报价；不在 settled / 非自有 / 已封顶 → null（施工中保留报价但不可用） */
 export function upgradeOffer(state: GameState): { cost: number; enabled: boolean } | null {
   if (state.over || state.phase !== 'settled') return null;
   const p = currentPlayer(state);
   const e = state.estates[p.pos];
   if (!e || e.owner !== p.id || !canUpgrade(e.level)) return null;
   const cost = buyPrice(nextLevel(e.level));
-  return { cost, enabled: p.cash >= cost };
+  return { cost, enabled: !e.processing && p.cash >= cost };
 }
 
 /** 底坞顶部状态行（轮次 / 行动玩家 / 胜负） */

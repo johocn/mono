@@ -56,7 +56,7 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 | M4-4 | 现金不足时点「买地」（把 `__monoMain.game.state.players[0].cash` 改成 10 后 `__monoMain.paint()`） | 按钮仍在但变灰且点不动（边界校验，不隐藏） | — |
 | M4-5 | 跑 `node local/mono-shots-m4.mjs` | 3 张 390×844 @dpr2 截图入库；`gate` 全 `true`、`errors` 为空 | 上述全部 |
 
-**M4 结论**：`src/core` 全部单测通过（`board` / `economy` / `dice` / `board-path` / `estate` / `game` 共 53 例，`test/core` 全量 57 例）+ 端到端整局可跑（`__monoMain.sim()` 返回胜者、`round ≤ ROUND_LIMIT + 1`）。有意偏差：楼体层级仍走演示层级 `slotLevelsOf()`（实时升级动画并入 M6），地砖归属色与棋子位置已跟游戏状态联动。
+**M4 结论**：`src/core` 全部单测通过（`board` / `economy` / `dice` / `board-path` / `estate` / `game` 共 53 例，`test/core` 全量 57 例）+ 端到端整局可跑（`__monoMain.sim()` 返回胜者、`round ≤ ROUND_LIMIT + 1`）；该「整局可跑」已由 **M7-4 真实点击整局**复证（973 次点击跑到 `over=true`，不经 `sim()`）。有意偏差：楼体层级仍走演示层级 `slotLevelsOf()`（实时升级动画并入 M6），地砖归属色与棋子位置已跟游戏状态联动。
 
 ### M5 卡牌 / 股票 / 特殊格
 
@@ -67,7 +67,7 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 | M5-3 | 控制台把 `players[0].pos` 移到命运/机会格前并走一步 | 浮层出现抽卡翻牌，`state.lastDraw.deck` 与牌面文案来自 `cards.ts`；右上角可见「关闭」键（点掉浮层） | `mono-m5-03-draw.png` |
 | M5-4 | 走到 index 19 股票交易所 | 弹出股票盘：4 支行（上排 代码/名称/现价/涨跌，下排「持股 n / 市值 ￥n」）+ 近价折线走势图（端点涨跌色脉冲）；盘底可见「买 1」「卖 1」键，点「买 1」后持股 +1、现金 −价 | `mono-m5-04-stock.png` |
 | M5-5 | 落到 index 12 监狱 | 状态行显示「禁行 2 回合」，主按钮变「跳过（1）」；持有免罚卡则自动抵消、不进监 | `mono-m5-05-jail.png` |
-| M5-6 | 控制台 `__monoMain.sim()` | 跑到胜负，结算面板展开含 4 行名次（净资产含地产 + 股票市值） | `mono-m5-06-settle.png` |
+| M5-6 | 控制台 `__monoMain.sim()` | 跑到胜负，结算面板展开含 4 行名次（净资产含地产 + 股票市值）（真实点击整局见 M7-4） | `mono-m5-06-settle.png` |
 | M5-7 | 跑 `node local/mono-shots-m5.mjs` | 6 张截图入库；`gate` 全 `true`、`errors` 为空 | 上述全部 |
 
 **M5 结论**：卡牌/股票/特殊格三套系统接入 `Game` 门面，`src/core` 新增 `cards`/`stocks`/`special`/`game-cards` 单测全绿；牌堆各 6 张、棋盘仍 5 fate + 5 chance 格（口径解耦）。
@@ -128,13 +128,14 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 | # | 步骤 | 期望 | 证据/截图 |
 |---|---|---|---|
 | M7-1 | `node scripts/deploy-mono.mjs`（=`npm run deploy`） | 本地构建 → tar 整包 → scp → 服务器仅解压（无服务器构建）；`mono.html` 200、`js/mono.js` 线上字节数=本地、`skins/photo/skin.json` 200 | 七步输出见下 |
-| M7-2 | `node local/mono-prod-check.mjs`（=`npm run check:prod`） | 线上无报错、元素计数一致、`?skin=photo` 可用、整局可跑 | `mono-prod-01..03` |
+| M7-2 | `node local/mono-prod-check.mjs`（=`npm run check:prod`） | 线上无报错、元素计数一致、`?skin=photo` 可用、整局可跑（程序化 `sim()`；**真实点击整局**另见 M7-4） | `mono-prod-01..03` |
 | M7-3 | 手机打开 `https://game.joho.cn/tour/mono.html?play=1` | 与本地同 seed 同画面、可完整打一局 | — |
+| M7-4 | `node local/mono-e2e-playthrough.mjs`（=`npm run e2e:play`） | **真实点击整局**（只用透明命中层 `#mono-hud button[data-action]` / `#mono-panels button[data-action]`，**非 `sim()`**）：seed=20260928 一路点到 `state.over=true`、结算面板给出胜者 + 4 行名次，未见「点击不变状态」；逐次断言状态、硬上限 61 轮 + 墙钟超时兜底；7 张关键截图两两内容哈希不同且非空；无 pageerror / console error | `mono-e2e-01-start.png` … `mono-e2e-07-final.png` |
 
-**部署记录**（ts `20260929-020158`）：
+**部署记录**（ts `20260929-024938`；本次为修复 `upgradeOffer` 的「施工中」边界后重部署，用于 M7-4）：
 - `ROOT = /opt/1panel/apps/openresty/openresty/www/sites/game.joho.cn/tour`（`location ^~ /tour/` alias 到此目录，替换即时生效、无需 nginx reload）
-- 备份 `tour.bak-20260929-020158`（脚本保留最近 **3** 份、多余自动删；本次现存 1 份）
-- 校验：`https://game.joho.cn/tour/mono.html` → **200** ✅；`js/mono.js` 线上/本地 = **473036 / 473036 bytes** ✅（现行值，原记录 472974 为更早构建）；`skins/photo/skin.json` → **200** ✅
+- 备份 `tour.bak-20260929-024938`（脚本保留最近 **3** 份、多余自动删；本次现存 3 份：`024938` / `021448` / `020158`）
+- 校验：`https://game.joho.cn/tour/mono.html` → **200** ✅；`js/mono.js` 线上/本地 = **473051 / 473051 bytes** ✅（现行值）；`skins/photo/skin.json` → **200** ✅
 - 线上 URL：<https://game.joho.cn/tour/mono.html>
 
 **线上回归记录**（`node local/mono-prod-check.mjs`，退出码 **0**，`gate` 全 `true`、`errors=[]`）：
@@ -143,14 +144,20 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 - `?skin=photo`：`__monoMain.missingAssets=0`、image provider 实例 8（图片素材线上就位）
 - 截图：`docs/verify/mono-prod-01-board.png` / `mono-prod-02-play.png` / `mono-prod-03-skin-photo.png`
 
+**真实点击整局记录**（`node local/mono-e2e-playthrough.mjs` = `npm run e2e:play`，退出码 **0**，`gate` 全 `true`、`errors=[]`）：
+- 完成方式：**真实点击**（逐次点透明命中层 `#mono-hud`/`#mono-panels` 的 `data-action` 按钮，全程**不经 `sim()`**）；URL = `https://game.joho.cn/tour/mono.html?play=1&seed=20260928&nofx=1`
+- seed=`20260928` · `round=61` · `state.over=true` · 胜者「小赵」（结算面板 4 行名次）
+- **点击总数 973**：掷骰 209 / 前进 209 / 结算 209 / 结束回合 209 / 跳过 31 / 买地 17 / 升级 27 / 抽卡关闭 60 / 用卡（租金翻倍）1 / 股票买 1；全程无一次「点击未改变状态」
+- 首末截图：首 = `docs/verify/mono-e2e-01-start.png`，末 = `docs/verify/mono-e2e-07-final.png`；另含 `mono-e2e-02-firstbuy` / `03-firstupgrade` / `04-jail` / `05-draw` / `06-stock`（7 张 390×844 @dpr2，哈希两两不同且均非空）
+
 **环境偏差（精确记录）**：① 脚本步骤 1 在 Windows 上经 `powershell.exe -NoProfile -Command "npm run build"` 调起（等价 `npm run build`）——经 `cmd.exe` 间接 spawn npm 时 vite 6.4 抛 `[vite:html-inline-proxy] No matching HTML proxy module found`（已实测复现），改走 PowerShell 即稳；② 远程校验用 Node 内置 `fetch` 替代计划里的 `curl | wc -c`（Windows 无 `wc`、`curl` 为 PowerShell 别名），字节数比对等价。服务器侧始终只 `cp`/`tar -x`，绝无 `npm`/`vite`/`node`。
 
 ### 最终验收（对照 spec §11 硬性标准）
 
 | # | spec §11 条目 | 证据 |
 |---|---|---|
-| 1 | 手机视口截图（390×844 dpr2） | M1–M7 全部 `docs/verify/mono-*.png`（M7 新增线上 `mono-prod-01..03`） |
-| 2 | `src/core` + `src/skin` 单测全覆盖 | `npx vitest run` → **43 文件 / 333 例全绿**（含骰子分布/移动越界/租金/升级互斥/卡牌效果/破产/胜负/回退链） |
+| 1 | 手机视口截图（390×844 dpr2） | M1–M7 全部 `docs/verify/mono-*.png`（M7 新增线上 `mono-prod-01..03`；M7-4 真实点击整局另出 `mono-e2e-01..07`——首末 `mono-e2e-01-start` / `07-final`，973 次点击跑到 `over=true`） |
+| 2 | `src/core` + `src/skin` 单测全覆盖 | `npx vitest run` → **43 文件 / 334 例全绿**（含骰子分布/移动越界/租金/升级互斥/卡牌效果/破产/胜负/回退链） |
 | 3 | 视觉回归与 v5 样张对齐 | M2-1..4 / M3-1..3 目视结论 |
 | 4 | 可换素材（`?skin=photo` 零改代码、缺素材走回退） | M3-5 / M7-2；线上 `missingAssets === []`、image 实例 8 |
 | 5 | 性能（中端安卓 60fps、首屏 <3s） | **每帧渲染**（60fps 判定口径）：4× CDP 节流代理 `npm run perf:android` 空闲 p95 4.4–10.0 ms、动效中 p95 3.1–14.7 ms **<16.7ms 帧预算 ✅**；首屏 1.27–1.36s **<3s ✅**；状态切换 `paint()` p95 42–56 ms 属**一次性卡顿**（≈掉 2–3 帧/动作，整局 ≈928 次，架构常态非缺陷）。真机人工勾选 ☐ |
@@ -164,7 +171,7 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 - **4× CDP 节流代理（`npm run perf:android`，中端安卓近似，非真机）——每帧渲染 vs 状态切换分开**：**每帧渲染**（60fps 判定口径）空闲 p50 1.0–2.2 / **p95 4.4–10.0 ms**、动效中 p50 1.8–2.6 / p95 3.1–14.7 ms，**均 < 16.7 ms 帧预算 ✅**；6× 低端压力空闲 p95 7.6–15.8、动效中 p95 6.4–22.0 ms（动效帧会掉到 ~45fps）。**状态切换 `paint()`** p50 20–23 / **p95 42–56 ms** ≈ 2.5–3.4 帧预算——一次性卡顿，每次动作 ≈ 掉 2–3 帧，**整局 ≈ 928 次状态切换**（全量重建架构常态，非缺陷）。整局 `sim()` 4× 墙钟 38–155 ms 且 `winner=2/round=61/over=true`（玩法逻辑非瓶颈）。
 - **诚实声明**：**中端安卓真机 60fps 从未在真机测量**（本机无中端安卓设备）。headless Chromium 的 rAF 被限到 ~20fps（帧间隔 p95 ≈ 100 ms），不能当真机帧率。**CDP 4× 节流代理的结论是「代理口径下每帧渲染 p95 4.4–14.7 ms < 16.7 ms 帧预算，支持可稳定 60fps」，但绝非「真机实测 60fps」**；该代理测**主线程**渲染提交成本（GPU 光栅在软件 GL 下异步、真机为硬件加速），用软件 GL + 4× 节流近似中端安卓 CPU，且 `paint()` 只在状态变化时调用（非每帧）。**真机 60fps 最终仍以手机打开 `?perf=1` 的读数为准**，该项保留人工在真机勾选 ☐。
 
-**M7 结论**：M1–M6 产物已发布到 `https://game.joho.cn/tour/mono.html`，线上回归七项闸门全绿（200 / 无报错 / 元素计数 / `?skin=photo` / 整局 / 三张截图 / `errors=[]`）；部署固化为「本地构建 → tar 整包 → scp → 服务器仅解压」，自带最近 3 份备份与三项字节数校验。
+**M7 结论**：M1–M6 产物已发布到 `https://game.joho.cn/tour/mono.html`，线上回归七项闸门全绿（200 / 无报错 / 元素计数 / `?skin=photo` / 整局 / 三张截图 / `errors=[]`）；整局「可跑」另有 **M7-4 真实点击整局**（973 次点击、`over=true`、退出码 0）作为非 `sim()` 的独立证据；部署固化为「本地构建 → tar 整包 → scp → 服务器仅解压」，自带最近 3 份备份与三项字节数校验。
 
 ## 3. 真机性能自测（3 步）
 

@@ -81,6 +81,12 @@ describe('hud 买地 / 升级报价（spec §5.2 / §5.4）', () => {
     expect(upgradeOffer(g2.state)).toBeNull();
   });
 
+  it('自有地块施工中（processing）→ 报价仍在但不可用（点击不生效；与引擎 upgrade 的 processing 边界一致）', () => {
+    const g = settledAt(3);
+    g.state.estates[3] = { index: 3, owner: 1, level: 2, processing: true };
+    expect(upgradeOffer(g.state)).toEqual({ cost: 420, enabled: false });
+  });
+
   it('非 settled 阶段一律不给报价（未结算不能买地）', () => {
     const g = createGame({ dice: fixed(1, 1) });
     g.state.players[0].pos = 1;
