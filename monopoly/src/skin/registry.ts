@@ -134,6 +134,12 @@ reg['ui.button.primary'] = { id: 'ui.button.primary', box: { w: 98, d: 1, h: 46 
 reg['ui.panel'] = { id: 'ui.panel', box: { w: 370, d: 1, h: 268 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image'] };
 reg['ui.icon.stock'] = { id: 'ui.icon.stock', box: { w: 100, d: 1, h: 26 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image', 'atlas'] };
 
+/* —— HUD（底部操作坞）：台位由 ElementSpec.fixed 给（pass 4 + 定格） —— */
+reg['ui.dock'] = { id: 'ui.dock', box: { w: 390, d: 1, h: 184 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image'] };
+reg['ui.label'] = { id: 'ui.label', box: { w: 390, d: 1, h: 24 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image'] };
+reg['ui.playerBar'] = { id: 'ui.playerBar', box: { w: 86, d: 1, h: 40 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image'] };
+reg['ui.button.secondary'] = { id: 'ui.button.secondary', box: { w: 110, d: 1, h: 46 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image', 'atlas'] };
+
 // —— 地块橱窗（B 版式）：全部 ground 挂载，台位由 ElementSpec.fixed 给（不走 resolvePlacement） ——
 const showcaseEntry = (id: string, box: { w: number; d: number; h: number }): RegistryEntry => ({
   id, box, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image'],

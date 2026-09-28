@@ -8,16 +8,20 @@ describe('smoke', () => {
 });
 
 describe('parseOptions', () => {
-  it('缺省：skin=default, debug=false, seed=1, speed=1, show=b', () => {
-    expect(parseOptions('')).toEqual({ skin: 'default', debug: false, seed: 1, speed: 1, show: 'b' });
+  it('缺省：skin=default, debug=false, seed=1, speed=1, show=b, play=false', () => {
+    expect(parseOptions('')).toEqual({ skin: 'default', debug: false, seed: 1, speed: 1, show: 'b', play: false });
   });
   it('解析 ?skin ?debug ?seed ?speed', () => {
     expect(parseOptions('?skin=photo&debug=1&seed=7&speed=4'))
-      .toEqual({ skin: 'photo', debug: true, seed: 7, speed: 4, show: 'b' });
+      .toEqual({ skin: 'photo', debug: true, seed: 7, speed: 4, show: 'b', play: false });
   });
   it('解析 ?show=0|c', () => {
     expect(parseOptions('?show=0').show).toBe('0');
     expect(parseOptions('?show=c').show).toBe('c');
+  });
+  it('解析 ?play=1（M4 交互局）', () => {
+    expect(parseOptions('?debug=1&play=1&seed=20260928').play).toBe(true);
+    expect(parseOptions('?play=0').play).toBe(false);
   });
   it('非法数字回落到缺省', () => {
     expect(parseOptions('?seed=abc&speed=-2').seed).toBe(1);

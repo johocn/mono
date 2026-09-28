@@ -107,6 +107,11 @@ export class Scene {
     return this.instances;
   }
 
+  /** 清空全部 spec（回合推进后按新状态重建用；`render()` 每次都会清层，故只需清 items） */
+  reset(): void {
+    this.items.length = 0;
+  }
+
   /** 全量重建：清层 → 四遍绘制（唯一入画口） */
   render(): void {
     const { layers, instantiateDeps, bg } = this.deps;

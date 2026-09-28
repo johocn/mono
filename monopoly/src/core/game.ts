@@ -261,6 +261,13 @@ export function autoTurn(g: Game): void {
 
 /** 自动跑到分出胜负，返回胜者 id（兜底：最多 ROUND_LIMIT × 2 圈的回合数） */
 export function autoPlay(g: Game, maxTurns: number = ROUND_LIMIT * g.state.players.length * 2): number {
+  /* 允许从「进行中的回合」起步（HUD 手动点过掷骰/前进/结算后调 sim()）：
+     先按阶段机补齐当前回合再自动推进，否则 rollDice 会因越序抛错 */
+  if (!g.state.over && g.state.phase !== 'idle') {
+    if (g.state.phase === 'rolled') g.moveCurrent();
+    if (g.state.phase === 'moved') g.settleCurrent();
+    if (g.state.phase === 'settled') g.endTurn();
+  }
   let guard = maxTurns;
   while (!g.state.over && guard > 0) {
     autoTurn(g);

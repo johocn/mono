@@ -97,6 +97,20 @@
     "showcase.banner": { "kind": "proc", "preset": "banner", "params": { "text": "温泉" } },
     "showcase.tree": { "kind": "proc", "preset": "tree", "params": { "trScale": 1.45 } },
     "showcase.lamp": { "kind": "proc", "preset": "lamp", "params": { "lpScale": 1.3 } },
-    "showcase.mini": { "kind": "proc", "preset": "showcaseMini", "params": { "gy": 0.62, "radius": 12, "fill": "#101a17", "skyline": "#16221e", "ground": "#1b2622", "slab": "#2a3830", "capTx": "#e8e4d8" } }
+    "showcase.mini": { "kind": "proc", "preset": "showcaseMini", "params": { "gy": 0.62, "radius": 12, "fill": "#101a17", "skyline": "#16221e", "ground": "#1b2622", "slab": "#2a3830", "capTx": "#e8e4d8" } },
+
+    "ui.dock": { "kind": "proc", "preset": "uiDock", "params": {} },
+    "ui.panel": { "kind": "proc", "preset": "uiPanel", "params": {} },
+    "ui.label": { "kind": "proc", "preset": "uiLabel", "params": {} },
+    "ui.playerBar": { "kind": "proc", "preset": "uiPlayerBar", "params": {} },
+    "ui.button.primary": { "kind": "proc", "preset": "uiButton", "params": {} },
+    "ui.button.secondary": { "kind": "proc", "preset": "uiButton", "params": {} },
+    "dice.body": { "kind": "proc", "preset": "diceBody", "params": {} },
+    "dice.face1": { "kind": "proc", "preset": "diceFace", "params": { "pips": 1 } },
+    "dice.face2": { "kind": "proc", "preset": "diceFace", "params": { "pips": 2 } },
+    "dice.face3": { "kind": "proc", "preset": "diceFace", "params": { "pips": 3 } },
+    "dice.face4": { "kind": "proc", "preset": "diceFace", "params": { "pips": 4 } },
+    "dice.face5": { "kind": "proc", "preset": "diceFace", "params": { "pips": 5 } },
+    "dice.face6": { "kind": "proc", "preset": "diceFace", "params": { "pips": 6 } }
   }
 }

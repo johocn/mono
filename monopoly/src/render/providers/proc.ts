@@ -118,6 +118,7 @@ const builtin: ProcPreset = (g, ctx) => {
 import { shop, sign } from './proc-building';
 import { antenna, awning, banner, lamp, lantern, rooftopBox, signTower, tree } from './proc-props';
 import { showcaseGround, showcaseHud, showcaseMini, showcasePanel, showcaseSky, showcaseSkyline } from './proc-showcase';
+import { diceBody, diceFace, uiButton, uiDock, uiLabel, uiPanel, uiPlayerBar } from './proc-hud';
 
 export const PROC_PRESETS: Record<string, ProcPreset> = {
   tile,
@@ -143,6 +144,13 @@ export const PROC_PRESETS: Record<string, ProcPreset> = {
   showcaseGround,
   showcaseHud,
   showcaseMini,
+  uiDock,
+  uiPanel,
+  uiPlayerBar,
+  uiButton,
+  uiLabel,
+  diceBody,
+  diceFace,
 };
 
 export function procPreset(name: string): ProcPreset {
