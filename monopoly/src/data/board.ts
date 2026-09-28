@@ -87,3 +87,22 @@ export function shortAt(index: number): string {
 export function brandAt(index: number): string {
   return TILES[index].brand;
 }
+
+/** v5 样张 line 58：演示归属（M3 视觉回归与「开局画面」用；真实归属由 M4 买地写回） */
+export const DEMO_OWNER: Record<number, 1 | 2 | 3 | 4> = {
+  0: 1, 1: 3, 3: 1, 4: 2, 6: 4, 8: 2, 10: 3, 11: 1, 13: 1, 15: 4, 16: 1,
+  18: 2, 20: 3, 22: 2, 24: 1, 26: 4, 28: 3, 30: 2,
+};
+
+/** v5 样张 line 59 OHUE：四位玩家的楼体色相（与 tokens.owner1..owner4 同源） */
+export const OWNER_HUE: Record<number, number> = { 1: 145, 2: 32, 3: 338, 4: 200 };
+
+/** 竖招幌子文字（v5 V 版「市集/温泉/烧烤/火锅/酒厂」；只给少数地块，避免满街挑臂） */
+export const SLOT_BANNER: Record<number, string> = {
+  0: '市集', 4: '温泉', 6: '烧烤', 18: '火锅', 26: '酒厂',
+};
+
+/** 灯笼字：只有 4 家有招牌字（挂门口那盏写自己的字） */
+export const SLOT_LANTERN_CHAR: Record<number, string> = {
+  4: '汤', 6: '烤', 18: '锅', 26: '酒',
+};

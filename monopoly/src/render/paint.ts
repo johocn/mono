@@ -1,5 +1,7 @@
+import { Text } from 'pixi.js';
 import type { Geo, Pt } from './iso';
 import { dia, win, up } from './iso';
+import type { TextRequest } from './providers/proc';
 
 /** [x,y][] → Pixi 扁平数组 */
 export function ptsToPoly(pts: Pt[]): number[] {
@@ -29,4 +31,21 @@ export function wallRect(P0: Pt, P1: Pt, h: number, u1: number, u2: number, v1: 
 /** 面上抬升（转发 iso.up） */
 export function liftPt(p: Pt, h: number): Pt {
   return up(p, h);
+}
+
+/** 按 preset 的文字请求创建 Pixi Text（唯一建文字处） */
+export function makeText(req: TextRequest): Text {
+  const t = new Text({
+    text: req.text,
+    style: {
+      fontFamily: 'system-ui, "PingFang SC", "Microsoft YaHei", sans-serif',
+      fontSize: req.size,
+      fontWeight: 'bold',
+      fill: req.fill,
+    },
+  });
+  t.anchor.set(req.align === 'left' ? 0 : 0.5, 0.5);
+  t.position.set(req.x, req.y);
+  t.rotation = ((req.rotate ?? 0) * Math.PI) / 180;
+  return t;
 }

@@ -17,7 +17,7 @@ export function innerSpecs(): ElementSpec[] {
       void x; void y;
       out.push({ id: 'board.inner.deco', slot: null, c, r, state: { dim: kind !== 'plaza' } });
       const deco = INNER_DECO_SLOTS[`${c},${r}`];
-      if (deco) out.push({ id: `board.inner.${deco.deco}`, slot: null, c, r, level: deco.levels });
+      if (deco) out.push({ id: `board.inner.${deco.deco}`, slot: null, c, r, level: deco.levels, state: { dim: true } });
     }
   }
   return out;

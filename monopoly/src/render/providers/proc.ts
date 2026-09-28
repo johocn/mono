@@ -5,30 +5,36 @@ import { ptsToPoly } from '../paint';
 import { fountain } from './proc-fountain';
 import { pawn } from './proc-pawn';
 
+/** preset 的文字输出请求（Graphics 画不了旋转文字，统一交给 Scene 落地） */
+export interface TextRequest {
+  text: string;
+  x: number;
+  y: number;
+  size: number;
+  fill: string;
+  rotate?: number;                       // 角度（度）
+  /** 水平对齐：center（默认，用于店招/灯笼）· left（用于橱窗信息条，x 即左边缘） */
+  align?: 'center' | 'left';
+}
+
 export interface ProcCtx {
   geo: Geo;
   box: { w: number; d: number; h: number };
   cx: number;      // 已含管线 lift 的地面锚点
   cy: number;
   s: number;       // 缩放（1 = 占满一格）
+  /** 管线施加的抬升（未乘 s）。preset 用 cy + lift×s 还原宿主楼基座 y0 */
+  lift?: number;
   params: Record<string, unknown>;
   state: Record<string, unknown>;
+  text?: (req: TextRequest) => void;
 }
 
 export type ProcPreset = (g: Graphics, ctx: ProcCtx) => void;
 
-type P = Record<string, unknown>;
-export const num = (p: P, k: string, d: number): number => (typeof p[k] === 'number' ? (p[k] as number) : d);
-export const str = (p: P, k: string, d: string): string => (typeof p[k] === 'string' ? (p[k] as string) : d);
-export const arr = <T>(p: P, k: string): T[] | null => (Array.isArray(p[k]) ? (p[k] as T[]) : null);
-
-/**
- * L4 内建兜底默认值容器（spec §3.6.4）：把一个 preset 的全部几何/色值默认值集中声明一次。
- * 取值器（num/str/arr/n/c/fb）的实参子树是 `no-visual-number` / `no-hardcoded-color` 唯一豁免的位置。
- */
-export function fb<T extends Record<string, unknown>>(d: T): T {
-  return d;
-}
+/* 取值器定义在依赖零的 proc-base.ts，此处转出以保持既有 import 路径可用 */
+export { num, str, arr, fb } from './proc-base';
+import { num, str, arr } from './proc-base';
 
 /* —— 地砖：菱形填充 + 描边（归属色/类型色/选中高亮） —— */
 const tile: ProcPreset = (g, ctx) => {
@@ -90,6 +96,9 @@ const builtin: ProcPreset = (g, ctx) => {
     .stroke({ color: str(params, 'edge', '#6b7f76'), width: num(params, 'edgeW', 1) });
 };
 
+import { shop, sign } from './proc-building';
+import { antenna, awning, banner, lamp, lantern, rooftopBox, signTower, tree } from './proc-props';
+
 export const PROC_PRESETS: Record<string, ProcPreset> = {
   tile,
   tileEdge,
@@ -98,6 +107,16 @@ export const PROC_PRESETS: Record<string, ProcPreset> = {
   builtin,
   fountain,
   pawn,
+  shop,
+  sign,
+  awning,
+  lantern,
+  banner,
+  rooftopBox,
+  signTower,
+  antenna,
+  tree,
+  lamp,
 };
 
 export function procPreset(name: string): ProcPreset {

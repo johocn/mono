@@ -2,7 +2,8 @@ import { Container, Graphics } from 'pixi.js';
 import { compareDepth, ipos } from './iso';
 import { instantiate, type ElementSpec, type InstantiateDeps, type Instance } from '../skin/instantiate';
 import { providerFor } from './providers';
-import type { ProcCtx } from './providers/proc';
+import { makeText } from './paint';
+import type { ProcCtx, TextRequest } from './providers/proc';
 import { STAGE_W, STAGE_H } from '../skin/layout';
 
 /** 玩家数（与 PieceView.PAWN_COUNT 同源；Scene 侧只为折 tokens，不引视图模块） */
@@ -67,7 +68,10 @@ export function resolvePlacement(
   }
   if (it.id.startsWith('building.')) {
     const s = opts.buildingScale ?? 1;
-    return { cx: x, cy: y - (opts.buildingYOffset ?? 0), s };
+    /* 贴墙子件（building.<slot>.sign）：lift 也随宿主楼一起缩放，
+       preset 再用 y0 = cy + lift×s 还原宿主基座；楼体本体 mount=ground、lift=0 不受影响 */
+    const lifted = it.mount && it.mount !== 'ground' ? it.lift * s : 0;
+    return { cx: x, cy: y - (opts.buildingYOffset ?? 0) - lifted, s };
   }
   if (it.id.startsWith('prop.') && it.mount && it.mount !== 'ground') {
     /* 贴墙/贴屋顶挂件：几何、lift 与宿主楼的 y 偏移都随楼一起缩放，否则会飘在楼外 */
@@ -124,19 +128,23 @@ export class Scene {
         this.deps.geo,
         this.deps.placement,
       );
+      const text: TextRequest[] = [];
       const ctx: ProcCtx = {
         geo: this.deps.geo,
         box: inst.box,
         cx: place.cx,
         cy: place.cy,
         s: place.s,
+        lift: inst.lift,
         params: inst.provider.kind === 'proc'
           ? { __preset: (inst.provider as { preset: string }).preset, ...((inst.provider as { params?: Record<string, unknown> }).params ?? {}) }
           : { __preset: 'builtin' },
         state: { ...inst.state, ownerColors: this.ownerColors() },
+        text: (r) => text.push(r),
       };
       providerFor(inst.provider).draw(g, ctx);
       target.addChild(g);
+      for (const r of text) target.addChild(makeText(r));
     }
   }
 

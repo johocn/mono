@@ -9,10 +9,14 @@ export function pawnSlots(centerX: number, _hw: number, p: { gap: number }): num
   return out;
 }
 
-export interface PawnState { index: number; c: number; r: number; x: number; y: number }
+/** 棋子的棋盘位置（屏幕坐标由 Scene 的 resolvePlacement 统一算，这里不存 x/y） */
+export interface PawnState { index: number; c: number; r: number }
 
-/** 生成棋子 spec（第三遍；同格四人用 pawnSlots 横向错开，避免重叠） */
-export function pawnSpecs(pawns: PawnState[], geo: { hh: number }, p: { gap: number; frontDy: number }): ElementSpec[] {
+/**
+ * 生成棋子 spec（第三遍）：同格四人靠 spec.pawnIndex 让 Scene 横向错开，
+ * 自己不算坐标（spec §3.7.1「渲染层禁止直接画」）。
+ */
+export function pawnSpecs(pawns: PawnState[]): ElementSpec[] {
   const byCell = new Map<string, PawnState[]>();
   for (const pw of pawns) {
     const k = `${pw.c},${pw.r}`;
@@ -21,14 +25,9 @@ export function pawnSpecs(pawns: PawnState[], geo: { hh: number }, p: { gap: num
   const out: ElementSpec[] = [];
   for (const [, group] of byCell) {
     const { c, r } = group[0];
-    const slots = pawnSlots(group[0].x, 0, p);
     group.forEach((pw, i) => {
-      void slots;
-      /* pawnIndex 供 Scene.resolvePlacement 算 cx（同格错开，v5 样张 line 319） */
       out.push({ id: `piece.p${pw.index + 1}`, slot: null, c, r, pawnIndex: i });
     });
-    void geo;
-    void p.frontDy;
   }
   return out;
 }

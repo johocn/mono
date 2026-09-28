@@ -1,7 +1,7 @@
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-const SEG = '[a-z][a-z0-9]*';
+const SEG = '[a-z][a-zA-Z0-9]*';
 const NS = ['token', 'board\\.tile', 'board\\.inner', 'board\\.center', 'building', 'prop', 'piece', 'dice', 'card', 'fx', 'ui'];
 const ID_RE = new RegExp(`^(${NS.join('|')})(\\.${SEG}){1,2}$`);
 

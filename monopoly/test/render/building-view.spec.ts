@@ -1,0 +1,122 @@
+import { describe, it, expect } from 'vitest';
+import {
+  INNER_STREET_PROPS, buildingSpecs, hueOf, slotLevelsOf, streetPropSpecs,
+} from '../../src/render/BuildingView';
+import {
+  DEMO_OWNER, OWNER_HUE, SLOT_BANNER, SLOT_LANTERN_CHAR, TILE_BRAND, TILE_LEVEL,
+} from '../../src/data/board';
+import type { ElementSpec } from '../../src/skin/instantiate';
+
+const byId = (specs: ElementSpec[], id: string) => specs.filter((s) => s.id === id);
+const byPrefix = (specs: ElementSpec[], p: string) => specs.filter((s) => s.id.startsWith(p));
+const endsWith = (specs: ElementSpec[], tail: string) => specs.filter((s) => s.id.endsWith(tail));
+
+describe('BuildingView · 层级表与色相', () => {
+  it('slotLevelsOf 只收 lv>0 的 18 格，值为 1/2/3', () => {
+    const lv = slotLevelsOf();
+    expect(Object.keys(lv).length).toBe(18);
+    expect(TILE_LEVEL.filter((x) => x > 0).length).toBe(18);
+    expect(lv[0]).toBe(3);
+    expect(lv[18]).toBe(3);
+    expect(lv[30]).toBe(3);
+    expect(lv[2]).toBeUndefined();
+  });
+
+  it('hueOf：有归属取归属色相，无归属落 2 号暖橙', () => {
+    expect(hueOf(0, (i) => DEMO_OWNER[i] ?? null)).toBe(OWNER_HUE[1]);
+    expect(hueOf(4, (i) => DEMO_OWNER[i] ?? null)).toBe(OWNER_HUE[2]);
+    expect(hueOf(19, (i) => DEMO_OWNER[i] ?? null)).toBe(OWNER_HUE[2]);
+    expect(hueOf(4, () => null)).toBe(OWNER_HUE[2]);
+  });
+});
+
+describe('BuildingView · 楼与店招', () => {
+  const specs = buildingSpecs();
+
+  it('18 栋楼（L1 9 / L2 6 / L3 3）+ 9 张店招（仅 L2/L3）= 27 条 building.*', () => {
+    expect(byPrefix(specs, 'building.').length).toBe(27);
+    expect(endsWith(specs, '.l1').length).toBe(9);
+    expect(endsWith(specs, '.l2').length).toBe(6);
+    expect(endsWith(specs, '.l3').length).toBe(3);
+    const signs = endsWith(specs, '.sign');
+    expect(signs.length).toBe(9);
+    expect(signs.every((s) => s.level !== 1)).toBe(true);
+    expect(signs.filter((s) => s.level === 2).length).toBe(6);
+    expect(signs.filter((s) => s.level === 3).length).toBe(3);
+  });
+
+  it('每栋楼的元素级覆盖命中自身 id，preset = shop，levels 与 hue 正确', () => {
+    const one = specs.find((s) => s.id === 'building.s4.l2')!;
+    expect(one).toBeTruthy();
+    expect(one.level).toBe(2);
+    expect(one.state).toMatchObject({ level: 2, dim: false });
+    const p = one.overrides?.['building.s4.l2'] as { kind: string; preset: string; params: Record<string, unknown> };
+    expect(p.kind).toBe('proc');
+    expect(p.preset).toBe('shop');
+    expect(p.params.levels).toBe(2);
+    expect(p.params.hue).toBe(OWNER_HUE[2]);
+    expect(p.params.brand).toBe(TILE_BRAND[4]);
+  });
+
+  it('店招 override 带 brand，且层级跟随宿主楼', () => {
+    const sign = specs.find((s) => s.id === 'building.s18.sign')!;
+    expect(sign).toBeTruthy();
+    expect(sign.level).toBe(3);
+    const p = sign.overrides?.['building.s18.sign'] as { preset: string; params: Record<string, unknown> };
+    expect(p.preset).toBe('sign');
+    expect(p.params.levels).toBe(3);
+    expect(p.params.brand).toBe('火锅店');
+  });
+});
+
+describe('BuildingView · 挂件', () => {
+  const specs = buildingSpecs();
+
+  it('L1 遮阳篷 9；L2/L3 屋顶设备箱 9；L3 招牌塔 3；不再重复挂独立天线', () => {
+    expect(byId(specs, 'prop.awning').length).toBe(9);
+    expect(byId(specs, 'prop.rooftopBox').length).toBe(9);
+    expect(byId(specs, 'prop.signTower').length).toBe(3);
+    expect(byId(specs, 'prop.antenna').length).toBe(0);
+  });
+
+  it('灯笼每栋 2 盏（门口 + 右侧），有字地块写自己的招牌字', () => {
+    const lamps = byId(specs, 'prop.lantern');
+    expect(lamps.length).toBe(36);
+    const st = (s: ElementSpec) => s.state as { at?: string; char?: string } | undefined;
+    const hot = lamps.filter((s) => s.slot === 4);
+    expect(hot.length).toBe(2);
+    expect(hot.map((s) => st(s)?.at).sort()).toEqual(['door', 'side']);
+    expect(hot.every((s) => st(s)?.char === SLOT_LANTERN_CHAR[4])).toBe(true);
+    const plain = lamps.filter((s) => s.slot === 0);
+    expect(plain.every((s) => st(s)?.char === '')).toBe(true);
+  });
+
+  it('竖招幌子 5 条，文字来自 SLOT_BANNER，override 的 preset = banner', () => {
+    const banners = byId(specs, 'prop.banner');
+    expect(banners.length).toBe(Object.keys(SLOT_BANNER).length);
+    expect([...banners.map((s) => Number(s.slot))].sort((a, b) => a - b)).toEqual([0, 4, 6, 18, 26]);
+    const b = banners.find((s) => s.slot === 26);
+    const p = b?.overrides?.['prop.banner'] as { preset: string; params: Record<string, unknown> };
+    expect(p.preset).toBe('banner');
+    expect(p.params.text).toBe('酒厂');
+  });
+
+  it('挂件带 slot（抬升交给注册表 + 管线），且不自己写覆盖', () => {
+    for (const s of [...byId(specs, 'prop.awning'), ...byId(specs, 'prop.rooftopBox'), ...byId(specs, 'prop.signTower')]) {
+      expect(typeof s.slot).toBe('number');
+      expect(s.overrides).toBeUndefined();
+    }
+  });
+});
+
+describe('BuildingView · 内环街道小品', () => {
+  it('行道树 ×2（v5 line 294）+ 石板路路灯 ×4，且都在地面上', () => {
+    const specs = streetPropSpecs();
+    expect(byId(specs, 'prop.tree').length).toBe(2);
+    expect(byId(specs, 'prop.lamp').length).toBe(4);
+    expect(specs.every((s) => s.slot === null)).toBe(true);
+    expect(INNER_STREET_PROPS.filter((p) => p.kind === 'tree').map((p) => [p.c, p.r])).toEqual([[2, 8], [8, 2]]);
+    expect(INNER_STREET_PROPS.filter((p) => p.kind === 'lamp').map((p) => [p.c, p.r]))
+      .toEqual([[3, 5], [5, 3], [7, 5], [5, 7]]);
+  });
+});

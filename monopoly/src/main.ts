@@ -5,8 +5,9 @@ import { Scene } from './render/Scene';
 import { boardTileSpecs } from './render/BoardView';
 import { innerSpecs, fountainSpec } from './render/InnerView';
 import { PAWN_COUNT, pawnSpecs } from './render/PieceView';
+import { buildingSpecs, slotLevelsOf, streetPropSpecs } from './render/BuildingView';
 import { drawLabels } from './render/LabelView';
-import { ipos } from './render/iso';
+import { DEMO_OWNER } from './data/board';
 import { DEFAULT_GEO } from './skin/layout';
 
 export const VERSION = '0.1.0';
@@ -49,21 +50,24 @@ export async function boot(): Promise<void> {
     layers: stage.layers,
     geo,
     bg: { color: tokens.bgBottom ?? '#0c1513', alpha: 1 },
-    instantiateDeps: { skin, defaultSkin, overrides: null, slotLevels: {} },
+    instantiateDeps: { skin, defaultSkin, overrides: null, slotLevels: slotLevelsOf() },
     placement: { pawnGap: 9.6, pawnFrontDy: 1.45, pawnScale: 0.62, buildingScale: 0.72, buildingYOffset: 1 },
   });
 
-  const ownerOf = (): number | null => null;
-  const [cellX, cellY] = ipos(CURRENT_CELL[0], CURRENT_CELL[1], geo);
+  const ownerOf = (i: number): number | null => DEMO_OWNER[i] ?? null;
+
+  /* v5 样张 line 63：当前格 index 4（太平温泉）在 (5,9)，四枚棋子同格 */
   const demoPawns = Array.from({ length: PAWN_COUNT }, (_, index) => ({
-    index, c: CURRENT_CELL[0], r: CURRENT_CELL[1], x: cellX, y: cellY,
+    index, c: CURRENT_CELL[0], r: CURRENT_CELL[1],
   }));
 
   scene.addMany([
     ...boardTileSpecs(CURRENT_INDEX, ownerOf),
     ...innerSpecs(),
     fountainSpec(),
-    ...pawnSpecs(demoPawns, geo, { gap: 9.6, frontDy: 1.45 }),
+    ...buildingSpecs({ ownerOf }),
+    ...streetPropSpecs(),
+    ...pawnSpecs(demoPawns),
   ]);
   scene.render();
 
