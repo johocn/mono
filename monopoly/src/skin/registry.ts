@@ -51,6 +51,12 @@ for (const d of INNER_DECOS) {
     anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image'],
   };
 }
+reg['board.inner.deco'] = {
+  id: 'board.inner.deco',
+  box: { w: 42, d: 21, h: 2 },
+  anchor: [0.5, 0.5], baseline: 0, mount: 'ground',
+  providerKinds: ['proc', 'image'],
+};
 reg['board.center.fountain'] = {
   id: 'board.center.fountain',
   box: { w: 60, d: 30, h: 28 },

@@ -28,7 +28,53 @@ export interface SceneDeps {
   instantiateDeps: InstantiateDeps;
   geo: { hw: number; hh: number; ox: number; oy: number };
   bg: { color: string; alpha: number };
+  placement: PlacementOpts;
   onPick?: (inst: Instance) => void;
+}
+
+export interface PlacementInput {
+  id: string;
+  c: number;
+  r: number;
+  slot: number | null;
+  lift: number;
+  box: { w: number; d: number; h: number };
+  pawnIndex?: number;
+  /** 来自 Instance.mount：贴墙/贴屋顶的挂件必须跟随宿主楼的缩放与抬升 */
+  mount?: 'ground' | 'wall' | 'roof';
+}
+export interface PlacementOpts {
+  pawnGap: number;
+  pawnFrontDy: number;
+  /** 棋子整体缩放（v5 样张 line 319：`isoPawn(..., 0.62, ...)`） */
+  pawnScale?: number;
+  buildingScale?: number;
+  buildingYOffset?: number;
+}
+export interface Placement { cx: number; cy: number; s: number }
+
+/** 唯一地点：给任一实例算屏幕坐标与缩放（各视图不得自己算） */
+export function resolvePlacement(
+  it: PlacementInput,
+  geo: { hw: number; hh: number; ox: number; oy: number },
+  opts: PlacementOpts,
+): Placement {
+  const [x, y] = ipos(it.c, it.r, geo);
+  if (it.id.startsWith('piece.')) {
+    const i = it.pawnIndex ?? 0;
+    const cx = x + (i - (4 - 1) / 2) * opts.pawnGap;
+    return { cx, cy: y + geo.hh * opts.pawnFrontDy, s: opts.pawnScale ?? 1 };
+  }
+  if (it.id.startsWith('building.')) {
+    const s = opts.buildingScale ?? 1;
+    return { cx: x, cy: y - (opts.buildingYOffset ?? 0), s };
+  }
+  if (it.id.startsWith('prop.') && it.mount && it.mount !== 'ground') {
+    /* 贴墙/贴屋顶挂件：几何、lift 与宿主楼的 y 偏移都随楼一起缩放，否则会飘在楼外 */
+    const s = opts.buildingScale ?? 1;
+    return { cx: x, cy: y - (opts.buildingYOffset ?? 0) - it.lift * s, s };
+  }
+  return { cx: x, cy: y - it.lift, s: 1 };
 }
 
 export class Scene {
@@ -70,15 +116,20 @@ export class Scene {
     for (const p of plan) {
       const inst = this.instances[p.at];
       if (!inst) continue;
+      const spec = this.items[p.at];
       const g = new Graphics();
       const target = p.pass === 2 ? layers.labels : p.pass === 3 ? layers.pieces : layers.ground;
-      const [cx, cy] = ipos(inst.c, inst.r, this.deps.geo);
+      const place = resolvePlacement(
+        { id: inst.id, c: inst.c, r: inst.r, slot: inst.slot, lift: inst.lift, box: inst.box, mount: inst.mount, pawnIndex: spec?.pawnIndex ?? 0 },
+        this.deps.geo,
+        this.deps.placement,
+      );
       const ctx: ProcCtx = {
         geo: this.deps.geo,
         box: inst.box,
-        cx,
-        cy,
-        s: 1,
+        cx: place.cx,
+        cy: place.cy,
+        s: place.s,
         params: inst.provider.kind === 'proc'
           ? { __preset: (inst.provider as { preset: string }).preset, ...((inst.provider as { params?: Record<string, unknown> }).params ?? {}) }
           : { __preset: 'builtin' },

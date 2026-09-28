@@ -2,6 +2,8 @@ import { Graphics } from 'pixi.js';
 import type { Geo } from '../iso';
 import { dia } from '../iso';
 import { ptsToPoly } from '../paint';
+import { fountain } from './proc-fountain';
+import { pawn } from './proc-pawn';
 
 export interface ProcCtx {
   geo: Geo;
@@ -94,6 +96,8 @@ export const PROC_PRESETS: Record<string, ProcPreset> = {
   bgGradient,
   solid,
   builtin,
+  fountain,
+  pawn,
 };
 
 export function procPreset(name: string): ProcPreset {

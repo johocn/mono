@@ -9,6 +9,9 @@
     "panelBg": "#0f1a18",
     "textPrimary": "#e8e4d8",
     "textSecondary": "#9fb3a8",
+    "labelBg": "#060a08",
+    "labelText": "#d8e4dc",
+    "labelOwnedText": "#ffffff",
     "owner1": "#3fbf7f",
     "owner2": "#f0a039",
     "owner3": "#e0607e",
@@ -18,13 +21,13 @@
     "token.bg": { "kind": "proc", "preset": "bgGradient", "params": { "top": "#1a2b2a", "bottom": "#0c1513" } },
     "token.gold": { "kind": "proc", "preset": "solid", "params": { "fill": "#f5c451" } },
 
-    "board.tile.core": { "kind": "proc", "preset": "tile", "params": { "fill": "#5c4a1a", "edge": "#f5c451", "inner": "#000000" } },
-    "board.tile.shop": { "kind": "proc", "preset": "tile", "params": { "fill": "#2f4238", "edge": "#5b7b6a", "inner": "#000000" } },
-    "board.tile.chance": { "kind": "proc", "preset": "tile", "params": { "fill": "#40305c", "edge": "#a26bf0", "inner": "#000000" } },
-    "board.tile.fate": { "kind": "proc", "preset": "tile", "params": { "fill": "#2b3566", "edge": "#6b7ff0", "inner": "#000000" } },
-    "board.tile.bonus": { "kind": "proc", "preset": "tile", "params": { "fill": "#245037", "edge": "#34c759", "inner": "#000000" } },
-    "board.tile.jail": { "kind": "proc", "preset": "tile", "params": { "fill": "#542c25", "edge": "#e5573f", "inner": "#000000" } },
-    "board.tile.stock": { "kind": "proc", "preset": "tile", "params": { "fill": "#22465a", "edge": "#29a9e0", "inner": "#000000" } },
+    "board.tile.core": { "kind": "proc", "preset": "tile", "params": { "fill": "#5c4a1a", "edge": "#f5c451", "inner": "#000000", "selectedEdge": "#f5c451", "edgeW": 0.9, "edgeWSel": 1.8 } },
+    "board.tile.shop": { "kind": "proc", "preset": "tile", "params": { "fill": "#2f4238", "edge": "#5b7b6a", "inner": "#000000", "selectedEdge": "#f5c451", "edgeW": 0.9, "edgeWSel": 1.8 } },
+    "board.tile.chance": { "kind": "proc", "preset": "tile", "params": { "fill": "#40305c", "edge": "#a26bf0", "inner": "#000000", "selectedEdge": "#f5c451", "edgeW": 0.9, "edgeWSel": 1.8 } },
+    "board.tile.fate": { "kind": "proc", "preset": "tile", "params": { "fill": "#2b3566", "edge": "#6b7ff0", "inner": "#000000", "selectedEdge": "#f5c451", "edgeW": 0.9, "edgeWSel": 1.8 } },
+    "board.tile.bonus": { "kind": "proc", "preset": "tile", "params": { "fill": "#245037", "edge": "#34c759", "inner": "#000000", "selectedEdge": "#f5c451", "edgeW": 0.9, "edgeWSel": 1.8 } },
+    "board.tile.jail": { "kind": "proc", "preset": "tile", "params": { "fill": "#542c25", "edge": "#e5573f", "inner": "#000000", "selectedEdge": "#f5c451", "edgeW": 0.9, "edgeWSel": 1.8 } },
+    "board.tile.stock": { "kind": "proc", "preset": "tile", "params": { "fill": "#22465a", "edge": "#29a9e0", "inner": "#000000", "selectedEdge": "#f5c451", "edgeW": 0.9, "edgeWSel": 1.8 } },
 
     "board.tile.core.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#f5c451" } },
     "board.tile.shop.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#5b7b6a" } },
@@ -34,6 +37,8 @@
     "board.tile.jail.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#e5573f" } },
     "board.tile.stock.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#29a9e0" } },
 
+    "board.inner.deco": { "kind": "proc", "preset": "tile", "params": { "fill": "#26382c", "edge": "#2c3a33", "edgeW": 0.6 } },
+
     "board.inner.d1": { "kind": "proc", "preset": "building", "params": { "levels": 3, "hue": 205, "dim": 0.72 } },
     "board.inner.d2": { "kind": "proc", "preset": "building", "params": { "levels": 2, "hue": 30, "dim": 0.72 } },
     "board.inner.d3": { "kind": "proc", "preset": "building", "params": { "levels": 2, "hue": 150, "dim": 0.72 } },
@@ -42,6 +47,29 @@
     "board.inner.d6": { "kind": "proc", "preset": "building", "params": { "levels": 3, "hue": 192, "dim": 0.72 } },
     "board.inner.d7": { "kind": "proc", "preset": "building", "params": { "levels": 2, "hue": 320, "dim": 0.72 } },
     "board.inner.d8": { "kind": "proc", "preset": "building", "params": { "levels": 3, "hue": 45, "dim": 0.72 } },
-    "board.center.fountain": { "kind": "proc", "preset": "fountain", "params": {} }
+    "board.center.fountain": {
+      "kind": "proc", "preset": "fountain",
+      "params": {
+        "rings": [
+          { "rx": 30, "ry": 15, "fill": "#55564f" },
+          { "rx": 25, "ry": 12.5, "fill": "#3a3b35" },
+          { "rx": 21, "ry": 10.5, "fill": "#2c6a80" }
+        ],
+        "pool": { "dx": -6, "dy": -1.5, "rx": 8, "ry": 3.6, "fill": "#aafbff" },
+        "column": { "w": 6, "dy": 3, "h": 17, "leftFill": "#585a52", "rightFill": "#6d6f66" },
+        "capRx": 6, "capRy": 3, "capFill": "#7d8078",
+        "arcs": [
+          { "sign": -1, "dx": 9, "dy": 7, "span": 14 },
+          { "sign": 1, "dx": 9, "dy": 7, "span": 14 }
+        ],
+        "spoutY": 24, "arcColor": "#b4ebff", "arcW": 1.4,
+        "beadY": 26, "beadR": 2.6, "beadFill": "#cdf1ff"
+      }
+    },
+
+    "piece.p1": { "kind": "proc", "preset": "pawn", "params": { "color": "#3fbf7f", "h": 13, "w": 4.2, "d": 2.1, "shadowY": 2, "shadowRx": 6, "shadowRy": 3, "shadowAlpha": 0.38, "leftAlpha": 0.72, "topAlpha": 0.18, "topDy": 0.1, "topRx": 0.9, "topRy": 0.9, "topGlowAlpha": 0.2 } },
+    "piece.p2": { "kind": "proc", "preset": "pawn", "params": { "color": "#f0a039", "h": 13, "w": 4.2, "d": 2.1, "shadowY": 2, "shadowRx": 6, "shadowRy": 3, "shadowAlpha": 0.38, "leftAlpha": 0.72, "topAlpha": 0.18, "topDy": 0.1, "topRx": 0.9, "topRy": 0.9, "topGlowAlpha": 0.2 } },
+    "piece.p3": { "kind": "proc", "preset": "pawn", "params": { "color": "#e0607e", "h": 13, "w": 4.2, "d": 2.1, "shadowY": 2, "shadowRx": 6, "shadowRy": 3, "shadowAlpha": 0.38, "leftAlpha": 0.72, "topAlpha": 0.18, "topDy": 0.1, "topRx": 0.9, "topRy": 0.9, "topGlowAlpha": 0.2 } },
+    "piece.p4": { "kind": "proc", "preset": "pawn", "params": { "color": "#4aa3e0", "h": 13, "w": 4.2, "d": 2.1, "shadowY": 2, "shadowRx": 6, "shadowRy": 3, "shadowAlpha": 0.38, "leftAlpha": 0.72, "topAlpha": 0.18, "topDy": 0.1, "topRx": 0.9, "topRy": 0.9, "topGlowAlpha": 0.2 } }
   }
 }
