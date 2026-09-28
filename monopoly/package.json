@@ -1,0 +1,28 @@
+{
+  "name": "monopoly-shuangyang",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "大富翁 · 吉林双阳邻里商业版（PixiJS 8 + GSAP）",
+  "scripts": {
+    "dev": "vite",
+    "build": "node tools/check-hardcoded.mjs && vite build",
+    "preview": "vite preview --port 52301",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src tools",
+    "lint:skin": "node tools/lint-skin.mjs",
+    "check": "npm run lint && npm run lint:skin && npm run test"
+  },
+  "dependencies": {
+    "gsap": "^3.12.5",
+    "pixi.js": "^8.6.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "eslint": "^9.17.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.0",
+    "vitest": "^2.1.9"
+  }
+}
