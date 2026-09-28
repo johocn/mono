@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "lint": "eslint src tools",
     "lint:skin": "node tools/gen-registry-ids.mjs && node tools/lint-skin.mjs",
+    "shots:m5": "node local/mono-shots-m5.mjs",
     "check": "npm run lint && npm run lint:skin && npm run test"
   },
   "dependencies": {

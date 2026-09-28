@@ -158,6 +158,19 @@ reg['showcase.tree'] = showcaseEntry('showcase.tree', { w: 14, d: 8, h: 30 });
 reg['showcase.lamp'] = showcaseEntry('showcase.lamp', { w: 8, d: 4, h: 28 });
 reg['showcase.mini'] = showcaseEntry('showcase.mini', { w: 160, d: 1, h: 210 });
 
+// —— M5 浮层（手牌 / 卡面 / 行情 / 结算 / 角标）：全部 ground 挂载 + fixed 定格台位 ——
+reg['ui.handSlot'] = showcaseEntry('ui.handSlot', { w: 68, d: 1, h: 52 });
+reg['ui.card'] = showcaseEntry('ui.card', { w: 66, d: 1, h: 88 });
+reg['ui.cardBack'] = showcaseEntry('ui.cardBack', { w: 66, d: 1, h: 88 });
+reg['ui.stockRow'] = showcaseEntry('ui.stockRow', { w: 342, d: 1, h: 34 });
+reg['ui.stockChart'] = showcaseEntry('ui.stockChart', { w: 300, d: 1, h: 54 });
+reg['ui.settleRow'] = showcaseEntry('ui.settleRow', { w: 342, d: 1, h: 40 });
+reg['ui.badge'] = showcaseEntry('ui.badge', { w: 120, d: 1, h: 26 });
+/* 浮层上的可见按键（复用 uiButton preset 的观感；台位与命中区一一对应） */
+reg['ui.tradeBuy'] = showcaseEntry('ui.tradeBuy', { w: 150, d: 1, h: 38 });
+reg['ui.tradeSell'] = showcaseEntry('ui.tradeSell', { w: 150, d: 1, h: 38 });
+reg['ui.panelClose'] = showcaseEntry('ui.panelClose', { w: 76, d: 1, h: 28 });
+
 export const REGISTRY: Record<string, RegistryEntry> = reg;
 
 export function getEntry(id: string): RegistryEntry | null {

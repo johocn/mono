@@ -6,6 +6,8 @@ export interface Advance {
   steps: number;
   /** 是否触发「经过起点」+￥200（含正好落在起点；后退不计，spec §5.4） */
   passedStart: boolean;
+  /** M5：被路障截停时的命中格号（未截停则缺省，`toEqual` 忽略 undefined） */
+  barrier?: number;
 }
 
 /**

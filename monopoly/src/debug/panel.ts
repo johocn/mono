@@ -34,7 +34,8 @@ export function createDebugPanel(): DebugPanel {
       const row = document.createElement('div');
       row.id = 'mono-views';
       row.style.cssText =
-        'position:fixed;right:6px;bottom:34vh;z-index:10;display:flex;gap:4px;' +
+        /* 靠右上角：浮层（300–622）与底坞（606+）都在下半屏，debug 行不再压浮层 */
+        'position:fixed;right:6px;top:6px;z-index:10;display:flex;gap:4px;' +
         'font:11px/1.4 ui-monospace,monospace';
       for (const [value, label] of [['0', '棋盘'], ['b', '橱窗 B'], ['c', '对照 C']]) {
         const on = value === current;

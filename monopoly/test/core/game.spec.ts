@@ -17,6 +17,14 @@ const playTurn = (g: Game): void => {
   g.endTurn();
 };
 
+/**
+ * M5 起开局手牌含「免罚」，落在他人地块会自动抵消租金。
+ * 租金/破产口径的用例先摘掉免罚，验证的是「无免罚时必须付租」的 M4 数学。
+ */
+const dropPardon = (g: Game): void => {
+  g.state.hands[0] = g.state.hands[0].filter((k) => k !== 'pardon');
+};
+
 describe('game 开局与阶段门槛（spec §5.1）', () => {
   it('开局：4 名玩家 ￥3000 / 位置 0 / 第 1 轮 / idle / 无地产', () => {
     const g = createGame({ dice: fixed(1, 1) });
@@ -85,11 +93,15 @@ describe('game 落格结算（spec §5.2）', () => {
   });
 
   it('非 shop 地块买不了：返回 not-buyable，不改现金', () => {
-    const g = createGame({ dice: fixed(1, 1) });
+    const g = createGame({ dice: fixed(1, 1), seed: 8 });
     g.state.players[0].pos = 3;
     g.rollDice();
     g.moveCurrent();
-    expect(g.settleCurrent()).toEqual({ kind: 'event', index: 5, tile: 'chance' });
+    /* M5 起 `event` 细分为 `fate` / `chance` 并带卡面 id（翻牌动画消费） */
+    const r = g.settleCurrent();
+    expect(r.kind).toBe('chance');
+    expect(r.kind === 'chance' ? r.cardId.startsWith('c-') : false).toBe(true);
+    expect(g.state.lastDraw?.deck).toBe('chance');
     expect(g.buyCurrent()).toEqual({ ok: false, reason: 'not-buyable' });
     expect(g.state.players[0].cash).toBe(START_CASH);
   });
@@ -108,6 +120,7 @@ describe('game 落格结算（spec §5.2）', () => {
 
   it('停在他人 L2 地块 → 付 ￥45 给地主', () => {
     const g = createGame({ dice: fixed(1, 1) });
+    dropPardon(g);
     g.state.estates[4] = { index: 4, owner: 2, level: 2, processing: false };
     g.state.players[0].pos = 2;
     g.rollDice();
@@ -134,6 +147,7 @@ describe('game 落格结算（spec §5.2）', () => {
 describe('game 破产清算（spec §5.4）', () => {
   it('现金不足且无地可卖 → 破产：余额归地主、现金清零、地块仍在', () => {
     const g = createGame({ dice: fixed(1, 1) });
+    dropPardon(g);
     g.state.estates[3] = { index: 3, owner: 1, level: 1, processing: false };
     g.state.estates[4] = { index: 4, owner: 2, level: 3, processing: false };
     g.state.players[0].cash = 10;
@@ -151,6 +165,7 @@ describe('game 破产清算（spec §5.4）', () => {
 
   it('卖地能抵清 → 不破产：按变卖价低者先卖，只卖到够付', () => {
     const g = createGame({ dice: fixed(1, 1) });
+    dropPardon(g);
     g.state.estates[1] = { index: 1, owner: 1, level: 1, processing: false };
     g.state.estates[3] = { index: 3, owner: 1, level: 1, processing: false };
     g.state.estates[8] = { index: 8, owner: 1, level: 1, processing: false };
@@ -234,7 +249,8 @@ describe('game 换手 / 轮次 / 胜负（spec §5.1 / §5.4）', () => {
 
 describe('game 自动对局（M4 端到端整局）', () => {
   it('autoTurn 自动完成一位玩家的整回合并交给下一位', () => {
-    const g = createGame({ seed: 7 });
+    /* seed 8：M5 起命运/机会会改写走位，7/33/51 首张命运为 f-swap 会让 p0 归 0（不再满足 pos≥2） */
+    const g = createGame({ seed: 8 });
     autoTurn(g);
     expect(g.state.over).toBe(false);
     expect(g.state.current).toBe(1);

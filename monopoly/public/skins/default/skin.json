@@ -99,6 +99,17 @@
     "showcase.lamp": { "kind": "proc", "preset": "lamp", "params": { "lpScale": 1.3 } },
     "showcase.mini": { "kind": "proc", "preset": "showcaseMini", "params": { "gy": 0.62, "radius": 12, "fill": "#101a17", "skyline": "#16221e", "ground": "#1b2622", "slab": "#2a3830", "capTx": "#e8e4d8" } },
 
+    "ui.handSlot": { "kind": "proc", "preset": "uiHandSlot", "params": {} },
+    "ui.card": { "kind": "proc", "preset": "uiCard", "params": {} },
+    "ui.cardBack": { "kind": "proc", "preset": "uiCardBack", "params": {} },
+    "ui.stockRow": { "kind": "proc", "preset": "uiStockRow", "params": {} },
+    "ui.stockChart": { "kind": "proc", "preset": "uiStockChart", "params": {} },
+    "ui.settleRow": { "kind": "proc", "preset": "uiSettleRow", "params": {} },
+    "ui.badge": { "kind": "proc", "preset": "uiBadge", "params": {} },
+    "ui.tradeBuy": { "kind": "proc", "preset": "uiButton", "params": { "btnFs": 14 } },
+    "ui.tradeSell": { "kind": "proc", "preset": "uiButton", "params": { "btnFs": 14 } },
+    "ui.panelClose": { "kind": "proc", "preset": "uiButton", "params": { "btnFs": 12, "btnR": 7 } },
+
     "ui.dock": { "kind": "proc", "preset": "uiDock", "params": {} },
     "ui.panel": { "kind": "proc", "preset": "uiPanel", "params": {} },
     "ui.label": { "kind": "proc", "preset": "uiLabel", "params": {} },

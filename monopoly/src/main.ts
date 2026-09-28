@@ -10,6 +10,8 @@ import { showcaseSpecs } from './render/ShowcaseView';
 import { drawLabels, type LabelParams } from './render/LabelView';
 import { autoPlay, createGame, currentPlayer, type Game } from './core/game';
 import { hudSpecs, mountHud, type HudActionId, type HudHandle } from './ui/Hud';
+import { mountPanels, panelSpecs, type PanelActionId, type PanelHandle } from './ui/panels';
+import type { ItemCardKind } from './data/cards';
 import { DEMO_OWNER } from './data/board';
 import { DEFAULT_GEO } from './skin/layout';
 import { preloadSkinAssets } from './render/assets';
@@ -109,12 +111,15 @@ export async function boot(): Promise<void> {
       ...streetPropSpecs(),
       ...pawnSpecs(alive.map((p) => ({ index: p.id - 1, c: cells[p.pos].c, r: cells[p.pos].r }))),
       ...hudSpecs(g.state),
+      /* M5 浮层：手牌 5 槽常驻 + 抽卡翻牌 / 股票盘 / 结算面板（未触发时为空） */
+      ...panelSpecs(g.state),
     ];
   };
 
   let hud: HudHandle | null = null;
+  let panels: PanelHandle | null = null;
 
-  /** 唯一出画口：清 spec → 组视图 → 渲染 → 标签 → HUD 命中层 */
+  /** 唯一出画口：清 spec → 组视图 → 渲染 → 标签 → HUD / 浮层命中层 */
   const paint = (): void => {
     scene.reset();
     scene.addMany(game ? playView(game) : demoView());
@@ -126,6 +131,7 @@ export async function boot(): Promise<void> {
       ownerOf: ownedOf,
     }, LABEL_PARAMS);
     hud?.update();
+    panels?.update();
   };
 
   if (game) {
@@ -135,7 +141,16 @@ export async function boot(): Promise<void> {
       else if (a === 'settle') game.settleCurrent();
       else if (a === 'buy') game.buyCurrent();
       else if (a === 'upgrade') game.upgradeCurrent();
+      else if (a === 'skip') game.skipTurn();
       else game.endTurn();
+      paint();
+    });
+    /* 浮层动作：关浮层 / 股票买卖 / 打手牌（目标由命中区 `data-target` 带出） */
+    panels = mountPanels(document.body, game, (a: PanelActionId, target?: number | string) => {
+      if (a === 'card:close' || a === 'settle:close') game.clearEvent();
+      else if (a === 'stock:buy') game.trade(String(target), 1);
+      else if (a === 'stock:sell') game.trade(String(target), -1);
+      else game.useCard(a.slice('card:'.length) as ItemCardKind, typeof target === 'number' ? target : undefined);
       paint();
     });
   }

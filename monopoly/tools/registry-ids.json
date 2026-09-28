@@ -216,5 +216,15 @@
   "showcase.banner",
   "showcase.tree",
   "showcase.lamp",
-  "showcase.mini"
+  "showcase.mini",
+  "ui.handSlot",
+  "ui.card",
+  "ui.cardBack",
+  "ui.stockRow",
+  "ui.stockChart",
+  "ui.settleRow",
+  "ui.badge",
+  "ui.tradeBuy",
+  "ui.tradeSell",
+  "ui.panelClose"
 ]

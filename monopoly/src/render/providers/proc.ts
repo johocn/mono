@@ -119,6 +119,9 @@ import { shop, sign } from './proc-building';
 import { antenna, awning, banner, lamp, lantern, rooftopBox, signTower, tree } from './proc-props';
 import { showcaseGround, showcaseHud, showcaseMini, showcasePanel, showcaseSky, showcaseSkyline } from './proc-showcase';
 import { diceBody, diceFace, uiButton, uiDock, uiLabel, uiPanel, uiPlayerBar } from './proc-hud';
+import {
+  uiBadge, uiCard, uiCardBack, uiHandSlot, uiSettleRow, uiStockChart, uiStockRow,
+} from './proc-panel';
 
 export const PROC_PRESETS: Record<string, ProcPreset> = {
   tile,
@@ -151,6 +154,13 @@ export const PROC_PRESETS: Record<string, ProcPreset> = {
   uiLabel,
   diceBody,
   diceFace,
+  uiHandSlot,
+  uiCard,
+  uiCardBack,
+  uiStockRow,
+  uiStockChart,
+  uiSettleRow,
+  uiBadge,
 };
 
 export function procPreset(name: string): ProcPreset {

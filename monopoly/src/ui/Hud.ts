@@ -10,8 +10,8 @@ import {
   HUD_DOCK_H, HUD_LABEL_Y, STAGE_W,
 } from '../skin/layout';
 
-/** 主按钮在四个阶段里的动作（spec §5.1 回合流程的显式化） */
-export type HudPrimaryAction = 'roll' | 'move' | 'settle' | 'end';
+/** 主按钮在四个阶段里的动作（spec §5.1 回合流程的显式化）；监狱禁行时为 `skip` */
+export type HudPrimaryAction = 'roll' | 'move' | 'settle' | 'end' | 'skip';
 export type HudActionId = HudPrimaryAction | 'buy' | 'upgrade';
 
 export interface HitArea {
@@ -26,11 +26,17 @@ export interface HudHandle {
 }
 
 const PRIMARY_LABEL: Record<HudPrimaryAction, string> = {
-  roll: '掷骰', move: '前进', settle: '结算', end: '结束回合',
+  roll: '掷骰', move: '前进', settle: '结算', end: '结束回合', skip: '跳过',
 };
+
+/** 当前玩家是否处于监狱禁行（`jail` 与新状态字段对 M4 老状态做防御性可选读） */
+function jailed(state: GameState): number {
+  return state.jail?.[state.current] ?? 0;
+}
 
 export function primaryAction(state: GameState): HudPrimaryAction | null {
   if (state.over) return null;
+  if (state.phase === 'idle' && jailed(state) > 0) return 'skip';
   switch (state.phase) {
     case 'idle': return 'roll';
     case 'rolled': return 'move';
@@ -41,6 +47,7 @@ export function primaryAction(state: GameState): HudPrimaryAction | null {
 
 export function primaryLabel(state: GameState): string {
   const a = primaryAction(state);
+  if (a === 'skip') return `跳过（${jailed(state)}）`;
   return a ? PRIMARY_LABEL[a] : '本局结束';
 }
 
@@ -77,7 +84,10 @@ export function statusText(state: GameState): string {
     }
     return `本局结束 · 胜者 ${PLAYER_NAME[best.id - 1]}`;
   }
-  return `第 ${state.round} 轮 · 轮到 ${PLAYER_NAME[currentPlayer(state).id - 1]}`;
+  const cur = currentPlayer(state);
+  const j = jailed(state);
+  const base = `第 ${state.round} 轮 · 轮到 ${PLAYER_NAME[cur.id - 1]}`;
+  return j > 0 ? `${base} · 禁行 ${j} 回合` : base;
 }
 
 /** bar 的中心 x（i = players 下标） */
