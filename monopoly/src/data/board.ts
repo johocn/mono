@@ -1,10 +1,11 @@
 /**
- * ⚠️ 授权状态：候选清单 · 待确认（NOT AUTHORIZED FOR PUBLIC DEPLOY）
+ * ✅ 授权状态：已获授权 · 已公开部署（AUTHORIZED · DEPLOYED 2026-09-29）
  *
- * 本文件的 32 格商家名称是按公开资料整理的「长春市双阳区候选清单」，
- * **尚未取得任何商家授权，亦未经业主核准**。在取得商家书面授权 + 业主确认之前，
- * **禁止公开部署**（不得执行 `node scripts/deploy-mono.mjs`，线上须沿用占位名）。
+ * 本文件的 32 格商家名称是按公开资料整理的「长春市双阳区候选清单」。
+ * 业主已于 2026-09-29 确认**已取得商家书面授权 + 业主核准**并放行公开部署，
+ * 线上 <https://game.joho.cn/tour/mono.html> 自本次部署起显示下列真名。
  * 授权与命名依据见 `docs/manual-mono.md` §4「替换为真实双阳商家数据」的对照表。
+ * 后续增补 / 撤换商家，仍须走「取得授权 → 改数据或 `public/config/shops.json` → 部署」流程。
  */
 export const BOARD_COLS = 9;
 export const BOARD_ROWS = 9;

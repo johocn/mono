@@ -138,6 +138,12 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 - 校验：`https://game.joho.cn/tour/mono.html` → **200** ✅；`js/mono.js` 线上/本地 = **473051 / 473051 bytes** ✅（现行值）；`skins/photo/skin.json` → **200** ✅
 - 线上 URL：<https://game.joho.cn/tour/mono.html>
 
+**部署记录（最新，ts `20260929-064040`）**：商家真名**授权放行后**重部署（含阶段一「静态认领」配置加载能力；出厂 `public/config/shops.json` 仍为 `shops: []`，故线上零配置变化）。
+- 校验：`https://game.joho.cn/tour/mono.html` → **200** ✅；`js/mono.js` 线上/本地 = **483744 / 483744 bytes** ✅；`skins/photo/skin.json` → **200** ✅
+- 备份 `tour.bak-20260929-064040`（现存最近 3 份：`064040` / `031606` / `024938`）
+- 线上回归 `node local/mono-prod-check.mjs` → 退出码 **0**、7 项 gate 全 `true`、`errors=[]`（元素计数 32/4/2/5；`sim()` 胜者 4、`round=61`；`?skin=photo` `missingAssets=0`、image 实例 8）
+- 授权状态同步：`src/data/board.ts` 文件头与本节 §4 的「未授权·禁止部署」守卫已改为「已获授权 · 已公开部署」（详见 §4.4）
+
 **线上回归记录**（`node local/mono-prod-check.mjs`，退出码 **0**，`gate` 全 `true`、`errors=[]`）：
 - `board.tile.*`=32 / `ui.playerBar`=4 / `dice.body`=2 / `ui.handSlot`=5（与本地闸门一致）
 - `__monoMain.sim()` → 胜者 4、`state.over=true`、`round=61`
@@ -242,11 +248,10 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 
 ## 4. 替换为真实双阳商家数据
 
-> ⚠️ **授权状态：候选清单 · 待确认（禁止公开部署）**
-> `src/data/board.ts` 的 32 格名称已由 v5 样张的**占位 / 派生**名替换为**双阳本地候选真名**（spec §12 待办项 1）。
-> 这些名称依据**公开资料 / 委托方实地核查清单**整理，**尚未取得任何商家授权，亦未经业主核准**。
-> 在商家书面授权 + 业主确认之前，**线上必须沿用占位名、不得部署**（不要执行 `node d:\zhao\scripts\deploy-mono.mjs`）。
-> 本节的对照表与预览截图供业主**离线核对**，确认后方可放行部署。数据层文件头另有一段同样的授权告警（`src/data/board.ts` 顶部）。
+> ✅ **授权状态：已获授权 · 已公开部署**（2026-09-29 业主确认「已取得商家书面授权 + 业主核准」并放行）
+> `src/data/board.ts` 的 32 格名称已由 v5 样张的**占位 / 派生**名替换为**双阳本地候选真名**（spec §12 待办项 1），并已随 `20260929-064040` 部署上线（详见 §4.4 执行记录）。
+> 授权前本节为「候选清单 · 待确认（禁止公开部署）」；**该守卫已于放行后解除**，线上现行即为下表真名。
+> 本文件头（`src/data/board.ts` 顶部）的授权告警已同步为「已获授权 · 已公开部署」。
 > 本次仅**改数据**，未改任何代码逻辑、未改棋盘结构 / 格数 / 索引 / 类型序列；经济数值**未**改动（见 §4.5「建议分级价目 · 待平衡」）。
 
 ### 4.1 改哪个文件、哪些字段
@@ -319,9 +324,10 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 - **灯笼字**：`prop.lantern` / `showcase.lantern`，字取 `SLOT_LANTERN_CHAR`。
 - **楼体 shop**：`building.s*.l{1,2,3}` / `showcase.shop`，`brand` 取 `TILE_BRAND`、`hue` 取 `OWNER_HUE[owner]`。
 
-### 4.4 重建 + 部署 + 线上回归（**获授权后**才可执行）
+### 4.4 重建 + 部署 + 线上回归（**已获授权 · 已执行**）
 
-> ⛔ **未取得商家书面授权 + 业主核准前，禁止执行下面的部署命令**（线上继续显示占位名，属有意为之）。
+> **执行记录（ts `20260929-064040`）**：2026-09-29 业主确认「已取得商家书面授权 + 业主核准」并放行 → 本地构建 → tar 整包 → scp → 服务器仅解压 → 三项校验全绿；备份 `tour.bak-20260929-064040`（现存最近 3 份）；线上回归 `node local/mono-prod-check.mjs` 退出码 **0**、7 项 gate 全 `true`、`errors=[]`（元素计数 32/4/2/5；`sim()` 胜者 4、`round=61`；`?skin=photo` `missingAssets=0`、image 实例 8）。线上 URL：<https://game.joho.cn/tour/mono.html>
+> 后续改数据 / 改 `public/config/shops.json` 后需再次部署时，执行下面的命令。
 
 ```powershell
 # 本地构建 → tar 整包 → scp → 服务器仅解压（绝不在服务器构建）
@@ -356,7 +362,7 @@ node local/mono-prod-check.mjs
 
 脚本自带闸门：32 张字牌、含新名（鹿乡小镇 / 国信温泉 / 鹿茸市场 / 神鹿峰）、不含任何旧占位名、`errors=[]`。
 
-**✅ 授权放行的一句话**（业主对助手说）：`双阳商家名单已获授权，按 §4.4 部署到线上`——收到后助手才执行 `node d:\zhao\scripts\deploy-mono.mjs` 并跑线上回归。
+**✅ 授权放行记录**：业主已于 2026-09-29 给出该类指令（「确认已授权 → 部署线上」），助手随之执行 `node d:\zhao\scripts\deploy-mono.mjs` 并跑线上回归，结果见 §4.4 执行记录。此后如需再次放行，仍以同类明确指令为准。
 
 ## 5. 商家配置加载（商业闭环 · 阶段一「静态认领」）
 
