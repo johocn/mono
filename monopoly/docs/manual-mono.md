@@ -48,7 +48,7 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 
 | # | 步骤 | 期望 | 截图 |
 |---|---|---|---|
-| M4-1 | 打开 `mono.html?debug=1&play=1&seed=20260928` | 底部操作坞出现：顶部金色提示条 + 状态行「第 1 轮 · 轮到 你」+ 4 条玩家资产条（当前玩家金框）+ 两个骰面（未掷为暗底空面）+ 金色「掷骰」按钮；地砖归属色与棋子位置跟游戏状态联动 | `mono-m4-01-hud.png` |
+| M4-1 | 打开 `mono.html?debug=1&play=1&seed=20260928` | 上=等距棋盘，**中=当前落点地块的橱窗**（spec §6 版式 A：夜空 + 天际线 + 广场 + 楼体 + 店名药丸 + 信息条，随 `paint()` 在 move/settle/upgrade 后同步；play 下不画 CTA 金按钮，棋盘上已有真实买卖键），下=底部操作坞：顶部金色提示条 + 状态行「第 1 轮 · 轮到 你」+ 4 条玩家资产条（当前玩家金框）+ 两个骰面（未掷为暗底空面）+ 金色「掷骰」按钮；地砖归属色与棋子位置跟游戏状态联动 | `mono-m4-01-hud.png` |
 | M4-2 | 依次点主按钮「掷骰」→「前进」→「结算」 | 三个动作按回合阶段递进（`idle→rolled→moved→settled`），骰面显示本回合点数（`seed=20260928` 时为 6+2）；结算后按钮变「结束回合」，若落格无主 shop 则在左侧出现「买地 ￥60」、若自有则在右侧出现「升级 ￥180」 | `mono-m4-02-settled.png` |
 | M4-3 | 控制台执行 `__monoMain.sim()` | headless 一路自动跑到分出胜负，返回胜者 id（1..4）；状态行变「本局结束 · 胜者 老王」，主按钮变为灰置禁用的「本局结束」（不再可点，胜者按净资产判定）；`__monoMain.game.state.round` ≤ 61 | `mono-m4-03-final.png` |
 | M4-4 | 现金不足时点「买地」（把 `__monoMain.game.state.players[0].cash` 改成 10 后 `__monoMain.paint()`） | 按钮仍在但变灰且点不动（边界校验，不隐藏） | — |
@@ -75,17 +75,21 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 | # | 步骤 | 期望 | 截图 |
 |---|---|---|---|
 | M6-1 | `mono.html?play=1&speed=0.25` 点「掷骰」 | 骰体绕轴旋转 + 弹跳后停下（≥12 帧观感；点屏可加速） | `mono-m6-01-dice.png` |
-| M6-2 | 点「前进」 | 棋子逐格起跳（kick 起跳段 + 抛物线），落点扬起一圈落尘 | `mono-m6-02-hop.png` |
+| M6-2 | 点「前进」 | 棋子放大后逐格起跳（kick 起跳段腾空 52px + 抛物线落向目标格），起跳点与落点各扬起一圈落尘（6 粒/圈） | `mono-m6-02-hop.png` |
 | M6-3 | 落格无主空地后点「买地」 | 红章旋正盖下 + 一圈金币飞出飞向持有者 | `mono-m6-03-buy.png` |
 | M6-4 | 点「升级」 | 脚手架淡入 → 落成 → 逐层点亮火花（L1→L2→L3） | `mono-m6-04-upgrade.png` |
 | M6-5 | 走到对家地块结算 | 金币飞向持有者 + 落点火花脉冲 | `mono-m6-05-rent.png` |
-| M6-6 | 走到命运 / 机会格 | 卡面 X 轴 3D 翻转 + 高光横扫 | `mono-m6-06-card.png` |
-| M6-7 | 使用手牌（炸弹等） | 牌堆/碎片轻微震动 + 淡出 | `mono-m6-07-deck.png` |
-| M6-8 | 买 / 卖股票 | 碎片红/绿脉冲示意涨跌 | `mono-m6-08-stock.png` |
-| M6-9 | 控制台 `__monoMain.sim()` | 全屏火花环形迸发 + 结算面板展开 | `mono-m6-09-end.png` |
-| M6-10 | 跑 `node local/mono-shots-m6.mjs` | 9 张中间帧 + 1 段录像（`mono-m6-anim.webm`）入库；`gate` 全 `true`、`errors=[]` | 上述全部 |
+| M6-6 | 走到命运 / 机会格 | 卡面横向自侧面展开（翻面入场）+ 高光横扫；中间帧卡面已展到近满宽、标题与正文可读（非边缘朝上） | `mono-m6-06-card.png` |
+| M6-7 | 使用手牌（炸弹等） | 牌背放大后左右/上下轻微震动 + 淡出 | `mono-m6-07-deck.png` |
+| M6-8 | 买 / 卖股票 | 菱形脉冲块放大到红/绿脉冲峰值示意涨跌 | `mono-m6-08-stock.png` |
+| M6-9 | 控制台 `__monoMain.sim()` | 16 枚四角火花自屏心环形迸发、半径展开到 ≈210px（铺满屏）+ 结算面板展开 | `mono-m6-09-end.png` |
+| M6-10 | 跑 `node local/mono-shots-m6.mjs` | 9 张中间帧 + 1 段录像（`mono-m6-anim.webm`）入库；`gate` 全 `true`、`errors=[]`；**9 张截图内容哈希两两不同且均 ≠ 空场景 baseline**，每张 `fx.bounds()` ≥ 40×40 | 上述全部 |
 
 **动画权威性**：`?speed=0.25` 慢放下逐条断言「动画播放中 `game.state.phase` 不变化」与「`fx.skip()` 后 phase 与不加动画一致」——状态机先落库、动画只回放。`?nofx=1` 等价 `speed=999`（瞬间到终帧）；动画播放中主按钮变「跳过」（点屏即加速到终帧，不取消、不吞点击）。
+
+**中间帧截取口径**：闸门用 `fx.progress()`（GSAP 时轴**真实相位**）轮询定位，不再按 `motionFor().durationMs` + 墙钟推算——后者对 `buy`/`rent`（金币错峰使时轴 900ms > 声明的 460/520ms）与 `end`（时轴 900ms、火花 620ms）会算错，曾截在动画结束 `cleanup()` 之后得到空帧。新增 `fxHandle.progress()/totalMs()/bounds()`（`bounds` 只统计本次 `spawn` 的元素，不含 HUD）。动效元素一律「preset 局部坐标绘制（`cx/cy=0`）+ 容器 `position` 承载台位」，避免 preset 绝对坐标与 GSAP 绝对补间二次叠加。
+
+**版式 A 中部橱窗**：`?play=1` 时中部条带（≈300..606）渲染当前玩家落点地块的橱窗，**完整复用** B 版式同一批注册表元素/preset（`showcase.panel/sky/skyline/ground/tree/lamp/shop/sign/lantern/banner/hud`），不另造美术；`showcaseHud` 新增 `state.barDy`/`state.btnOn` 两个开关（经 state 传参，避免 `only()` 整替换 provider 丢 skin params）。布局常量在 `src/skin/layout.ts`（`PLAY_SHOWCASE_Y=300` / `PLAY_HUD_BAR_DY=-40` / `PLAY_SHOP_S=2.6`），`src/render/**` 零新增字面量。`?show=b|c|0` 仍作独立版式开关（非 play 路径完全不经过 play 分支）。
 
 **性能核对行**（`node local/mono-perf.mjs`；headless 仅给代理指标，真机 60fps 需人工勾选）：
 

@@ -2,7 +2,7 @@ import {
   levelCaption, OWNER_HUE, PLAYER_NAME, RENT_BY_LEVEL, SHOWCASE_TEXT as T,
   SLOT_BANNER, SLOT_LANTERN_CHAR, TILE_BRAND, TILE_LEVEL,
 } from '../data/board';
-import { STAGE_W } from '../skin/layout';
+import { PLAY_HUD_BAR_DY, PLAY_SHOP_S, PLAY_SHOWCASE_Y, STAGE_W } from '../skin/layout';
 import type { ElementSpec } from '../skin/instantiate';
 import { only, proc } from './BuildingView';
 import { SHOWCASE_L as W } from './providers/proc-showcase';
@@ -14,6 +14,12 @@ export interface ShowcaseInput {
   owner?: number | null;
   /** 版式：b = 单地块橱窗（默认，踩格特写 / 升级弹窗）；c = 三级对照（我的地产 / 图鉴） */
   variant?: 'b' | 'c';
+  /**
+   * play 版式（spec §6 版式 A「中 = 当前地块橱窗」）：面板上移到 PLAY_SHOWCASE_Y，
+   * 信息条上移 PLAY_HUD_BAR_DY 避开手牌行，且不画 CTA 金按钮（棋盘上已有真实买卖键）。
+   * 元素 ID / preset / 构图与 B 版式完全一致，不另造美术。
+   */
+  play?: boolean;
 }
 
 /** 定格台位：橱窗元素不在棋盘网格上，直接给绝对屏幕坐标（Scene 见 fixed 即短路 resolvePlacement） */
@@ -35,12 +41,12 @@ export function showcaseSpecs(input: ShowcaseInput): ElementSpec[] {
   const brand = TILE_BRAND[slot] || T.fallbackBrand;
   const hue = OWNER_HUE[owner ?? 2] ?? OWNER_HUE[2];
   const px = W.x;
-  const py = W.y;
+  const py = input.play ? PLAY_SHOWCASE_Y : W.y;
   const gy = py + W.h * W.gy;
   /* 大楼基座（v5 showcase line 355–356 的 cx/cy） */
   const bx = px + W.w / 2;
   const by = gy + Math.min(W.h - W.h * W.gy, W.cyMax) * W.cyF;
-  const big = at(bx, by, W.shopScale);
+  const big = at(bx, by, input.play ? PLAY_SHOP_S : W.shopScale);
   const rent = RENT_BY_LEVEL[lv] ?? RENT_BY_LEVEL[2];
   const nextRent = RENT_BY_LEVEL[lv + 1];
   const ownerName = owner ? PLAYER_NAME[owner - 1] : T.noOwner;
@@ -86,16 +92,20 @@ export function showcaseSpecs(input: ShowcaseInput): ElementSpec[] {
     }));
   }
 
-  /* 信息条（v5 optB line 444–448） */
-  out.push(sc('showcase.hud', at(px, py), {
-    state: {
-      brand,
-      sub: `${T.kind} · ${T.holder} ${ownerName}`,
-      line1: `${lv} ${T.floors} · ${T.rent} ￥${rent}`,
-      line2: lv === 3 ? T.maxLevel : `${T.upgradeTo} L${lv + 1} → ${T.rent} ￥${nextRent}`,
-      cta: `${T.pay} ￥${rent * 4}`,
-    },
-  }));
+  /* 信息条（v5 optB line 444–448）；play 版式上移避开手牌行且不画 CTA（棋盘上已有买卖键） */
+  const hudState: Record<string, unknown> = {
+    brand,
+    sub: `${T.kind} · ${T.holder} ${ownerName}`,
+    line1: `${lv} ${T.floors} · ${T.rent} ￥${rent}`,
+    line2: lv === 3 ? T.maxLevel : `${T.upgradeTo} L${lv + 1} → ${T.rent} ￥${nextRent}`,
+  };
+  if (input.play) {
+    hudState.barDy = PLAY_HUD_BAR_DY;
+    hudState.btnOn = false;
+  } else {
+    hudState.cta = `${T.pay} ￥${rent * 4}`;
+  }
+  out.push(sc('showcase.hud', at(px, py), { state: hudState }));
 
   return out;
 }

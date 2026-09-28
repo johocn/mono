@@ -88,62 +88,85 @@ export const PANEL_CLOSE_Y = 336;                // 顶
 export const PANEL_CLOSE_W = 76;
 export const PANEL_CLOSE_H = 28;
 
+/* —— play 版式中部橱窗（spec §6 版式 A「中 = 当前地块橱窗」）——
+   棋盘底 ≈ 276，底坞顶 = DOCK_Y(606)，中间条带 ≈ 300..606；橱窗**完整复用** B 版式构图（§3.5）与
+   同名注册表元素（showcase.panel/sky/skyline/ground/tree/lamp/shop/sign/lantern/banner/hud）。
+   手牌行（PANEL_HAND_Y = 550 .. 602）落在条带下部，而 B 版式的信息条默认在面板内 248..286
+   （play 下 = 548..586，正好压住手牌行），故把它整体上移到楼体基座处（248 → 208，即 508..546），
+   紧贴手牌行上沿而不重叠；CTA 金按钮在 play 版式下不画（棋盘上已有真实买卖键）。 */
+export const PLAY_SHOWCASE_Y = 300;              // 橱窗面板左上角 y（与 B 版式同 x=10）
+export const PLAY_HUD_BAR_DY = -40;              // 信息条相对默认位上移（默认 248 → 208，落在手牌行之上）
+export const PLAY_SHOP_S = 2.6;                  // 楼体缩放（略收小，让楼顶落在面板之内）
+
 /* —— M6 动效参数（spec §5.6 全清单）：`src/render/fx.ts` 唯一取值来源 ——
    `fx.ts` 处于「禁写死」gate 作用域内，裸时长/弧高/粒子数一律集中在此（本文件不在 gate 内）。
-   任何动效数字必须写成这里的具名常量，再由 fx.ts 引用——否则 lint 拦下。 */
+   任何动效数字必须写成这里的具名常量，再由 fx.ts 引用——否则 lint 拦下。
+   尺寸口径：spec §5.6 要求「大富翁-4 级可读性」，故每条动效都在手机 390×844 下放大到可辨识。 */
 export const FX_MS_PER_S = 1000;                 // ms → gsap 秒
 export const FX_EASE_FALLBACK = 'power2.out';    // skin.json `fx.ease` 缺失时的兜底（非色值，可裸写）
 export const FX_NOFX_SPEED = 999;                // `?nofx=1` → 时轴瞬间到终帧
 export const FX_LEVELS = 3;                      // 升级「逐层点亮」层数（L1→L2→L3）
 export const FX_FRAMES = 300;                    // `?perf=1` 采样帧数
 
-/* 掷骰：旋转弹跳 */
-export const FX_DICE_MS = 520;
+/* 掷骰：旋转弹跳（骰体放大到 HUD 骰面的 2.4 倍，弹跳抬出底坞 → 手机屏上可辨识「翻滚」） */
+export const FX_DICE_MS = 560;
 export const FX_DICE_SPIN = 360;                 // 旋转总角度（度）
-export const FX_DICE_HOP = 14;                   // 弹跳高度（px）
-/* 移动：逐格跳跃 + 落尘 */
-export const FX_HOP_MS = 240;
-export const FX_HOP_ARC = 26;                    // 腾空弧高（px）
-export const FX_HOP_KICK_MS = 90;                // 起跳段时长
+export const FX_DICE_HOP = 46;                   // 弹跳高度（px）
+export const FX_DICE_S = 2.4;                    // 骰体动效缩放
+/* 移动：逐格跳跃 + 落尘（棋子放大 2.2 倍，原棋盘棋子 0.62 缩放太小于静帧不可辨） */
+export const FX_HOP_MS = 320;
+export const FX_HOP_ARC = 52;                    // 腾空弧高（px）
+export const FX_HOP_S = 2.2;                     // 棋子动效缩放
+export const FX_HOP_KICK_MS = 110;               // 起跳段时长
 export const FX_DUST_COUNT = 6;
-export const FX_DUST_MS = 240;
-export const FX_DUST_ARC = 12;
+export const FX_DUST_MS = 320;
+export const FX_DUST_ARC = 22;                   // 落尘扇形铺开半宽（px）
+export const FX_DUST_S = 3.2;                    // 落尘动效缩放（原 1 倍在静帧下不可辨）
 /* 买地：盖章 + 金币飞出 */
 export const FX_BUY_MS = 460;
-export const FX_STAMP_MS = 200;
-export const FX_STAMP_S0 = 2.2;                  // 盖章初始放大（砸下感）
-export const FX_STAMP_DEG = -12;                 // 盖章初始旋转（度）
+export const FX_STAMP_MS = 220;
+export const FX_STAMP_S0 = 3.2;                  // 盖章初始放大（砸下感）
+export const FX_STAMP_S = 2.4;                   // 盖章落定缩放（26px → 62px）
+export const FX_STAMP_DEG = -14;                 // 盖章初始旋转（度）
 export const FX_COIN_COUNT = 8;
-export const FX_COIN_FLY_MS = 420;
-export const FX_COIN_LIFT = -34;                 // 金币飞出上抛弧高（px）
+export const FX_COIN_FLY_MS = 480;
+export const FX_COIN_LIFT = -52;                 // 金币飞出上抛弧高（px）
+export const FX_COIN_ARC = 26;                   // 金币扇形铺开半宽（px）
+export const FX_COIN_S = 2.2;                    // 金币动效缩放（原 1 倍在手机静帧下太小）
 /* 升级：脚手架 → 落成 → 逐层点亮 */
 export const FX_UPGRADE_MS = 640;
 export const FX_SCAFFOLD_MS = 220;
 export const FX_SCAFFOLD_S0 = 0.6;
-export const FX_PER_LEVEL_LIT_MS = 140;
-export const FX_LIT_S = 1.25;
-export const FX_LEVEL_STEP = 12;                 // 逐层点亮的每级纵向间隔（px）
+export const FX_SCAFFOLD_S = 2.2;                // 脚手架落定缩放（30×34 → 66×75）
+export const FX_PER_LEVEL_LIT_MS = 180;
+export const FX_LIT_S = 2;                       // 逐层点亮火花落定缩放
+export const FX_LEVEL_STEP = 26;                 // 逐层点亮的每级纵向间隔（px）
 /* 收租：金币飞行 + 数字滚动 */
 export const FX_RENT_MS = 520;
-/* 卡牌：3D 翻转 + 高光扫过 */
+export const FX_BURST_MS = 320;                  // 落点火花时长（rent 专用，与 end 的铺开分开）
+/* 卡牌：翻面入场 + 高光扫过（卡面放大 2 倍并翻至可读角度，原 8×12 碎片不可辨） */
 export const FX_CARD_MS = 480;
-export const FX_FLIP_MS = 260;
-export const FX_FLIP_SCALE_X = 0.08;             // 翻到侧面时的横向收窄（近似 3D）
-export const FX_SHINE_MS = 220;
-export const FX_SHINE_DX = 40;                   // 高光横扫位移（px）
+export const FX_CARD_S = 2;                      // 卡面动效缩放（66×88 → 132×176）
+export const FX_FLIP_MS = 280;
+export const FX_FLIP_SCALE_X = 0.08;             // 入场起点：横向收窄到近侧面（近似 3D）
+export const FX_SHINE_MS = 260;
+export const FX_SHINE_DX = 60;                   // 高光横扫位移（px）
 /* 命运/机会：牌堆抽取 + 轻微震动 */
 export const FX_DECK_MS = 420;
-export const FX_SHAKE_MS = 180;
-export const FX_SHAKE_AMP = 6;
+export const FX_DECK_S = 1.8;                    // 牌背动效缩放（66×88 → 119×158）
+export const FX_SHAKE_MS = 200;
+export const FX_SHAKE_AMP = 10;
 /* 股票：折线抖动 + 红绿脉冲（用缩放/透明度脉冲表达，色由 skin 令牌管） */
 export const FX_STOCK_MS = 460;
-export const FX_PULSE_MS = 140;
-export const FX_PULSE_S = 1.3;
-/* 破产/胜利：全屏特效 + 结算展开 */
+export const FX_PULSE_MS = 160;
+export const FX_PULSE_S = 1.6;
+export const FX_SHARD_S = 6;                     // 碎片（股票脉冲）动效缩放（原 2.6 太小，静帧不可辨）
+/* 破产/胜利：全屏特效 + 结算展开（火花铺开半径 ≈ 舞台半宽 → 铺满屏） */
 export const FX_END_MS = 900;
-export const FX_END_COUNT = 12;
-export const FX_SPARK_MS = 260;
-export const FX_SPARK_ARC = 44;
+export const FX_END_COUNT = 16;
+export const FX_SPARK_MS = 620;
+export const FX_SPARK_ARC = 210;
+export const FX_END_S = 2.6;                     // 全屏火花落定缩放
 
 /* 动效落点兜底（ctx 未给坐标时）：舞台中心 / 底坞骰位 / 橱窗卡面中心 */
 export const FX_CENTER_X = STAGE_W / 2;

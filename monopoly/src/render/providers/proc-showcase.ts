@@ -147,18 +147,24 @@ export const showcaseGround: ProcPreset = (g, ctx) => {
     .fill({ color: str(params, 'slabIn', D.slabIn) });
 };
 
-/* —— 信息条：顶部药丸 + 底部条 + 金色按钮（v5 optB line 444–448） —— */
+/* —— 信息条：顶部药丸 + 底部条 + 金色按钮（v5 optB line 444–448） ——
+   `state.barDy` 把信息条整体上移（play 版式避开手牌行；缺省 0 = B 版式原位）；
+   `state.btnOn === false` 时不画金色 CTA（play 版式棋盘上已有真实买卖键）。 */
 export const showcaseHud: ProcPreset = (g, ctx) => {
   const { cx, cy, params, state } = ctx;
   const L = SHOWCASE_L;
+  const barDy = num(state, 'barDy', 0);
+  const btnOn = state.btnOn !== false;
   const pillTx = str(params, 'pillTx', D.pillTx);
   const subTx = str(params, 'subTx', D.subTx);
   const barTx = str(params, 'barTx', D.barTx);
   const goldTx = str(params, 'goldTx', D.goldTx);
 
   g.roundRect(cx + L.pillX, cy + L.pillY, L.pillW, L.pillH, L.pillR).fill({ color: str(params, 'pillBg', D.pillBg) });
-  g.roundRect(cx + L.barX, cy + L.barY, L.barW, L.barH, L.barR).fill({ color: str(params, 'barBg', D.barBg) });
-  g.roundRect(cx + L.btnX, cy + L.btnY, L.btnW, L.btnH, L.btnR).fill({ color: str(params, 'gold', D.gold) });
+  g.roundRect(cx + L.barX, cy + L.barY + barDy, L.barW, L.barH, L.barR).fill({ color: str(params, 'barBg', D.barBg) });
+  if (btnOn) {
+    g.roundRect(cx + L.btnX, cy + L.btnY + barDy, L.btnW, L.btnH, L.btnR).fill({ color: str(params, 'gold', D.gold) });
+  }
 
   const emit = (key: string, x: number, y: number, size: number, fill: string): void => {
     const text = str(state, key, '');
@@ -166,9 +172,9 @@ export const showcaseHud: ProcPreset = (g, ctx) => {
   };
   emit('brand', cx + L.brandX, cy + L.brandY, L.brandFs, pillTx);
   emit('sub', cx + L.subX, cy + L.subY, L.subFs, subTx);
-  emit('line1', cx + L.barTx, cy + L.barTy1, L.barFs1, barTx);
-  emit('line2', cx + L.barTx, cy + L.barTy2, L.barFs2, subTx);
-  emit('cta', cx + L.btnCx, cy + L.btnCy, L.btnFs, goldTx);
+  emit('line1', cx + L.barTx, cy + L.barTy1 + barDy, L.barFs1, barTx);
+  emit('line2', cx + L.barTx, cy + L.barTy2 + barDy, L.barFs2, subTx);
+  if (btnOn) emit('cta', cx + L.btnCx, cy + L.btnCy + barDy, L.btnFs, goldTx);
 };
 
 /* —— C 版式迷你卡：底板 + 迷你天际线（无窗）+ 地面/石板 + 卡外标签（v5 miniShop line 369–380） —— */

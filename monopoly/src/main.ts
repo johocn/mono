@@ -12,7 +12,7 @@ import { ipos } from './render/iso';
 import { autoPlay, createGame, currentPlayer, type Game, type SettleResult } from './core/game';
 import { hudSpecs, mountHud, type HudActionId, type HudHandle } from './ui/Hud';
 import { mountPanels, panelSpecs, type PanelActionId, type PanelHandle } from './ui/panels';
-import type { ItemCardKind } from './data/cards';
+import { FATE_DECK, type ItemCardKind } from './data/cards';
 import { DEMO_OWNER } from './data/board';
 import { STOCK_TILE_INDEX } from './data/stocks';
 import { DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED } from './skin/layout';
@@ -138,6 +138,8 @@ export async function boot(): Promise<void> {
       ...buildingSpecs({ ownerOf: ownedOf }),
       ...streetPropSpecs(),
       ...pawnSpecs(alive.map((p) => ({ index: p.id - 1, c: cells[p.pos].c, r: cells[p.pos].r }))),
+      /* spec §6 版式 A：中部 = 当前玩家落点地块的橱窗（复用 B 版式构图；随 paint() 同步） */
+      ...showcaseSpecs({ slot: currentPlayer(g.state).pos, owner: ownedOf(currentPlayer(g.state).pos), play: true }),
       ...hudSpecs(g.state, fxPending || fx.busy()),
       /* M5 浮层：手牌 5 槽常驻 + 抽卡翻牌 / 股票盘 / 结算面板（未触发时为空） */
       ...panelSpecs(g.state),
@@ -190,8 +192,10 @@ export async function boot(): Promise<void> {
       }
       case 'fate':
       case 'chance':
-      case 'bonus':
-        return { kind: 'card' };
+      case 'bonus': {
+        const d = game?.state.lastDraw;
+        return { kind: 'card', title: d?.title ?? FATE_DECK[0].name, text: d?.text ?? FATE_DECK[0].text };
+      }
       case 'stock':
         return { kind: 'stock', x: at.x, y: at.y };
       default:
@@ -269,7 +273,7 @@ export async function boot(): Promise<void> {
       case 'buy': return { kind, x: a.x, y: a.y };
       case 'upgrade': return { kind, x: a.x, y: a.y, levels: FX_LEVELS };
       case 'rent': return { kind, x: a.x, y: a.y, tx: b.x, ty: b.y };
-      case 'card': return { kind };
+      case 'card': return { kind, title: FATE_DECK[0].name, text: FATE_DECK[0].text };
       case 'deck': return { kind, x: a.x, y: a.y };
       case 'stock': return { kind, x: s.x, y: s.y };
       default: return { kind: 'end' };
