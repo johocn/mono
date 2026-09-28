@@ -92,6 +92,7 @@ export function resolvePlacement(
 export class Scene {
   private items: ElementSpec[] = [];
   private instances: Instance[] = [];
+  private counts: Record<Pass, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
 
   constructor(private deps: SceneDeps) {}
 
@@ -110,6 +111,25 @@ export class Scene {
   /** 清空全部 spec（回合推进后按新状态重建用；`render()` 每次都会清层，故只需清 items） */
   reset(): void {
     this.items.length = 0;
+    this.counts = { 1: 0, 2: 0, 3: 0, 4: 0 };
+  }
+
+  /** 本帧各绘制遍的元素数（spec §11.5「单帧绘制调用 < 200」的可测口径；纯读，不改绘制状态） */
+  stats(): { perPass: Record<Pass, number>; total: number } {
+    const { counts } = this;
+    return {
+      perPass: { 1: counts[1], 2: counts[2], 3: counts[3], 4: counts[4] },
+      total: counts[1] + counts[2] + counts[3] + counts[4],
+    };
+  }
+
+  /** 单元素出图（唯一绘制逻辑）：给一个 spec → 一个 Container（含图形/文字/精灵）。
+      动效层（fx.ts）经此产出实例，不直接绘图（spec §3.7.1）。 */
+  buildOne(spec: ElementSpec): Container {
+    const inst = instantiate(spec, this.deps.instantiateDeps);
+    const out = new Container();
+    this.paintItem(inst, spec, out);
+    return out;
   }
 
   /** 全量重建：清层 → 四遍绘制（唯一入画口） */
@@ -137,45 +157,54 @@ export class Scene {
       })),
     );
 
+    this.counts = { 1: 0, 2: 0, 3: 0, 4: 0 };
     for (const p of plan) {
       const spec = this.items[p.index];
       const inst = this.instances[p.index];
       if (!spec || !inst) continue;
-      const g = new Graphics();
+      this.counts[p.pass] += 1;
       const target = p.pass === 2 ? layers.labels : p.pass === 3 ? layers.pieces : p.pass === 4 ? layers.fx : layers.ground;
-      const texts: TextRequest[] = [];
-      const sprites: SpriteRequest[] = [];
-      const place = spec.fixed
-        ? { cx: spec.fixed.cx, cy: spec.fixed.cy, s: spec.fixed.s ?? 1 }
-        : resolvePlacement(
-            {
-              id: inst.id, c: inst.c, r: inst.r, slot: inst.slot, lift: inst.lift,
-              box: inst.box, mount: inst.mount, scale: inst.scale, pawnIndex: spec.pawnIndex ?? 0,
-            },
-            this.deps.geo,
-            this.deps.placement,
-          );
-      const ctx: ProcCtx = {
-        geo: this.deps.geo,
-        box: inst.box,
-        cx: place.cx,
-        cy: place.cy,
-        s: place.s,
-        lift: inst.lift,
-        params: inst.provider.kind === 'proc'
-          ? { __preset: (inst.provider as { preset: string }).preset, ...((inst.provider as { params?: Record<string, unknown> }).params ?? {}) }
-          : { __preset: 'builtin' },
-        state: { ...inst.state, ownerColors: this.ownerColors() },
-        spec: inst.provider,
-        asset: (rel) => this.assetOf(rel),
-        sprite: (r) => sprites.push(r),
-        text: (r) => texts.push(r),
-      };
-      providerFor(inst.provider).draw(g, ctx);
-      target.addChild(g);
-      for (const r of texts) target.addChild(makeText(r));
-      for (const r of sprites) target.addChild(makeSprite(r));
+      const box = new Container();
+      this.paintItem(inst, spec, box);
+      target.addChild(box);
     }
+  }
+
+  /** 把一个实例画进 out（图形 + 文字 + 精灵），唯一绘制实现 */
+  private paintItem(inst: Instance, spec: ElementSpec, out: Container): void {
+    const g = new Graphics();
+    const texts: TextRequest[] = [];
+    const sprites: SpriteRequest[] = [];
+    const place = spec.fixed
+      ? { cx: spec.fixed.cx, cy: spec.fixed.cy, s: spec.fixed.s ?? 1 }
+      : resolvePlacement(
+          {
+            id: inst.id, c: inst.c, r: inst.r, slot: inst.slot, lift: inst.lift,
+            box: inst.box, mount: inst.mount, scale: inst.scale, pawnIndex: spec.pawnIndex ?? 0,
+          },
+          this.deps.geo,
+          this.deps.placement,
+        );
+    const ctx: ProcCtx = {
+      geo: this.deps.geo,
+      box: inst.box,
+      cx: place.cx,
+      cy: place.cy,
+      s: place.s,
+      lift: inst.lift,
+      params: inst.provider.kind === 'proc'
+        ? { __preset: (inst.provider as { preset: string }).preset, ...((inst.provider as { params?: Record<string, unknown> }).params ?? {}) }
+        : { __preset: 'builtin' },
+      state: { ...inst.state, ownerColors: this.ownerColors() },
+      spec: inst.provider,
+      asset: (rel) => this.assetOf(rel),
+      sprite: (r) => sprites.push(r),
+      text: (r) => texts.push(r),
+    };
+    providerFor(inst.provider).draw(g, ctx);
+    out.addChild(g);
+    for (const r of texts) out.addChild(makeText(r));
+    for (const r of sprites) out.addChild(makeSprite(r));
   }
 
   /** 素材解析：按 skinIds 顺序在各包内找同名相对路径的已装载纹理（都没有 → null） */

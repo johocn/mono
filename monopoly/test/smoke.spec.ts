@@ -8,12 +8,14 @@ describe('smoke', () => {
 });
 
 describe('parseOptions', () => {
-  it('缺省：skin=default, debug=false, seed=1, speed=1, show=b, play=false', () => {
-    expect(parseOptions('')).toEqual({ skin: 'default', debug: false, seed: 1, speed: 1, show: 'b', play: false });
+  it('缺省：skin=default, debug=false, seed=1, speed=1, show=b, play=false, nofx=false, perf=false', () => {
+    expect(parseOptions('')).toEqual({
+      skin: 'default', debug: false, seed: 1, speed: 1, show: 'b', play: false, nofx: false, perf: false,
+    });
   });
   it('解析 ?skin ?debug ?seed ?speed', () => {
     expect(parseOptions('?skin=photo&debug=1&seed=7&speed=4'))
-      .toEqual({ skin: 'photo', debug: true, seed: 7, speed: 4, show: 'b', play: false });
+      .toEqual({ skin: 'photo', debug: true, seed: 7, speed: 4, show: 'b', play: false, nofx: false, perf: false });
   });
   it('解析 ?show=0|c', () => {
     expect(parseOptions('?show=0').show).toBe('0');

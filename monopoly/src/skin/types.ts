@@ -10,12 +10,21 @@ export interface FramesSpec { kind: 'frames'; src: string[]; fps: number; anchor
 
 export type ProviderSpec = ProcSpec | ImageSpec | AtlasSpec | FramesSpec;
 
+/** 皮肤包的动效 token 段（spec §5.6 / M6 契约①）：缓动 + 震动 + 落尘数（美术参数，允许写在 skin.json） */
+export interface FxTokens {
+  ease?: string;
+  shake?: { amp?: number; ms?: number };
+  dust?: { count?: number };
+}
+
 export interface SkinPack {
   id: string;
   meta?: { name?: string };
   geo: { hw: number; hh: number; ox: number; oy: number };
   tokens: Record<string, string>;
   elements: Record<string, ProviderSpec>;
+  /** 顶层 `fx` 段：`fx.ts` 经 `resolveMotion()` 消费，缺省时用 layout 的 FX_* 兜底 */
+  fx?: FxTokens;
 }
 
 export interface RegistryEntry {

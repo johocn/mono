@@ -122,6 +122,7 @@ import { diceBody, diceFace, uiButton, uiDock, uiLabel, uiPanel, uiPlayerBar } f
 import {
   uiBadge, uiCard, uiCardBack, uiHandSlot, uiSettleRow, uiStockChart, uiStockRow,
 } from './proc-panel';
+import { fxCoin, fxDust, fxScaffold, fxShard, fxShine, fxSpark, fxStamp } from './proc-fx';
 
 export const PROC_PRESETS: Record<string, ProcPreset> = {
   tile,
@@ -161,6 +162,13 @@ export const PROC_PRESETS: Record<string, ProcPreset> = {
   uiStockChart,
   uiSettleRow,
   uiBadge,
+  fxCoin,
+  fxStamp,
+  fxDust,
+  fxScaffold,
+  fxSpark,
+  fxShard,
+  fxShine,
 };
 
 export function procPreset(name: string): ProcPreset {

@@ -8,13 +8,16 @@ import { PAWN_COUNT, pawnSpecs } from './render/PieceView';
 import { buildingSpecs, slotLevelsOf, streetPropSpecs } from './render/BuildingView';
 import { showcaseSpecs } from './render/ShowcaseView';
 import { drawLabels, type LabelParams } from './render/LabelView';
-import { autoPlay, createGame, currentPlayer, type Game } from './core/game';
+import { ipos } from './render/iso';
+import { autoPlay, createGame, currentPlayer, type Game, type SettleResult } from './core/game';
 import { hudSpecs, mountHud, type HudActionId, type HudHandle } from './ui/Hud';
 import { mountPanels, panelSpecs, type PanelActionId, type PanelHandle } from './ui/panels';
 import type { ItemCardKind } from './data/cards';
 import { DEMO_OWNER } from './data/board';
-import { DEFAULT_GEO } from './skin/layout';
+import { STOCK_TILE_INDEX } from './data/stocks';
+import { DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED } from './skin/layout';
 import { preloadSkinAssets } from './render/assets';
+import { createFx, motionFor, timeScaleFrom, type FxContext, type FxHandle, type FxKind } from './render/fx';
 import type { ElementSpec } from './skin/instantiate';
 
 export const VERSION = '0.1.0';
@@ -22,7 +25,13 @@ export const VERSION = '0.1.0';
 /** 兜底底色（真色值在 M2 起从 skins/<id>/skin.json 的 tokens 读取） */
 const BG_FALLBACK = 0x0c1513;
 
-export interface UrlOptions { skin: string; debug: boolean; seed: number; speed: number; show: string; play: boolean }
+export interface UrlOptions {
+  skin: string; debug: boolean; seed: number; speed: number; show: string; play: boolean;
+  /** `?nofx=1`：等价 `speed=999`（动画瞬间到终帧；截图闸门与无障碍用） */
+  nofx: boolean;
+  /** `?perf=1`：挂性能覆盖层并采样帧间隔 */
+  perf: boolean;
+}
 
 /** v5 样张 line 63：当前格 index 4（太平温泉）在 (5,9)，四枚棋子同格 */
 const CURRENT_INDEX = 4;
@@ -44,6 +53,8 @@ export function parseOptions(search: string): UrlOptions {
     speed: num('speed', 1),
     show: q.get('show') || 'b',
     play: q.get('play') === '1',
+    nofx: q.get('nofx') === '1',
+    perf: q.get('perf') === '1',
   };
 }
 
@@ -74,6 +85,16 @@ export async function boot(): Promise<void> {
     skinIds: [...new Set([skin?.id, defaultSkin?.id].filter((v): v is string => Boolean(v)))],
   });
 
+  /* —— M6 动效层：只回放视觉，绝不写 state；一切参数经 skin.fx / layout 注入 —— */
+  const fxTokens = (skin ?? defaultSkin)?.fx ?? null;
+  const fx: FxHandle = createFx({
+    fxLayer: stage.layers.fx,
+    make: (id, s) => scene.buildOne({ id, c: 0, r: 0, pass: 4, fixed: { cx: s.cx, cy: s.cy, s: s.s ?? 1 }, state: s.state }),
+    motion: (kind: FxKind) => motionFor(kind, fxTokens),
+  });
+  fx.speed(opts.nofx ? FX_NOFX_SPEED : timeScaleFrom(opts.speed));
+  let fxPending = false;
+
   const ownerOf = (i: number): number | null => DEMO_OWNER[i] ?? null;
 
   /* v5 样张 line 63：当前格 index 4（太平温泉）在 (5,9)，四枚棋子同格 */
@@ -82,6 +103,14 @@ export async function boot(): Promise<void> {
   }));
 
   const game = opts.play ? createGame({ seed: opts.seed }) : null;
+
+  /** 格号 → 屏幕坐标（动效落点用；与 Scene 同一套 iso 变换） */
+  const cells = boardCells(geo);
+  const cellXY = (index: number): { x: number; y: number } => {
+    const cell = cells[((index % cells.length) + cells.length) % cells.length] ?? { c: 0, r: 0 };
+    const [x, y] = ipos(cell.c, cell.r, geo);
+    return { x, y };
+  };
 
   /** 非 play：沿用 M3 的六组演示视图 + 可选橱窗 */
   const demoView = (): ElementSpec[] => {
@@ -101,7 +130,6 @@ export async function boot(): Promise<void> {
   /** play：地砖归属色 / 当前格 / 棋子位置跟游戏状态联动，再叠 HUD */
   const ownedOf = (i: number): number | null => game?.state.estates[i]?.owner ?? ownerOf(i);
   const playView = (g: Game): ElementSpec[] => {
-    const cells = boardCells(geo);
     const alive = g.state.players.filter((p) => !p.bankrupt);
     return [
       ...boardTileSpecs(currentPlayer(g.state).pos, ownedOf),
@@ -110,7 +138,7 @@ export async function boot(): Promise<void> {
       ...buildingSpecs({ ownerOf: ownedOf }),
       ...streetPropSpecs(),
       ...pawnSpecs(alive.map((p) => ({ index: p.id - 1, c: cells[p.pos].c, r: cells[p.pos].r }))),
-      ...hudSpecs(g.state),
+      ...hudSpecs(g.state, fxPending || fx.busy()),
       /* M5 浮层：手牌 5 槽常驻 + 抽卡翻牌 / 股票盘 / 结算面板（未触发时为空） */
       ...panelSpecs(g.state),
     ];
@@ -134,24 +162,78 @@ export async function boot(): Promise<void> {
     panels?.update();
   };
 
+  /**
+   * 动作 → 状态先落库（同步）→ 立即重画（权威画面）→ 动效只回放。
+   * `?nofx` / `fx.speed(999)` 时 play() 瞬间到终帧，等价无动画。
+   */
+  const runAction = (fn: () => unknown, ctxOf: (r: never) => FxContext | null): void => {
+    const result = fn();
+    const ctx = ctxOf(result as never);
+    if (!ctx) {
+      fxPending = false;
+      paint();
+      return;
+    }
+    fxPending = true;
+    paint();
+    fx.play(ctx, () => { fxPending = false; paint(); });
+  };
+
+  /** 落格结算结果 → 动画上下文（纯映射；位置取自 iso） */
+  const settleFx = (r: SettleResult): FxContext | null => {
+    const at = cellXY(r.index);
+    switch (r.kind) {
+      case 'rent': {
+        const ownerPos = game?.state.players.find((p) => p.id === r.owner)?.pos ?? r.index;
+        const to = cellXY(ownerPos);
+        return { kind: 'rent', x: at.x, y: at.y, tx: to.x, ty: to.y };
+      }
+      case 'fate':
+      case 'chance':
+      case 'bonus':
+        return { kind: 'card' };
+      case 'stock':
+        return { kind: 'stock', x: at.x, y: at.y };
+      default:
+        return null;
+    }
+  };
+
   if (game) {
     hud = mountHud(document.body, game, (a: HudActionId) => {
-      if (a === 'roll') game.rollDice();
-      else if (a === 'move') game.moveCurrent();
-      else if (a === 'settle') game.settleCurrent();
-      else if (a === 'buy') game.buyCurrent();
-      else if (a === 'upgrade') game.upgradeCurrent();
-      else if (a === 'skip') game.skipTurn();
-      else game.endTurn();
-      paint();
+      if (fx.busy()) fx.skip();   // 点屏加速：状态早已落库，跳过只影响观感时长
+      if (a === 'roll') runAction(() => game.rollDice(), () => ({ kind: 'dice' }));
+      else if (a === 'move') runAction(() => game.moveCurrent(), (r: { from: number; to: number }) => {
+        const from = cellXY(r.from); const to = cellXY(r.to);
+        return { kind: 'hop', x: from.x, y: from.y, tx: to.x, ty: to.y };
+      });
+      else if (a === 'settle') runAction(() => game.settleCurrent(), settleFx);
+      else if (a === 'buy') runAction(() => game.buyCurrent(), (r: { ok: boolean }) => {
+        const at = cellXY(currentPlayer(game.state).pos);
+        return r.ok ? { kind: 'buy', x: at.x, y: at.y } : null;
+      });
+      else if (a === 'upgrade') runAction(() => game.upgradeCurrent(), (r: { ok: boolean; level?: number }) => {
+        const at = cellXY(currentPlayer(game.state).pos);
+        return r.ok ? { kind: 'upgrade', x: at.x, y: at.y, levels: r.level ?? FX_LEVELS } : null;
+      });
+      else if (a === 'skip') runAction(() => game.skipTurn(), () => null);
+      else runAction(() => game.endTurn(), () => null);
     });
     /* 浮层动作：关浮层 / 股票买卖 / 打手牌（目标由命中区 `data-target` 带出） */
     panels = mountPanels(document.body, game, (a: PanelActionId, target?: number | string) => {
-      if (a === 'card:close' || a === 'settle:close') game.clearEvent();
-      else if (a === 'stock:buy') game.trade(String(target), 1);
-      else if (a === 'stock:sell') game.trade(String(target), -1);
-      else game.useCard(a.slice('card:'.length) as ItemCardKind, typeof target === 'number' ? target : undefined);
-      paint();
+      if (a === 'card:close' || a === 'settle:close') runAction(() => game.clearEvent(), () => null);
+      else if (a === 'stock:buy') runAction(() => game.trade(String(target), 1), () => {
+        const at = cellXY(STOCK_TILE_INDEX);
+        return { kind: 'stock', x: at.x, y: at.y };
+      });
+      else if (a === 'stock:sell') runAction(() => game.trade(String(target), -1), () => {
+        const at = cellXY(STOCK_TILE_INDEX);
+        return { kind: 'stock', x: at.x, y: at.y };
+      });
+      else runAction(() => game.useCard(a.slice('card:'.length) as ItemCardKind, typeof target === 'number' ? target : undefined), () => {
+        const at = cellXY(currentPlayer(game.state).pos);
+        return { kind: 'deck', x: at.x, y: at.y };
+      });
     });
   }
 
@@ -172,11 +254,51 @@ export async function boot(): Promise<void> {
     if (!game) throw new Error('[mono] sim 需要 ?play=1');
     const w = autoPlay(game);
     paint();
+    fx.play({ kind: 'end' }, () => paint());
     return w;
   };
 
+  /** M6 闸门用：各 kind 的代表性动效上下文（确定性，便于中间帧截图） */
+  const fxPreview = (kind: FxKind): FxContext => {
+    const a = cellXY(CURRENT_INDEX);
+    const b = cellXY(CURRENT_INDEX + 2);
+    const s = cellXY(STOCK_TILE_INDEX);
+    switch (kind) {
+      case 'dice': return { kind };
+      case 'hop': return { kind, x: a.x, y: a.y, tx: b.x, ty: b.y };
+      case 'buy': return { kind, x: a.x, y: a.y };
+      case 'upgrade': return { kind, x: a.x, y: a.y, levels: FX_LEVELS };
+      case 'rent': return { kind, x: a.x, y: a.y, tx: b.x, ty: b.y };
+      case 'card': return { kind };
+      case 'deck': return { kind, x: a.x, y: a.y };
+      case 'stock': return { kind, x: s.x, y: s.y };
+      default: return { kind: 'end' };
+    }
+  };
+
+  /** `?perf=1`：帧间隔采样 + 绘制元素峰值（spec §11.5 的测量口径） */
+  const perf = { firstInteractiveMs: 0, intervals: [] as number[], maxDraw: 0, budget: { interactiveMs: 3000, frameP95Ms: 20, draw: 200 } };
+  if (opts.perf) {
+    const overlay = document.createElement('div');
+    overlay.id = 'mono-perf';
+    overlay.style.cssText = 'position:fixed;left:4px;top:4px;z-index:20;font:11px monospace;color:#9fe;background:rgba(0,0,0,.5);padding:2px 4px;border-radius:4px';
+    document.body.appendChild(overlay);
+    let last = performance.now();
+    const tick = (now: number): void => {
+      const dt = now - last;
+      last = now;
+      perf.intervals.push(dt);
+      const st = scene.stats();
+      if (st.total > perf.maxDraw) perf.maxDraw = st.total;
+      overlay.textContent = `fps ${Math.round(1000 / dt)} · draw ${st.total}`;
+      if (perf.intervals.length < FX_FRAMES) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+  perf.firstInteractiveMs = performance.now();
+
   (window as unknown as Record<string, unknown>).__monoMain = {
-    stage, scene, opts, geo, skin, missingAssets, game, paint, sim, VERSION,
+    stage, scene, opts, geo, skin, missingAssets, game, paint, sim, fx, fxPreview, perf, VERSION,
   };
 }
 

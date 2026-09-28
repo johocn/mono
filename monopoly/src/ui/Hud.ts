@@ -45,8 +45,9 @@ export function primaryAction(state: GameState): HudPrimaryAction | null {
   }
 }
 
-export function primaryLabel(state: GameState): string {
+export function primaryLabel(state: GameState, fxBusy = false): string {
   const a = primaryAction(state);
+  if (a !== null && fxBusy) return '跳过';
   if (a === 'skip') return `跳过（${jailed(state)}）`;
   return a ? PRIMARY_LABEL[a] : '本局结束';
 }
@@ -99,7 +100,7 @@ function barCx(i: number): number {
  * HUD 的 instantiate spec（全部 `pass: 4` + `fixed` 定格台位）。
  * `c` 恒为 0、`r` 递增 —— depth（= c+r）升序即绘制序：底坞 → 标签 → 资产条 → 骰体 → 骰面 → 按钮。
  */
-export function hudSpecs(state: GameState): ElementSpec[] {
+export function hudSpecs(state: GameState, fxBusy = false): ElementSpec[] {
   const out: ElementSpec[] = [];
   const bar = (id: string, r: number, cx: number, cy: number, st: Record<string, unknown>, slot = null): void => {
     out.push({ id, slot, c: 0, r, pass: 4, fixed: { cx, cy, s: 1 }, state: st });
@@ -127,7 +128,7 @@ export function hudSpecs(state: GameState): ElementSpec[] {
   }
 
   bar('ui.button.primary', 10, HUD_BTN_PRIMARY_X + HUD_BTN_PRIMARY_W / 2, BOTTOM_BTN_Y + HUD_BTN_H / 2, {
-    action: primaryAction(state), label: primaryLabel(state), enabled: primaryAction(state) !== null,
+    action: primaryAction(state), label: primaryLabel(state, fxBusy), enabled: primaryAction(state) !== null,
   });
 
   const buy = buyOffer(state);

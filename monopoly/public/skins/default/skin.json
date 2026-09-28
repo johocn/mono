@@ -17,6 +17,11 @@
     "owner3": "#e0607e",
     "owner4": "#4aa3e0"
   },
+  "fx": {
+    "ease": "power2.out",
+    "shake": { "amp": 6, "ms": 180 },
+    "dust": { "count": 6 }
+  },
   "elements": {
     "token.bg": { "kind": "proc", "preset": "bgGradient", "params": { "top": "#1a2b2a", "bottom": "#0c1513" } },
     "token.gold": { "kind": "proc", "preset": "solid", "params": { "fill": "#f5c451" } },
@@ -116,6 +121,15 @@
     "ui.playerBar": { "kind": "proc", "preset": "uiPlayerBar", "params": {} },
     "ui.button.primary": { "kind": "proc", "preset": "uiButton", "params": {} },
     "ui.button.secondary": { "kind": "proc", "preset": "uiButton", "params": {} },
+
+    "fx.coin": { "kind": "proc", "preset": "fxCoin", "params": {} },
+    "fx.stamp": { "kind": "proc", "preset": "fxStamp", "params": {} },
+    "fx.dust": { "kind": "proc", "preset": "fxDust", "params": {} },
+    "fx.scaffold": { "kind": "proc", "preset": "fxScaffold", "params": {} },
+    "fx.spark": { "kind": "proc", "preset": "fxSpark", "params": {} },
+    "fx.shard": { "kind": "proc", "preset": "fxShard", "params": {} },
+    "fx.shine": { "kind": "proc", "preset": "fxShine", "params": {} },
+
     "dice.body": { "kind": "proc", "preset": "diceBody", "params": {} },
     "dice.face1": { "kind": "proc", "preset": "diceFace", "params": { "pips": 1 } },
     "dice.face2": { "kind": "proc", "preset": "diceFace", "params": { "pips": 2 } },

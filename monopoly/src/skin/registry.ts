@@ -12,7 +12,7 @@ export const INNER_DECOS = ['d1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8'] as c
 export const PROPS = [
   'awning', 'lantern', 'banner', 'rooftopBox', 'signTower', 'antenna', 'tree', 'lamp',
 ] as const;
-export const FX = ['coin', 'scaffold', 'dust', 'stamp', 'shine'] as const;
+export const FX = ['coin', 'scaffold', 'dust', 'stamp', 'shine', 'spark', 'shard'] as const;
 
 const tile = (t: TileType): RegistryEntry => ({
   id: `board.tile.${t}`,

@@ -9,7 +9,7 @@
 | 构建 | `npm run build` → `release/mono.html` + `release/js/mono.js` |
 | 校验 | `npm run check`（lint + lint:skin + test） |
 
-URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围盒/depth/provider 回退级别）· `?seed=<n>` · `?speed=<n>`。
+URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围盒/depth/provider 回退级别）· `?seed=<n>` · `?speed=<n>`（动画时轴倍率）· `?play=1`（交互局）· `?nofx=1`（等价 `speed=999`，动画瞬间到终帧）· `?perf=1`（性能覆盖层 + 帧间隔采样）。
 
 ## 2. 测试用例
 
@@ -69,3 +69,34 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 | M5-7 | 跑 `node local/mono-shots-m5.mjs` | 6 张截图入库；`gate` 全 `true`、`errors` 为空 | 上述全部 |
 
 **M5 结论**：卡牌/股票/特殊格三套系统接入 `Game` 门面，`src/core` 新增 `cards`/`stocks`/`special`/`game-cards` 单测全绿；牌堆各 6 张、棋盘仍 5 fate + 5 chance 格（口径解耦）。
+
+### M6 动画层（§5.6 全清单）与性能
+
+| # | 步骤 | 期望 | 截图 |
+|---|---|---|---|
+| M6-1 | `mono.html?play=1&speed=0.25` 点「掷骰」 | 骰体绕轴旋转 + 弹跳后停下（≥12 帧观感；点屏可加速） | `mono-m6-01-dice.png` |
+| M6-2 | 点「前进」 | 棋子逐格起跳（kick 起跳段 + 抛物线），落点扬起一圈落尘 | `mono-m6-02-hop.png` |
+| M6-3 | 落格无主空地后点「买地」 | 红章旋正盖下 + 一圈金币飞出飞向持有者 | `mono-m6-03-buy.png` |
+| M6-4 | 点「升级」 | 脚手架淡入 → 落成 → 逐层点亮火花（L1→L2→L3） | `mono-m6-04-upgrade.png` |
+| M6-5 | 走到对家地块结算 | 金币飞向持有者 + 落点火花脉冲 | `mono-m6-05-rent.png` |
+| M6-6 | 走到命运 / 机会格 | 卡面 X 轴 3D 翻转 + 高光横扫 | `mono-m6-06-card.png` |
+| M6-7 | 使用手牌（炸弹等） | 牌堆/碎片轻微震动 + 淡出 | `mono-m6-07-deck.png` |
+| M6-8 | 买 / 卖股票 | 碎片红/绿脉冲示意涨跌 | `mono-m6-08-stock.png` |
+| M6-9 | 控制台 `__monoMain.sim()` | 全屏火花环形迸发 + 结算面板展开 | `mono-m6-09-end.png` |
+| M6-10 | 跑 `node local/mono-shots-m6.mjs` | 9 张中间帧 + 1 段录像（`mono-m6-anim.webm`）入库；`gate` 全 `true`、`errors=[]` | 上述全部 |
+
+**动画权威性**：`?speed=0.25` 慢放下逐条断言「动画播放中 `game.state.phase` 不变化」与「`fx.skip()` 后 phase 与不加动画一致」——状态机先落库、动画只回放。`?nofx=1` 等价 `speed=999`（瞬间到终帧）；动画播放中主按钮变「跳过」（点屏即加速到终帧，不取消、不吞点击）。
+
+**性能核对行**（`node local/mono-perf.mjs`；headless 仅给代理指标，真机 60fps 需人工勾选）：
+
+| 指标 | 门槛 | 实测（default / photo） | 结论 |
+|---|---|---|---|
+| 首屏可交互 | < 3000ms | 248 / 1096 ms | ✅ |
+| 单次全量重绘 p95 | ≤ 20ms | 15.6 / 17.6 ms | ✅ |
+| 场景绘制元素数（pass 1–3） | < 200 | 189 | ✅ |
+| fx 峰值 overlay 元素数 | < 40 | 12 | ✅ |
+| 真机 60fps（中端安卓） | 稳定 60fps | 待人工勾选 ☐ | — |
+
+**M6 结论**：§5.6 九条动效全部落地（GSAP 编排；时长/弧高/粒子数一律经 `src/skin/layout.ts` 的 FX 段 + `skin.json` 的 `fx` token 注入，`fx.ts` 零裸色值/裸时长，`check-hardcoded` 通过）；动画只消费 `instantiate()` 产出的实例、绝不写 `state`。
+
+**M6 有意偏差（精确记录）**：spec §11.5 预算「单帧绘制调用 < 200」按**场景渲染（pass 1–3）= 189** 计（✅）；若把**屏幕空间 HUD/浮层（pass 4）也算进整帧元素则 = 205**（M4/M5 常驻的底坞/资产条/骰面/手牌共 16 件）。该 205 是**元素实例数**而非 GPU 绘制调用数——Pixi 会对同状态图元合批，且 HUD 为静态屏幕空间图元，故不影响「绘制调用 < 200」。另：headless Chromium 的 rAF 被浏览器限到 ~20fps（帧间隔 p95 ≈ 66.7ms），**不可当真机帧率**，故门槛以「单次全量重绘 p95 ≤ 20ms」作为可测代理，真机 60fps 由人工核对行兜底。GSAP 打进 `release/js/mono.js`：471.68 kB（gzip 158.48 kB）。

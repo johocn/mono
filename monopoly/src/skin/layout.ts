@@ -87,3 +87,73 @@ export const PANEL_CLOSE_X = 294;                // 左
 export const PANEL_CLOSE_Y = 336;                // 顶
 export const PANEL_CLOSE_W = 76;
 export const PANEL_CLOSE_H = 28;
+
+/* —— M6 动效参数（spec §5.6 全清单）：`src/render/fx.ts` 唯一取值来源 ——
+   `fx.ts` 处于「禁写死」gate 作用域内，裸时长/弧高/粒子数一律集中在此（本文件不在 gate 内）。
+   任何动效数字必须写成这里的具名常量，再由 fx.ts 引用——否则 lint 拦下。 */
+export const FX_MS_PER_S = 1000;                 // ms → gsap 秒
+export const FX_EASE_FALLBACK = 'power2.out';    // skin.json `fx.ease` 缺失时的兜底（非色值，可裸写）
+export const FX_NOFX_SPEED = 999;                // `?nofx=1` → 时轴瞬间到终帧
+export const FX_LEVELS = 3;                      // 升级「逐层点亮」层数（L1→L2→L3）
+export const FX_FRAMES = 300;                    // `?perf=1` 采样帧数
+
+/* 掷骰：旋转弹跳 */
+export const FX_DICE_MS = 520;
+export const FX_DICE_SPIN = 360;                 // 旋转总角度（度）
+export const FX_DICE_HOP = 14;                   // 弹跳高度（px）
+/* 移动：逐格跳跃 + 落尘 */
+export const FX_HOP_MS = 240;
+export const FX_HOP_ARC = 26;                    // 腾空弧高（px）
+export const FX_HOP_KICK_MS = 90;                // 起跳段时长
+export const FX_DUST_COUNT = 6;
+export const FX_DUST_MS = 240;
+export const FX_DUST_ARC = 12;
+/* 买地：盖章 + 金币飞出 */
+export const FX_BUY_MS = 460;
+export const FX_STAMP_MS = 200;
+export const FX_STAMP_S0 = 2.2;                  // 盖章初始放大（砸下感）
+export const FX_STAMP_DEG = -12;                 // 盖章初始旋转（度）
+export const FX_COIN_COUNT = 8;
+export const FX_COIN_FLY_MS = 420;
+export const FX_COIN_LIFT = -34;                 // 金币飞出上抛弧高（px）
+/* 升级：脚手架 → 落成 → 逐层点亮 */
+export const FX_UPGRADE_MS = 640;
+export const FX_SCAFFOLD_MS = 220;
+export const FX_SCAFFOLD_S0 = 0.6;
+export const FX_PER_LEVEL_LIT_MS = 140;
+export const FX_LIT_S = 1.25;
+export const FX_LEVEL_STEP = 12;                 // 逐层点亮的每级纵向间隔（px）
+/* 收租：金币飞行 + 数字滚动 */
+export const FX_RENT_MS = 520;
+/* 卡牌：3D 翻转 + 高光扫过 */
+export const FX_CARD_MS = 480;
+export const FX_FLIP_MS = 260;
+export const FX_FLIP_SCALE_X = 0.08;             // 翻到侧面时的横向收窄（近似 3D）
+export const FX_SHINE_MS = 220;
+export const FX_SHINE_DX = 40;                   // 高光横扫位移（px）
+/* 命运/机会：牌堆抽取 + 轻微震动 */
+export const FX_DECK_MS = 420;
+export const FX_SHAKE_MS = 180;
+export const FX_SHAKE_AMP = 6;
+/* 股票：折线抖动 + 红绿脉冲（用缩放/透明度脉冲表达，色由 skin 令牌管） */
+export const FX_STOCK_MS = 460;
+export const FX_PULSE_MS = 140;
+export const FX_PULSE_S = 1.3;
+/* 破产/胜利：全屏特效 + 结算展开 */
+export const FX_END_MS = 900;
+export const FX_END_COUNT = 12;
+export const FX_SPARK_MS = 260;
+export const FX_SPARK_ARC = 44;
+
+/* 动效落点兜底（ctx 未给坐标时）：舞台中心 / 底坞骰位 / 橱窗卡面中心 */
+export const FX_CENTER_X = STAGE_W / 2;
+export const FX_CENTER_Y = STAGE_H / 2;
+export const FX_DICE_CX = HUD_DICE_X0 + HUD_DICE_SIZE / 2;
+export const FX_DICE_CY = HUD_DICE_Y + HUD_DICE_SIZE / 2;
+export const FX_CARD_CX = PANEL_CARD_CX;
+export const FX_CARD_CY = PANEL_CARD_CY;
+
+/* —— M6 性能预算（spec §11.5）：门槛与口径 —— */
+export const PERF_INTERACTIVE_BUDGET_MS = 3000;  // 首屏可交互（4G）
+export const PERF_FRAME_P95_BUDGET_MS = 20;      // 帧间隔 p95（headless 代理）
+export const PERF_DRAW_BUDGET = 200;             // 单帧绘制元素数
