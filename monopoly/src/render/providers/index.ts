@@ -1,17 +1,20 @@
+import type { Graphics } from 'pixi.js';
 import type { ProviderSpec } from '../../skin/types';
+import { procPreset, type ProcCtx } from './proc';
 
 export interface ProviderImpl {
-  draw(g: unknown, ctx: { params: Record<string, unknown>; box: { w: number; d: number; h: number } }): void;
+  draw(g: Graphics, ctx: ProcCtx): void;
 }
 
 const proc: ProviderImpl = {
-  draw: () => {
-    /* Task 9 起填真绘制；未实现的 preset 由 builtin 兜底（纯色块 + 文字） */
+  draw: (g, ctx) => {
+    const preset = typeof ctx.params.__preset === 'string' ? (ctx.params.__preset as string) : 'builtin';
+    procPreset(preset)(g, ctx);
   },
 };
-const image: ProviderImpl = { draw: () => {} };
-const atlas: ProviderImpl = { draw: () => {} };
-const frames: ProviderImpl = { draw: () => {} };
+const image: ProviderImpl = { draw: () => { /* Task 20 实现 */ } };
+const atlas: ProviderImpl = { draw: () => { /* Task 20 实现 */ } };
+const frames: ProviderImpl = { draw: () => { /* Task 20 实现 */ } };
 
 export const PROVIDERS: Record<string, ProviderImpl> = { proc, image, atlas, frames };
 

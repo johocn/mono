@@ -1,5 +1,9 @@
 import { createStage } from './render/stage';
 import { createDebugPanel } from './debug/panel';
+import { loadSkin } from './skin/skinLoader';
+import { Scene } from './render/Scene';
+import { boardTileSpecs } from './render/BoardView';
+import { DEFAULT_GEO } from './skin/layout';
 
 export const VERSION = '0.1.0';
 
@@ -26,12 +30,24 @@ export async function boot(): Promise<void> {
   const canvas = document.getElementById('stage') as HTMLCanvasElement | null;
   if (!canvas) throw new Error('[mono] #stage not found');
   const opts = parseOptions(location.search);
-  const stage = await createStage(canvas, {
-    bg: BG_FALLBACK,
-    dpr: window.devicePixelRatio || 2,
+
+  const defaultSkin = await loadSkin('default');
+  const skin = opts.skin === 'default' ? defaultSkin : await loadSkin(opts.skin);
+  const geo = skin?.geo ?? defaultSkin?.geo ?? DEFAULT_GEO;
+  const tokens = { ...(defaultSkin?.tokens ?? {}), ...(skin?.tokens ?? {}) };
+
+  const stage = await createStage(canvas, { bg: BG_FALLBACK, dpr: window.devicePixelRatio || 2 });
+  const scene = new Scene({
+    layers: stage.layers,
+    geo,
+    bg: { color: tokens.bgBottom ?? '#0c1513', alpha: 1 },
+    instantiateDeps: { skin, defaultSkin, overrides: null, slotLevels: {} },
   });
+  scene.addMany(boardTileSpecs(0, () => null));
+  scene.render();
+
   if (opts.debug) createDebugPanel().mount(document.body);
-  (window as unknown as Record<string, unknown>).__monoMain = { stage, opts, VERSION };
+  (window as unknown as Record<string, unknown>).__monoMain = { stage, scene, opts, geo, skin, VERSION };
 }
 
 if (typeof document !== 'undefined') void boot();

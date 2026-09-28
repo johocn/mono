@@ -1,0 +1,47 @@
+{
+  "id": "default",
+  "meta": { "name": "默认程序化（v5 定稿）" },
+  "geo": { "hw": 21, "hh": 10.5, "ox": 195, "oy": 96 },
+  "tokens": {
+    "gold": "#f5c451",
+    "bgTop": "#1a2b2a",
+    "bgBottom": "#0c1513",
+    "panelBg": "#0f1a18",
+    "textPrimary": "#e8e4d8",
+    "textSecondary": "#9fb3a8",
+    "owner1": "#3fbf7f",
+    "owner2": "#f0a039",
+    "owner3": "#e0607e",
+    "owner4": "#4aa3e0"
+  },
+  "elements": {
+    "token.bg": { "kind": "proc", "preset": "bgGradient", "params": { "top": "#1a2b2a", "bottom": "#0c1513" } },
+    "token.gold": { "kind": "proc", "preset": "solid", "params": { "fill": "#f5c451" } },
+
+    "board.tile.core": { "kind": "proc", "preset": "tile", "params": { "fill": "#5c4a1a", "edge": "#f5c451", "inner": "#000000" } },
+    "board.tile.shop": { "kind": "proc", "preset": "tile", "params": { "fill": "#2f4238", "edge": "#5b7b6a", "inner": "#000000" } },
+    "board.tile.chance": { "kind": "proc", "preset": "tile", "params": { "fill": "#40305c", "edge": "#a26bf0", "inner": "#000000" } },
+    "board.tile.fate": { "kind": "proc", "preset": "tile", "params": { "fill": "#2b3566", "edge": "#6b7ff0", "inner": "#000000" } },
+    "board.tile.bonus": { "kind": "proc", "preset": "tile", "params": { "fill": "#245037", "edge": "#34c759", "inner": "#000000" } },
+    "board.tile.jail": { "kind": "proc", "preset": "tile", "params": { "fill": "#542c25", "edge": "#e5573f", "inner": "#000000" } },
+    "board.tile.stock": { "kind": "proc", "preset": "tile", "params": { "fill": "#22465a", "edge": "#29a9e0", "inner": "#000000" } },
+
+    "board.tile.core.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#f5c451" } },
+    "board.tile.shop.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#5b7b6a" } },
+    "board.tile.chance.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#a26bf0" } },
+    "board.tile.fate.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#6b7ff0" } },
+    "board.tile.bonus.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#34c759" } },
+    "board.tile.jail.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#e5573f" } },
+    "board.tile.stock.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#29a9e0" } },
+
+    "board.inner.d1": { "kind": "proc", "preset": "building", "params": { "levels": 3, "hue": 205, "dim": 0.72 } },
+    "board.inner.d2": { "kind": "proc", "preset": "building", "params": { "levels": 2, "hue": 30, "dim": 0.72 } },
+    "board.inner.d3": { "kind": "proc", "preset": "building", "params": { "levels": 2, "hue": 150, "dim": 0.72 } },
+    "board.inner.d4": { "kind": "proc", "preset": "building", "params": { "levels": 3, "hue": 268, "dim": 0.72 } },
+    "board.inner.d5": { "kind": "proc", "preset": "building", "params": { "levels": 2, "hue": 22, "dim": 0.72 } },
+    "board.inner.d6": { "kind": "proc", "preset": "building", "params": { "levels": 3, "hue": 192, "dim": 0.72 } },
+    "board.inner.d7": { "kind": "proc", "preset": "building", "params": { "levels": 2, "hue": 320, "dim": 0.72 } },
+    "board.inner.d8": { "kind": "proc", "preset": "building", "params": { "levels": 3, "hue": 45, "dim": 0.72 } },
+    "board.center.fountain": { "kind": "proc", "preset": "fountain", "params": {} }
+  }
+}
