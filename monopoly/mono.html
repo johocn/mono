@@ -4,6 +4,21 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <title>大富翁 · 双阳邻里</title>
+    <!-- M8 分享卡（静态写入：微信抓 og 不执行 JS，故 og:* 必须在源码 HTML 里；
+         运行时 src/ui/share.ts 的 applyMeta 会按当前 origin 再校正一次。?v= 破微信长 TTL 缓存） -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="双阳邻里大富翁" />
+    <meta property="og:title" content="双阳邻里大富翁 · 掷骰逛遍 32 家街坊好店" />
+    <meta property="og:description" content="吉林双阳的邻里商业版大富翁：买地、升级、收租、炒股，一局打完看谁是街坊首富。" />
+    <meta property="og:image" content="https://game.joho.cn/tour/share/share-card.png?v=v1" />
+    <meta property="og:image:width" content="800" />
+    <meta property="og:image:height" content="640" />
+    <meta property="og:url" content="https://game.joho.cn/tour/mono.html" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="双阳邻里大富翁 · 掷骰逛遍 32 家街坊好店" />
+    <meta name="twitter:description" content="吉林双阳的邻里商业版大富翁：买地、升级、收租、炒股，一局打完看谁是街坊首富。" />
+    <meta name="twitter:image" content="https://game.joho.cn/tour/share/share-card.png?v=v1" />
+    <meta name="description" content="吉林双阳的邻里商业版大富翁：买地、升级、收租、炒股，一局打完看谁是街坊首富。" />
     <style>
       html, body { margin: 0; height: 100%; background: #0c1513; overflow: hidden; }
       #stage { display: block; width: 390px; height: 844px; margin: 0 auto; touch-action: none; }

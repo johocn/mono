@@ -12,6 +12,11 @@ import { ipos } from './render/iso';
 import { autoPlay, createGame, currentPlayer, type Game, type SettleResult } from './core/game';
 import { hudSpecs, mountHud, type HudActionId, type HudHandle } from './ui/Hud';
 import { mountPanels, panelSpecs, type PanelActionId, type PanelHandle } from './ui/panels';
+import {
+  applyMeta, buildShareConfig, initWechatShare, mountShare, resultCopy,
+  type ShareHandle,
+} from './ui/share';
+import { SHARE_VERSION } from './data/share';
 import { FATE_DECK, type ItemCardKind } from './data/cards';
 import { DEMO_OWNER } from './data/board';
 import { STOCK_TILE_INDEX } from './data/stocks';
@@ -148,6 +153,7 @@ export async function boot(): Promise<void> {
 
   let hud: HudHandle | null = null;
   let panels: PanelHandle | null = null;
+  let share: ShareHandle | null = null;
 
   /** 唯一出画口：清 spec → 组视图 → 渲染 → 标签 → HUD / 浮层命中层 */
   const paint = (): void => {
@@ -162,6 +168,7 @@ export async function boot(): Promise<void> {
     }, LABEL_PARAMS);
     hud?.update();
     panels?.update();
+    share?.update();
   };
 
   /**
@@ -240,6 +247,17 @@ export async function boot(): Promise<void> {
       });
     });
   }
+
+  /* —— M8 分享 / 裂变入口：meta 注入 + 常驻 CTA + 微信 JS-SDK（非微信 / 签名不可用自动降级） —— */
+  const overCopy = (): { title: string; desc: string } | null => resultCopy(game?.state ?? null);
+  applyMeta(document, buildShareConfig(location.href, SHARE_VERSION, overCopy()));
+  share = mountShare(document.body, overCopy, SHARE_VERSION);
+  void initWechatShare({ pageHref: location.href, version: SHARE_VERSION, getOver: overCopy })
+    .then((b) => {
+      share?.setWechat(b);
+      (window as unknown as Record<string, unknown>).__monoShareStatus = b.status;
+    });
+  /* —— M8 结束 —— */
 
   paint();
 
