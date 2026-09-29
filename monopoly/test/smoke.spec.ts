@@ -8,14 +8,30 @@ describe('smoke', () => {
 });
 
 describe('parseOptions', () => {
-  it('缺省：进站即交互局（play=true）；skin=default, debug=false, seed=1, speed=1, show=b, nofx=false, perf=false', () => {
+  it('缺省：进站即交互局（play=true）；humans/ai/tour 缺省为 undefined（走开局面板）', () => {
     expect(parseOptions('')).toEqual({
       skin: 'default', debug: false, seed: 1, speed: 1, show: 'b', play: true, nofx: false, perf: false,
+      humans: undefined, ai: [], tour: undefined,
     });
   });
   it('解析 ?skin ?debug ?seed ?speed（play 仍默认 true）', () => {
     expect(parseOptions('?skin=photo&debug=1&seed=7&speed=4'))
-      .toEqual({ skin: 'photo', debug: true, seed: 7, speed: 4, show: 'b', play: true, nofx: false, perf: false });
+      .toEqual({
+        skin: 'photo', debug: true, seed: 7, speed: 4, show: 'b', play: true, nofx: false, perf: false,
+        humans: undefined, ai: [], tour: undefined,
+      });
+  });
+  it('解析 ?humans / ?ai / ?tour（AI 对手 + 新手引导）', () => {
+    expect(parseOptions('?humans=1').humans).toBe(1);
+    expect(parseOptions('?humans=4').humans).toBe(4);
+    expect(parseOptions('?humans=5').humans).toBeUndefined();   // 越界不采纳
+    expect(parseOptions('?humans=0').humans).toBeUndefined();
+    expect(parseOptions('?humans=abc').humans).toBeUndefined();
+    expect(parseOptions('?humans=1&ai=aggressive,speculative').ai).toEqual(['aggressive', 'speculative']);
+    expect(parseOptions('?humans=1&ai=bogus').ai).toEqual([]);
+    expect(parseOptions('?tour=1').tour).toBe(true);
+    expect(parseOptions('?tour=0').tour).toBe(false);
+    expect(parseOptions('?tour=2').tour).toBeUndefined();
   });
   it('解析 ?show=0|c', () => {
     expect(parseOptions('?show=0').show).toBe('0');

@@ -10,8 +10,12 @@ import { showcaseSpecs } from './render/ShowcaseView';
 import { drawLabels, type LabelParams } from './render/LabelView';
 import { ipos } from './render/iso';
 import { autoPlay, createGame, currentPlayer, type Game, type SettleResult } from './core/game';
+import { applyStep, type AiStep } from './core/ai';
 import { hudSpecs, mountHud, type HudActionId, type HudHandle } from './ui/Hud';
 import { mountPanels, panelSpecs, type PanelActionId, type PanelHandle } from './ui/panels';
+import { createAiDriver, type AiDriver } from './ui/aiDriver';
+import { mountSetup, readPlan, resolveSeats, type SeatPlan } from './ui/setup';
+import { parsePersonaList, type Persona, type Seat } from './data/ai';
 import {
   applyMeta, buildShareConfig, initWechatShare, mountShare, resultCopy,
   type ShareHandle,
@@ -39,6 +43,12 @@ export interface UrlOptions {
   nofx: boolean;
   /** `?perf=1`：挂性能覆盖层并采样帧间隔 */
   perf: boolean;
+  /** `?humans=1..4`：真人数；缺省（undefined）= 先弹开局面板（spec §6） */
+  humans?: number;
+  /** `?ai=conservative,aggressive,speculative`：AI 席位性格序列（与 humans 搭配） */
+  ai: Persona[];
+  /** `?tour=1` 强制引导 / `?tour=0` 关闭；缺省 = 首访自动弹一次（spec §7.1） */
+  tour?: boolean;
 }
 
 /** v5 样张 line 63：当前格 index 4（太平温泉）在 (5,9)，四枚棋子同格 */
@@ -64,6 +74,13 @@ export function parseOptions(search: string): UrlOptions {
     play: q.get('demo') !== '1' && q.get('play') !== '0',
     nofx: q.get('nofx') === '1',
     perf: q.get('perf') === '1',
+    /* AI 对手 + 新手引导（spec §6/§7）：`humans` 需 1..4 才采纳（`num()` 是「>0 才采纳」，口径不同） */
+    humans: (() => {
+      const v = Number(q.get('humans'));
+      return Number.isInteger(v) && v >= 1 && v <= 4 ? v : undefined;
+    })(),
+    ai: parsePersonaList(q.get('ai')),
+    tour: q.get('tour') === '1' ? true : q.get('tour') === '0' ? false : undefined,
   };
 }
 
@@ -133,7 +150,16 @@ export async function boot(): Promise<void> {
     index, c: CURRENT_CELL[0], r: CURRENT_CELL[1],
   }));
 
-  const game = opts.play ? createGame({ seed: opts.seed }) : null;
+  /* 新手引导挂载点（spec §7；Task 6 落地）。开局面板的「重看引导」先接在此。 */
+  const replayTour = (): void => {};
+
+  /* 席位归属：`?humans=` → localStorage → 弹开局面板（spec §6） */
+  const planned = opts.play ? resolveSeats(opts) : null;
+  let seats: Seat[] = opts.play ? (planned ?? [null, null, null, null]) : [];
+  let setupDone: Promise<SeatPlan> | null = null;
+  if (opts.play && !planned) setupDone = mountSetup(document.body, readPlan(), () => replayTour());
+  const game = opts.play ? createGame({ seed: opts.seed, playerCount: 4 }) : null;
+  let driver: AiDriver | null = null;
 
   /** 格号 → 屏幕坐标（动效落点用；与 Scene 同一套 iso 变换） */
   const cells = boardCells(geo);
@@ -173,7 +199,7 @@ export async function boot(): Promise<void> {
       ...showcaseSpecs({
         slot: currentPlayer(g.state).pos, owner: ownedOf(currentPlayer(g.state).pos), play: true, brandOf: shops.brandAt,
       }),
-      ...hudSpecs(g.state, fxPending || fx.busy()),
+      ...hudSpecs(g.state, fxPending || fx.busy(), seats, driver?.isFast() ?? false),
       /* M5 浮层：手牌 5 槽常驻 + 抽卡翻牌 / 股票盘 / 结算面板（未触发时为空） */
       ...panelSpecs(g.state),
     ];
@@ -204,9 +230,9 @@ export async function boot(): Promise<void> {
    * 动作 → 状态先落库（同步）→ 立即重画（权威画面）→ 动效只回放。
    * `?nofx` / `fx.speed(999)` 时 play() 瞬间到终帧，等价无动画。
    */
-  const runAction = (fn: () => unknown, ctxOf: (r: never) => FxContext | null): void => {
+  const runAction = (fn: () => unknown, ctxOf: (r: never) => FxContext | null, withFx = true): void => {
     const result = fn();
-    const ctx = ctxOf(result as never);
+    const ctx = withFx ? ctxOf(result as never) : null;
     if (!ctx) {
       fxPending = false;
       paint();
@@ -239,42 +265,76 @@ export async function boot(): Promise<void> {
     }
   };
 
+  /** AiStep → FxContext（与既有 HUD/浮层回调逐字一致） */
+  const ctxOfStep = (step: AiStep, r: unknown): FxContext | null => {
+    switch (step.kind) {
+      case 'roll': return { kind: 'dice' };
+      case 'move': {
+        const m = r as { from: number; to: number };
+        const from = cellXY(m.from); const to = cellXY(m.to);
+        return { kind: 'hop', x: from.x, y: from.y, tx: to.x, ty: to.y };
+      }
+      case 'settle': return settleFx(r as SettleResult);
+      case 'buy': {
+        const at = cellXY(currentPlayer(game!.state).pos);
+        return (r as { ok: boolean }).ok ? { kind: 'buy', x: at.x, y: at.y } : null;
+      }
+      case 'upgrade': {
+        const at = cellXY(currentPlayer(game!.state).pos);
+        const u = r as { ok: boolean; level?: number };
+        return u.ok ? { kind: 'upgrade', x: at.x, y: at.y, levels: u.level ?? FX_LEVELS } : null;
+      }
+      case 'card': {
+        const at = cellXY(currentPlayer(game!.state).pos);
+        return { kind: 'deck', x: at.x, y: at.y };
+      }
+      case 'trade': {
+        const at = cellXY(STOCK_TILE_INDEX);
+        return { kind: 'stock', x: at.x, y: at.y };
+      }
+      default: return null;   // skip / close / end
+    }
+  };
+
+  /** 唯一动作入口：真人 HUD / 浮层点击与 AI 决策层都归一到 AiStep 后走这里 */
+  const dispatch = (step: AiStep, withFx = true): void => {
+    if (!game) return;
+    runAction(() => applyStep(game, step), (r: never) => ctxOfStep(step, r as unknown), withFx);
+  };
+
+  /** HUD 点击 → AiStep（`ai:fast` / `ai:skip` 已在回调里拦截，不会传到这里） */
+  const stepOfHud = (a: Exclude<HudActionId, 'ai:fast' | 'ai:skip'>): AiStep =>
+    a === 'buy' ? { kind: 'buy' } : a === 'upgrade' ? { kind: 'upgrade' } : { kind: a };
+
+  const stepOfPanel = (a: PanelActionId, target?: number | string): AiStep => {
+    if (a === 'card:close' || a === 'settle:close') return { kind: 'close' };
+    if (a === 'stock:buy') return { kind: 'trade', code: String(target), shares: 1 };
+    if (a === 'stock:sell') return { kind: 'trade', code: String(target), shares: -1 };
+    return { kind: 'card', card: a.slice('card:'.length) as ItemCardKind, target: typeof target === 'number' ? target : undefined };
+  };
+
   if (game) {
     hud = mountHud(document.body, game, (a: HudActionId) => {
       if (fx.busy()) fx.skip();   // 点屏加速：状态早已落库，跳过只影响观感时长
-      if (a === 'roll') runAction(() => game.rollDice(), () => ({ kind: 'dice' }));
-      else if (a === 'move') runAction(() => game.moveCurrent(), (r: { from: number; to: number }) => {
-        const from = cellXY(r.from); const to = cellXY(r.to);
-        return { kind: 'hop', x: from.x, y: from.y, tx: to.x, ty: to.y };
-      });
-      else if (a === 'settle') runAction(() => game.settleCurrent(), settleFx);
-      else if (a === 'buy') runAction(() => game.buyCurrent(), (r: { ok: boolean }) => {
-        const at = cellXY(currentPlayer(game.state).pos);
-        return r.ok ? { kind: 'buy', x: at.x, y: at.y } : null;
-      });
-      else if (a === 'upgrade') runAction(() => game.upgradeCurrent(), (r: { ok: boolean; level?: number }) => {
-        const at = cellXY(currentPlayer(game.state).pos);
-        return r.ok ? { kind: 'upgrade', x: at.x, y: at.y, levels: r.level ?? FX_LEVELS } : null;
-      });
-      else if (a === 'skip') runAction(() => game.skipTurn(), () => null);
-      else runAction(() => game.endTurn(), () => null);
-    });
+      if (a === 'ai:fast') { if (driver) driver.setFast(!driver.isFast()); paint(); return; }
+      if (a === 'ai:skip') { driver?.skipRest(); return; }
+      dispatch(stepOfHud(a));
+    }, () => ({ seats, fast: driver?.isFast() ?? false }));
     /* 浮层动作：关浮层 / 股票买卖 / 打手牌（目标由命中区 `data-target` 带出） */
     panels = mountPanels(document.body, game, (a: PanelActionId, target?: number | string) => {
-      if (a === 'card:close' || a === 'settle:close') runAction(() => game.clearEvent(), () => null);
-      else if (a === 'stock:buy') runAction(() => game.trade(String(target), 1), () => {
-        const at = cellXY(STOCK_TILE_INDEX);
-        return { kind: 'stock', x: at.x, y: at.y };
-      });
-      else if (a === 'stock:sell') runAction(() => game.trade(String(target), -1), () => {
-        const at = cellXY(STOCK_TILE_INDEX);
-        return { kind: 'stock', x: at.x, y: at.y };
-      });
-      else runAction(() => game.useCard(a.slice('card:'.length) as ItemCardKind, typeof target === 'number' ? target : undefined), () => {
-        const at = cellXY(currentPlayer(game.state).pos);
-        return { kind: 'deck', x: at.x, y: at.y };
-      });
+      if (fx.busy()) fx.skip();
+      dispatch(stepOfPanel(a, target));
     });
+
+    driver = createAiDriver({
+      game, seats: () => seats,
+      run: (step, withFx = true) => dispatch(step, withFx),
+      isBusy: () => fx.busy(),
+      onFlush: () => fx.play({ kind: 'end' }, () => paint()),
+    });
+    driver.start();
+    /* 开局面板选完 → 换 seats 并重画（面板期间 driver 停在真人/默认席位，不会误推进） */
+    void setupDone?.then((plan) => { seats = plan; paint(); });
   }
 
   /* —— M8 分享 / 裂变入口：meta 注入 + 常驻 CTA + 微信 JS-SDK（非微信 / 签名不可用自动降级） —— */
@@ -353,6 +413,7 @@ export async function boot(): Promise<void> {
 
   (window as unknown as Record<string, unknown>).__monoMain = {
     stage, scene, opts, geo, skin, missingAssets, game, paint, sim, fx, fxPreview, perf, shops, VERSION,
+    seats, aiDriver: driver, hudSeats: () => seats,
   };
 }
 

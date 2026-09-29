@@ -213,10 +213,10 @@ describe('hud spec 组装（AI 回合）', () => {
     expect(byId(specs, 'ui.qk').length).toBe(2);
     expect(specs[specs.length - 1].id).toBe('ui.qk');
     const wide = byId(specs, 'ui.button.wide')[0];
-    expect(wide.state.enabled).toBe(false);
-    expect(String(wide.state.label)).toContain('AI 思考中');
-    expect(String(wide.state.label)).toContain('保守');
-    expect(wide.fixed.cx).toBe(HUD_BTN_AI_X + HUD_BTN_AI_W / 2);
+    expect(wide.state!.enabled).toBe(false);
+    expect(String(wide.state!.label)).toContain('AI 思考中');
+    expect(String(wide.state!.label)).toContain('保守');
+    expect(wide.fixed!.cx).toBe(HUD_BTN_AI_X + HUD_BTN_AI_W / 2);
   });
 
   it('AI 回合：每个 AI 席位在其资产条后紧跟一枚性格徽标（真人席位不推）', () => {
@@ -233,7 +233,7 @@ describe('hud spec 组装（AI 回合）', () => {
     const g = createGame({ seed: 1 });
     g.state.current = 1;
     const fast = byId(hudSpecs(g.state, false, seats, true), 'ui.qk');
-    expect(String(fast[0].state.label)).toContain('✓');
+    expect(String(fast[0].state!.label)).toContain('✓');
   });
 
   it('AI 回合命中层：主按钮禁用 + 两枚快捷键可点', () => {

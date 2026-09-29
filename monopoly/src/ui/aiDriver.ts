@@ -12,7 +12,8 @@ export type { Seat } from '../data/ai';
 
 export interface AiDriverDeps {
   game: Game;
-  seats: readonly Seat[];
+  /** 席位归属；开局面板可能换掉整个数组，故允许传 getter（实现内统一取值） */
+  seats: readonly Seat[] | (() => readonly Seat[]);
   /** 执行一步；`withFx=false` 表示只落库 + 重画（跳过本次用），默认 true */
   run: (step: AiStep, withFx?: boolean) => void;
   /** `fx.busy()`——动画未播完则等待 */
@@ -35,13 +36,14 @@ export interface AiDriver {
 
 export function createAiDriver(deps: AiDriverDeps): AiDriver {
   const now = deps.now ?? (() => performance.now());
+  const seatList = (): readonly Seat[] => (typeof deps.seats === 'function' ? deps.seats() : deps.seats);
   let nextAt = 0;
   let fast = false;
   let raf = 0;
   let alive = false;
   let destroyed = false;
 
-  const persona = (): Persona | null => deps.seats[deps.game.state.current] ?? null;
+  const persona = (): Persona | null => seatList()[deps.game.state.current] ?? null;
   const stepMs = (): number => (fast ? AI_STEP_MS / AI_FAST_FACTOR : AI_STEP_MS);
 
   const tick = (nowMs: number): void => {
