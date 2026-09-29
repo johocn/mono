@@ -15,6 +15,7 @@ import { hudSpecs, mountHud, type HudActionId, type HudHandle } from './ui/Hud';
 import { mountPanels, panelSpecs, type PanelActionId, type PanelHandle } from './ui/panels';
 import { createAiDriver, type AiDriver } from './ui/aiDriver';
 import { mountSetup, readPlan, resolveSeats, type SeatPlan } from './ui/setup';
+import { isDone, mountTutorial, shouldShowTutorial, type TutorialHandle } from './ui/tutorial';
 import { parsePersonaList, type Persona, type Seat } from './data/ai';
 import {
   applyMeta, buildShareConfig, initWechatShare, mountShare, resultCopy,
@@ -149,9 +150,6 @@ export async function boot(): Promise<void> {
   const demoPawns = Array.from({ length: PAWN_COUNT }, (_, index) => ({
     index, c: CURRENT_CELL[0], r: CURRENT_CELL[1],
   }));
-
-  /* 新手引导挂载点（spec §7；Task 6 落地）。开局面板的「重看引导」先接在此。 */
-  const replayTour = (): void => {};
 
   /* 席位归属：`?humans=` → localStorage → 弹开局面板（spec §6） */
   const planned = opts.play ? resolveSeats(opts) : null;
@@ -333,9 +331,21 @@ export async function boot(): Promise<void> {
       onFlush: () => fx.play({ kind: 'end' }, () => paint()),
     });
     driver.start();
-    /* 开局面板选完 → 换 seats 并重画（面板期间 driver 停在真人/默认席位，不会误推进） */
-    void setupDone?.then((plan) => { seats = plan; paint(); });
   }
+
+  /* —— 新手引导（spec §7）：仅在含真人席位的局、首访一次；「重看引导」入口见开局面板 —— */
+  let tutorial: TutorialHandle | null = null;
+  const replayTour = (): void => {
+    tutorial?.destroy();
+    tutorial = mountTutorial(document.body, { onDone: () => { tutorial = null; } });
+  };
+  if (game && shouldShowTutorial(opts, isDone(), seats)) replayTour();
+  /* 开局面板选完 → 换 seats；若面板期间未弹（或席位变为含真人）则补弹，再重画 */
+  void setupDone?.then((plan) => {
+    seats = plan;
+    if (game && shouldShowTutorial(opts, isDone(), plan) && !tutorial) replayTour();
+    paint();
+  });
 
   /* —— M8 分享 / 裂变入口：meta 注入 + 常驻 CTA + 微信 JS-SDK（非微信 / 签名不可用自动降级） —— */
   const overCopy = (): { title: string; desc: string } | null => resultCopy(game?.state ?? null);
@@ -414,6 +424,7 @@ export async function boot(): Promise<void> {
   (window as unknown as Record<string, unknown>).__monoMain = {
     stage, scene, opts, geo, skin, missingAssets, game, paint, sim, fx, fxPreview, perf, shops, VERSION,
     seats, aiDriver: driver, hudSeats: () => seats,
+    tutorial: () => tutorial, mountTutorial: replayTour,
   };
 }
 
