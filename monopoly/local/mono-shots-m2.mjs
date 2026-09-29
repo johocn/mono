@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 
-const BASE = process.env.MONO_URL || 'http://127.0.0.1:52300/mono.html?debug=1';
+const BASE = process.env.MONO_URL || 'http://127.0.0.1:52300/mono.html?demo=1&debug=1';
 const OUT = 'docs/verify';
 mkdirSync(OUT, { recursive: true });
 

@@ -35,7 +35,7 @@ async function open(url) {
 }
 
 for (const [show, file, minFx] of views) {
-  const page = await open(`${ORIGIN}/mono.html?debug=1&show=${show}`);
+  const page = await open(`${ORIGIN}/mono.html?demo=1&debug=1&show=${show}`);
   const f = await page.evaluate(() => {
     const main = window.__monoMain;
     const inst = main.scene.instancesOf();
@@ -56,7 +56,7 @@ for (const [show, file, minFx] of views) {
 }
 
 for (const [show, file, minImages] of skinViews) {
-  const page = await open(`${ORIGIN}/mono.html?debug=1&skin=photo&show=${show}`);
+  const page = await open(`${ORIGIN}/mono.html?demo=1&debug=1&skin=photo&show=${show}`);
   const f = await page.evaluate(() => {
     const main = window.__monoMain;
     const inst = main.scene.instancesOf();

@@ -34,7 +34,7 @@ const browser = await chromium.launch();
 try {
   /* —— 1) 真实游戏画面：棋盘区 —— */
   const game = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
-  await game.goto(`${ORIGIN}/mono.html?nofx=1&seed=20260928`, { waitUntil: 'networkidle' });
+  await game.goto(`${ORIGIN}/mono.html?demo=1&nofx=1&seed=20260928`, { waitUntil: 'networkidle' });
   await game.waitForFunction(() => Boolean(window.__monoMain?.scene), null, { timeout: 20000 });
   await game.waitForTimeout(150);
   /* 抹掉所有 DOM 覆盖层（CTA / 命中层 / 性能层），只留画布画面 */

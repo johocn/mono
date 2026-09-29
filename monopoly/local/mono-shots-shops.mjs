@@ -46,15 +46,15 @@ await page.route('**/config/shops.json', (route) => route.fulfill({
   body: JSON.stringify(FIXTURE),
 }));
 
-await open('?show=0');
+await open('?demo=1&show=0');
 await page.screenshot({ path: `${OUT}/mono-shops-01-board.png` });
 const labelsInjected = await labelsOf();
 
-await open('?show=b');
+await open('?demo=1&show=b');
 await page.screenshot({ path: `${OUT}/mono-shops-02-showcase-b.png` });
 
 /* —— ② 映射与图片预装（photo 皮肤内已有 tex/tree.png） —— */
-await open('?show=0&skin=photo');
+await open('?demo=1&show=0&skin=photo');
 await page.screenshot({ path: `${OUT}/mono-shops-03-photo-sign.png` });
 const injected = await page.evaluate(() => ({
   overrides: window.__monoMain.shops.overrides,
@@ -63,7 +63,7 @@ const injected = await page.evaluate(() => ({
 
 /* —— ③ 零配置回退：不拦截 → 走 shipped 空清单 → 与内建默认完全一致（截图） —— */
 await page.unroute('**/config/shops.json');
-await open('?show=0');
+await open('?demo=1&show=0');
 await page.screenshot({ path: `${OUT}/mono-shops-04-board-zero-config.png` });
 const labelsDefault = await labelsOf();
 const zeroCfg = await page.evaluate(() => ({

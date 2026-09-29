@@ -21,7 +21,7 @@ const open = async (query) => {
 };
 
 /* 1) 纯棋盘（含 32 字牌）：?show=0 关掉橱窗覆盖层 */
-await open('?show=0');
+await open('?demo=1&show=0');
 await page.screenshot({ path: `${OUT}/mono-real-01-board.png` });
 const labels = await page.evaluate(() => {
   const nodes = window.__monoMain.stage.layers.labels.children;
@@ -32,7 +32,7 @@ const labels = await page.evaluate(() => {
 await page.screenshot({ path: `${OUT}/mono-real-02-labels.png`, clip: { x: 0, y: 34, width: 390, height: 300 } });
 
 /* 3) B 版式橱窗（样板地块 slot 4 = 国信南山温泉酒店） */
-await open('?show=b');
+await open('?demo=1&show=b');
 await page.screenshot({ path: `${OUT}/mono-real-03-showcase-b.png` });
 
 const gate = {
