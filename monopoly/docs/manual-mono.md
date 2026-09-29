@@ -11,7 +11,7 @@
 | 线上回归 | `npm run check:prod`（打真实 URL `https://game.joho.cn/tour/mono.html`） |
 | 校验 | `npm run check`（lint + lint:skin + test） |
 
-URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围盒/depth/provider 回退级别）· `?seed=<n>` · `?speed=<n>`（动画时轴倍率）· `?play=1`（交互局）· `?nofx=1`（等价 `speed=999`，动画瞬间到终帧）· `?perf=1`（性能覆盖层 + 帧间隔采样）。
+URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围盒/depth/provider 回退级别）· `?seed=<n>` · `?speed=<n>`（动画时轴倍率）· **默认即交互局**（裸链接进站即玩）· `?demo=1`（演示棋盘，= 旧裸入口行为）· `?play=1`（等价默认；`?play=0` 同 `?demo=1`）· `?nofx=1`（等价 `speed=999`，动画瞬间到终帧）· `?perf=1`（性能覆盖层 + 帧间隔采样）。
 
 ## 2. 测试用例
 
@@ -55,6 +55,8 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 | M4-3 | 控制台执行 `__monoMain.sim()` | headless 一路自动跑到分出胜负，返回胜者 id（1..4）；状态行变「本局结束 · 胜者 老王」，主按钮变为灰置禁用的「本局结束」（不再可点，胜者按净资产判定）；`__monoMain.game.state.round` ≤ 61 | `mono-m4-03-final.png` |
 | M4-4 | 现金不足时点「买地」（把 `__monoMain.game.state.players[0].cash` 改成 10 后 `__monoMain.paint()`） | 按钮仍在但变灰且点不动（边界校验，不隐藏） | — |
 | M4-5 | 跑 `node local/mono-shots-m4.mjs` | 3 张 390×844 @dpr2 截图入库；`gate` 全 `true`、`errors` 为空 | 上述全部 |
+
+**默认入口（2026-09-29 起）**：裸链接 `mono.html` 即交互局，HUD（资产条/手牌/骰子）首屏齐备；演示棋盘与 B/C 版式改由 `?demo=1&show=b|c` 进入（play 分支不经过 `demoView`，故橱窗版式必须显式加 `demo=1`）。此前裸入口为演示棋盘，曾导致「主页面没有玩家信息 / 没道具 / 看不见骰子」的误判，根因与修复见 `docs/superpowers/specs/2026-09-29-mono-default-entry-design.md`。
 
 **M4 结论**：`src/core` 全部单测通过（`board` / `economy` / `dice` / `board-path` / `estate` / `game` 共 53 例，`test/core` 全量 57 例）+ 端到端整局可跑（`__monoMain.sim()` 返回胜者、`round ≤ ROUND_LIMIT + 1`）；该「整局可跑」已由 **M7-4 真实点击整局**复证（973 次点击跑到 `over=true`，不经 `sim()`）。有意偏差：楼体层级仍走演示层级 `slotLevelsOf()`（实时升级动画并入 M6），地砖归属色与棋子位置已跟游戏状态联动。
 
@@ -127,6 +129,7 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 
 | # | 步骤 | 期望 | 证据/截图 |
 |---|---|---|---|
+| M7-0 | 手机打开 `https://game.joho.cn/tour/mono.html`（**无参数**） | 进站即交互局：底部资产条 4 条 + 手牌 5 槽 + 两枚骰面齐备，`#mono-hud` 满屏 390×844，无控制台错误 | `mono-prod-00-default.png` |
 | M7-1 | `node scripts/deploy-mono.mjs`（=`npm run deploy`） | 本地构建 → tar 整包 → scp → 服务器仅解压（无服务器构建）；`mono.html` 200、`js/mono.js` 线上字节数=本地、`skins/photo/skin.json` 200 | 七步输出见下 |
 | M7-2 | `node local/mono-prod-check.mjs`（=`npm run check:prod`） | 线上无报错、元素计数一致、`?skin=photo` 可用、整局可跑（程序化 `sim()`；**真实点击整局**另见 M7-4） | `mono-prod-01..03` |
 | M7-3 | 手机打开 `https://game.joho.cn/tour/mono.html?play=1` | 与本地同 seed 同画面、可完整打一局 | — |
