@@ -32,7 +32,9 @@ export const VERSION = '0.1.0';
 const BG_FALLBACK = 0x0c1513;
 
 export interface UrlOptions {
-  skin: string; debug: boolean; seed: number; speed: number; show: string; play: boolean;
+  skin: string; debug: boolean; seed: number; speed: number; show: string;
+  /** 默认 true（进站即交互局）；`?demo=1` / `?play=0` 为显式反义，不单独暴露字段 */
+  play: boolean;
   /** `?nofx=1`：等价 `speed=999`（动画瞬间到终帧；截图闸门与无障碍用） */
   nofx: boolean;
   /** `?perf=1`：挂性能覆盖层并采样帧间隔 */
@@ -58,7 +60,8 @@ export function parseOptions(search: string): UrlOptions {
     seed: num('seed', 1),
     speed: num('speed', 1),
     show: q.get('show') || 'b',
-    play: q.get('play') === '1',
+    /* 默认即交互局（design §3.1）：裸链接 = 进站即玩；`?demo=1` 或 `?play=0` 回演示棋盘 */
+    play: q.get('demo') !== '1' && q.get('play') !== '0',
     nofx: q.get('nofx') === '1',
     perf: q.get('perf') === '1',
   };

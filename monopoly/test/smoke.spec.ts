@@ -8,22 +8,24 @@ describe('smoke', () => {
 });
 
 describe('parseOptions', () => {
-  it('缺省：skin=default, debug=false, seed=1, speed=1, show=b, play=false, nofx=false, perf=false', () => {
+  it('缺省：进站即交互局（play=true）；skin=default, debug=false, seed=1, speed=1, show=b, nofx=false, perf=false', () => {
     expect(parseOptions('')).toEqual({
-      skin: 'default', debug: false, seed: 1, speed: 1, show: 'b', play: false, nofx: false, perf: false,
+      skin: 'default', debug: false, seed: 1, speed: 1, show: 'b', play: true, nofx: false, perf: false,
     });
   });
-  it('解析 ?skin ?debug ?seed ?speed', () => {
+  it('解析 ?skin ?debug ?seed ?speed（play 仍默认 true）', () => {
     expect(parseOptions('?skin=photo&debug=1&seed=7&speed=4'))
-      .toEqual({ skin: 'photo', debug: true, seed: 7, speed: 4, show: 'b', play: false, nofx: false, perf: false });
+      .toEqual({ skin: 'photo', debug: true, seed: 7, speed: 4, show: 'b', play: true, nofx: false, perf: false });
   });
   it('解析 ?show=0|c', () => {
     expect(parseOptions('?show=0').show).toBe('0');
     expect(parseOptions('?show=c').show).toBe('c');
   });
-  it('解析 ?play=1（M4 交互局）', () => {
+  it('解析 ?play / ?demo（M4 交互局）', () => {
     expect(parseOptions('?debug=1&play=1&seed=20260928').play).toBe(true);
     expect(parseOptions('?play=0').play).toBe(false);
+    expect(parseOptions('?demo=1').play).toBe(false);
+    expect(parseOptions('?demo=1&play=1').play).toBe(false); // demo 优先于 play
   });
   it('非法数字回落到缺省', () => {
     expect(parseOptions('?seed=abc&speed=-2').seed).toBe(1);
