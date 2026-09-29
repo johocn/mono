@@ -4,9 +4,10 @@ import {
   buyOffer, hitAreas, hudSpecs, primaryAction, primaryLabel, upgradeOffer, statusText,
 } from '../../src/ui/Hud';
 import {
-  BOTTOM_BTN_Y, DOCK_Y, HUD_BAR_H, HUD_BAR_W, HUD_DICE_Y, STAGE_W,
+  BOTTOM_BTN_Y, DOCK_Y, HUD_BAR_H, HUD_BAR_W, HUD_BTN_AI_W, HUD_BTN_AI_X, HUD_DICE_Y, STAGE_W,
 } from '../../src/skin/layout';
 import type { Dice } from '../../src/core/dice';
+import type { Seat } from '../../src/data/ai';
 
 /** 固定点数骰：每步走 2 格，落点完全可预期 */
 const fixed = (d1: number, d2: number): Dice => ({ roll: () => ({ d1, d2, total: d1 + d2 }) });
@@ -195,5 +196,66 @@ describe('hud 命中层（透明 DOM 按钮的矩形来源）', () => {
       expect(a.x).toBeGreaterThanOrEqual(0);
       expect(a.x + a.w).toBeLessThanOrEqual(STAGE_W);
     }
+  });
+});
+
+describe('hud spec 组装（AI 回合）', () => {
+  const seats: Seat[] = [null, 'conservative', 'aggressive', 'speculative'];
+  const byId = (specs: ReturnType<typeof hudSpecs>, id: string) => specs.filter((s) => s.id === id);
+
+  it('AI 回合：整行主按钮 + 两枚快捷键，不出买地/升级次要按钮', () => {
+    const g = createGame({ seed: 1 });
+    g.state.current = 1;                       // 席位 1 = 保守 AI
+    const specs = hudSpecs(g.state, false, seats, false);
+    expect(byId(specs, 'ui.button.wide').length).toBe(1);
+    expect(byId(specs, 'ui.button.primary').length).toBe(0);
+    expect(byId(specs, 'ui.button.secondary').length).toBe(0);
+    expect(byId(specs, 'ui.qk').length).toBe(2);
+    expect(specs[specs.length - 1].id).toBe('ui.qk');
+    const wide = byId(specs, 'ui.button.wide')[0];
+    expect(wide.state.enabled).toBe(false);
+    expect(String(wide.state.label)).toContain('AI 思考中');
+    expect(String(wide.state.label)).toContain('保守');
+    expect(wide.fixed.cx).toBe(HUD_BTN_AI_X + HUD_BTN_AI_W / 2);
+  });
+
+  it('AI 回合：每个 AI 席位在其资产条后紧跟一枚性格徽标（真人席位不推）', () => {
+    const g = createGame({ seed: 1 });
+    const specs = hudSpecs(g.state, false, seats, false);
+    expect(byId(specs, 'ui.personaTag').length).toBe(3);
+    const bars = specs.filter((s) => s.id === 'ui.playerBar').map((s) => s.r);
+    for (const tag of specs.filter((s) => s.id === 'ui.personaTag')) {
+      expect(bars).toContain(tag.r);
+    }
+  });
+
+  it('加速态标签切换为「加速 ✓」', () => {
+    const g = createGame({ seed: 1 });
+    g.state.current = 1;
+    const fast = byId(hudSpecs(g.state, false, seats, true), 'ui.qk');
+    expect(String(fast[0].state.label)).toContain('✓');
+  });
+
+  it('AI 回合命中层：主按钮禁用 + 两枚快捷键可点', () => {
+    const g = createGame({ seed: 1 });
+    g.state.current = 2;
+    const areas = hitAreas(g.state, seats);
+    expect(areas.length).toBe(3);
+    expect(areas[0].enabled).toBe(false);
+    expect(areas[0].x).toBe(HUD_BTN_AI_X);
+    expect(areas[0].w).toBe(HUD_BTN_AI_W);
+    expect(areas[0].x + areas[0].w).toBeLessThanOrEqual(STAGE_W);
+    expect(areas.map((a) => a.action)).toEqual([expect.any(String), 'ai:fast', 'ai:skip']);
+    expect(areas[1].enabled).toBe(true);
+    expect(areas[2].enabled).toBe(true);
+  });
+
+  it('真人回合不受影响：仍出 primary + 买/升级', () => {
+    const g = createGame({ seed: 1 });
+    g.state.current = 0;                       // 席位 0 = 真人
+    const specs = hudSpecs(g.state, false, seats, false);
+    expect(byId(specs, 'ui.button.wide').length).toBe(0);
+    expect(byId(specs, 'ui.button.primary').length).toBe(1);
+    expect(byId(specs, 'ui.qk').length).toBe(0);
   });
 });

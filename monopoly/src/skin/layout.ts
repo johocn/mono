@@ -30,6 +30,21 @@ export const HUD_BTN_PRIMARY_X = 146;            // 左
 export const HUD_BTN_BUY_X = 31;                 // 左
 export const HUD_BTN_UPGRADE_X = 249;            // 左
 
+/* —— AI 回合（spec §5.2）：整行主按钮 + 状态行右侧两枚快捷键 —— */
+export const HUD_BTN_AI_X = 31;
+export const HUD_BTN_AI_W = 328;
+export const HUD_QK_W = 72;
+export const HUD_QK_H = 22;
+export const HUD_QK_FAST_X = 211;
+export const HUD_QK_SKIP_X = 287;
+/** 快捷键顶边 y；中心 = HUD_LABEL_Y（状态行中心），即右侧 211..359 / 287..359 */
+export const HUD_QK_Y = 607;
+/** AI 回合把状态行文字左移，给右侧快捷键让位 */
+export const HUD_LABEL_SHIFT_X = -90;
+/** 性格徽标相对资产条中心的偏移（贴右上角，右缘与资产条右缘齐平） */
+export const HUD_PERSONA_DX = 26;
+export const HUD_PERSONA_DY = -11;
+
 /** 默认皮肤几何（= public/skins/default/skin.json 的 geo；供渲染层免写死引用） */
 export const DEFAULT_GEO = { hw: 21, hh: 10.5, ox: 195, oy: 96 };
 
@@ -180,3 +195,11 @@ export const FX_CARD_CY = PANEL_CARD_CY;
 export const PERF_INTERACTIVE_BUDGET_MS = 3000;  // 首屏可交互（4G）
 export const PERF_FRAME_P95_BUDGET_MS = 20;      // 帧间隔 p95（headless 代理）
 export const PERF_DRAW_BUDGET = 200;             // 单帧绘制元素数
+
+/* —— AI 驱动器（spec §5.3）—— */
+export const AI_STEP_MS = 450;                   // 步间停顿（默认）
+export const AI_FAST_FACTOR = 2;                 // 「加速 ×2」倍率
+export const AI_SKIP_MAX_STEPS = 64;             // skipRest 单次上限（防御性兜底）
+
+/* —— 新手引导（spec §7.3）—— */
+export const TUTORIAL_GAP = 12;                  // 气泡与高亮框边距

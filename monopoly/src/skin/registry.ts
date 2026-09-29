@@ -139,6 +139,10 @@ reg['ui.dock'] = { id: 'ui.dock', box: { w: 390, d: 1, h: 184 }, anchor: [0.5, 0
 reg['ui.label'] = { id: 'ui.label', box: { w: 390, d: 1, h: 24 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image'] };
 reg['ui.playerBar'] = { id: 'ui.playerBar', box: { w: 86, d: 1, h: 40 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image'] };
 reg['ui.button.secondary'] = { id: 'ui.button.secondary', box: { w: 110, d: 1, h: 46 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image', 'atlas'] };
+/* AI 回合专用（spec §5.2）：整行主按钮 + 状态行右侧两枚快捷键 + 性格徽标 */
+reg['ui.button.wide'] = { id: 'ui.button.wide', box: { w: 328, d: 1, h: 46 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image', 'atlas'] };
+reg['ui.qk'] = { id: 'ui.qk', box: { w: 72, d: 1, h: 22 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image', 'atlas'] };
+reg['ui.personaTag'] = { id: 'ui.personaTag', box: { w: 34, d: 1, h: 13 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image'] };
 
 // —— 地块橱窗（B 版式）：全部 ground 挂载，台位由 ElementSpec.fixed 给（不走 resolvePlacement） ——
 const showcaseEntry = (id: string, box: { w: number; d: number; h: number }): RegistryEntry => ({

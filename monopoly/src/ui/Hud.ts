@@ -2,17 +2,20 @@ import { PLAYER_NAME } from '../data/board';
 import { buyPrice, canUpgrade, nextLevel } from '../data/economy';
 import { buyable } from '../core/estate';
 import { currentPlayer, netWorth, type Game, type GameState } from '../core/game';
+/** AI 席位（`null` = 真人）；从 `src/data/ai` 取，避免 ui → ui 横向依赖 */
+import { PERSONA_LABEL, type Persona, type Seat } from '../data/ai';
 import type { ElementSpec } from '../skin/instantiate';
 import {
   BOTTOM_BTN_Y, DOCK_Y, HUD_BAR_GAP, HUD_BAR_H, HUD_BAR_W, HUD_BAR_X0, HUD_BAR_Y,
-  HUD_BTN_BUY_X, HUD_BTN_H, HUD_BTN_PRIMARY_W, HUD_BTN_PRIMARY_X, HUD_BTN_SECONDARY_W,
-  HUD_BTN_UPGRADE_X, HUD_DICE_DX, HUD_DICE_SIZE, HUD_DICE_X0, HUD_DICE_Y,
-  HUD_DOCK_H, HUD_LABEL_Y, STAGE_W,
+  HUD_BTN_AI_W, HUD_BTN_AI_X, HUD_BTN_BUY_X, HUD_BTN_H, HUD_BTN_PRIMARY_W, HUD_BTN_PRIMARY_X,
+  HUD_BTN_SECONDARY_W, HUD_BTN_UPGRADE_X, HUD_DICE_DX, HUD_DICE_SIZE, HUD_DICE_X0, HUD_DICE_Y,
+  HUD_DOCK_H, HUD_LABEL_SHIFT_X, HUD_LABEL_Y, HUD_PERSONA_DX, HUD_PERSONA_DY,
+  HUD_QK_FAST_X, HUD_QK_H, HUD_QK_SKIP_X, HUD_QK_W, HUD_QK_Y, STAGE_W,
 } from '../skin/layout';
 
 /** 主按钮在四个阶段里的动作（spec §5.1 回合流程的显式化）；监狱禁行时为 `skip` */
 export type HudPrimaryAction = 'roll' | 'move' | 'settle' | 'end' | 'skip';
-export type HudActionId = HudPrimaryAction | 'buy' | 'upgrade';
+export type HudActionId = HudPrimaryAction | 'buy' | 'upgrade' | 'ai:fast' | 'ai:skip';
 
 export interface HitArea {
   action: HudActionId;
@@ -45,7 +48,8 @@ export function primaryAction(state: GameState): HudPrimaryAction | null {
   }
 }
 
-export function primaryLabel(state: GameState, fxBusy = false): string {
+export function primaryLabel(state: GameState, fxBusy = false, aiPersona: Persona | null = null): string {
+  if (aiPersona) return `AI 思考中 · ${PERSONA_LABEL[aiPersona]}`;
   const a = primaryAction(state);
   if (a !== null && fxBusy) return '跳过';
   if (a === 'skip') return `跳过（${jailed(state)}）`;
@@ -100,20 +104,28 @@ function barCx(i: number): number {
  * HUD 的 instantiate spec（全部 `pass: 4` + `fixed` 定格台位）。
  * `c` 恒为 0、`r` 递增 —— depth（= c+r）升序即绘制序：底坞 → 标签 → 资产条 → 骰体 → 骰面 → 按钮。
  */
-export function hudSpecs(state: GameState, fxBusy = false): ElementSpec[] {
+export function hudSpecs(
+  state: GameState, fxBusy = false, seats: readonly Seat[] = [], fast = false,
+): ElementSpec[] {
   const out: ElementSpec[] = [];
-  const bar = (id: string, r: number, cx: number, cy: number, st: Record<string, unknown>, slot = null): void => {
-    out.push({ id, slot, c: 0, r, pass: 4, fixed: { cx, cy, s: 1 }, state: st });
+  const bar = (id: string, r: number, cx: number, cy: number, st: Record<string, unknown>, s = 1): void => {
+    out.push({ id, slot: null, c: 0, r, pass: 4, fixed: { cx, cy, s }, state: st });
   };
 
+  const aiSeat = state.over ? null : (seats[state.current] ?? null);
+
   bar('ui.dock', 0, STAGE_W / 2, DOCK_Y + HUD_DOCK_H / 2, { round: state.round });
-  bar('ui.label', 1, STAGE_W / 2, HUD_LABEL_Y, { text: statusText(state) });
+  /* 状态行：AI 回合把文字左移，给右侧「加速 / 跳过」让位 */
+  bar('ui.label', 1, STAGE_W / 2, HUD_LABEL_Y, { text: statusText(state), dx: aiSeat ? HUD_LABEL_SHIFT_X : 0 });
 
   state.players.forEach((p, i) => {
-    bar('ui.playerBar', 2 + i, barCx(i), HUD_BAR_Y + HUD_BAR_H / 2, {
+    const cy = HUD_BAR_Y + HUD_BAR_H / 2;
+    bar('ui.playerBar', 2 + i, barCx(i), cy, {
       owner: p.id, name: PLAYER_NAME[p.id - 1], cash: p.cash,
       active: i === state.current, bankrupt: p.bankrupt,
     });
+    const seat = seats[i] ?? null;
+    if (seat) bar('ui.personaTag', 2 + i, barCx(i) + HUD_PERSONA_DX, cy + HUD_PERSONA_DY, { text: PERSONA_LABEL[seat] });
   });
 
   const d = state.dice;
@@ -125,6 +137,20 @@ export function hudSpecs(state: GameState, fxBusy = false): ElementSpec[] {
   for (let k = 0; k < 2; k++) {
     const pips = d ? (k === 0 ? d.d1 : d.d2) : 1;
     bar(`dice.face${pips}`, 8 + k, HUD_DICE_X0 + HUD_DICE_SIZE / 2 + k * HUD_DICE_DX, HUD_DICE_Y + HUD_DICE_SIZE / 2, { pips, blank: !d });
+  }
+
+  if (aiSeat) {
+    /* AI 回合：命中区全禁用，主按钮整行拉宽显示「AI 思考中 · <性格>」 */
+    bar('ui.button.wide', 10, HUD_BTN_AI_X + HUD_BTN_AI_W / 2, BOTTOM_BTN_Y + HUD_BTN_H / 2, {
+      label: primaryLabel(state, fxBusy, aiSeat), enabled: false,
+    });
+    bar('ui.qk', 11, HUD_QK_FAST_X + HUD_QK_W / 2, HUD_QK_Y + HUD_QK_H / 2, {
+      label: fast ? '加速 ✓' : '加速 ×2', enabled: true,
+    });
+    bar('ui.qk', 12, HUD_QK_SKIP_X + HUD_QK_W / 2, HUD_QK_Y + HUD_QK_H / 2, {
+      label: '跳过本次', enabled: true,
+    });
+    return out;
   }
 
   bar('ui.button.primary', 10, HUD_BTN_PRIMARY_X + HUD_BTN_PRIMARY_W / 2, BOTTOM_BTN_Y + HUD_BTN_H / 2, {
@@ -147,8 +173,17 @@ export function hudSpecs(state: GameState, fxBusy = false): ElementSpec[] {
 }
 
 /** 透明 DOM 命中层的矩形来源（与 hudSpecs 的按钮台位一一对应） */
-export function hitAreas(state: GameState): HitArea[] {
+export function hitAreas(state: GameState, seats: readonly Seat[] = []): HitArea[] {
   const out: HitArea[] = [];
+  if (state.over) return out;
+  /* AI 回合：主按钮整行且禁用；两枚快捷键可点（加速 / 跳过本次） */
+  if (seats[state.current]) {
+    return [
+      { action: primaryAction(state) ?? 'end', x: HUD_BTN_AI_X, y: BOTTOM_BTN_Y, w: HUD_BTN_AI_W, h: HUD_BTN_H, enabled: false },
+      { action: 'ai:fast', x: HUD_QK_FAST_X, y: HUD_QK_Y, w: HUD_QK_W, h: HUD_QK_H, enabled: true },
+      { action: 'ai:skip', x: HUD_QK_SKIP_X, y: HUD_QK_Y, w: HUD_QK_W, h: HUD_QK_H, enabled: true },
+    ];
+  }
   const pa = primaryAction(state);
   if (pa) {
     out.push({ action: pa, x: HUD_BTN_PRIMARY_X, y: BOTTOM_BTN_Y, w: HUD_BTN_PRIMARY_W, h: HUD_BTN_H, enabled: true });
@@ -167,8 +202,12 @@ export function hitAreas(state: GameState): HitArea[] {
 /**
  * 挂透明命中层：容器不吃事件，只有命中区 `<button>` 吃。
  * 按钮的**可见像素**由 `hudSpecs` + proc preset 画在画布上（spec §3.6：可见元素必须可换素材）。
+ * `view` 让命中层跟上席位归属与加速态（默认全真人 / 未加速）。
  */
-export function mountHud(root: HTMLElement, game: Game, onAction: (a: HudActionId) => void): HudHandle {
+export function mountHud(
+  root: HTMLElement, game: Game, onAction: (a: HudActionId) => void,
+  view: () => { seats: readonly Seat[]; fast: boolean } = () => ({ seats: [], fast: false }),
+): HudHandle {
   const layer = document.createElement('div');
   layer.id = 'mono-hud';
   layer.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:8';
@@ -177,7 +216,7 @@ export function mountHud(root: HTMLElement, game: Game, onAction: (a: HudActionI
   const update = (): void => {
     layer.textContent = '';
     const pa = primaryAction(game.state);
-    for (const a of hitAreas(game.state)) {
+    for (const a of hitAreas(game.state, view().seats)) {
       const b = document.createElement('button');
       b.dataset.action = a.action;
       if (a.action === pa) b.dataset.primary = '1';

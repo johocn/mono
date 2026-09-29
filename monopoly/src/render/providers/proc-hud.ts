@@ -106,11 +106,12 @@ export const uiButton: ProcPreset = (g, ctx) => {
   });
 };
 
-/* —— 状态行：居中单行文字（轮次 / 胜负 / 提示） —— */
+/* —— 状态行：居中单行文字（轮次 / 胜负 / 提示）；`state.dx` 供 AI 回合给右侧快捷键让位 —— */
 export const uiLabel: ProcPreset = (_g, ctx) => {
   const { cx, cy, params, state, text } = ctx;
   if (!text) return;
-  text({ text: typeof state.text === 'string' ? state.text : '', x: cx, y: cy, size: G(params, 'labelFs'), fill: S(params, 'labelFill') });
+  const dx = typeof state.dx === 'number' ? state.dx : 0;
+  text({ text: typeof state.text === 'string' ? state.text : '', x: cx + dx, y: cy, size: G(params, 'labelFs'), fill: S(params, 'labelFill') });
 };
 
 /* —— 骰体：圆角方（掷出后亮底） —— */
