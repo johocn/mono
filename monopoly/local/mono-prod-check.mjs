@@ -38,6 +38,38 @@ const attach = (page) => {
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 };
 
+/* 记录「有没有真的发出声音」的 AudioContext 替身（只记次数，不产生声波） */
+const audioStub = () => {
+  window.__audioCtxCount = 0;
+  window.__audioStarts = 0;
+  const param = () => ({
+    value: 0,
+    setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {},
+  });
+  const node = () => ({ connect() {}, disconnect() {} });
+  class AudioContextStub {
+    constructor() {
+      window.__audioCtxCount += 1;
+      this.currentTime = 0;
+      this.sampleRate = 48000;
+      this.state = 'running';
+      this.destination = {};
+    }
+    resume() { return Promise.resolve(); }
+    close() { return Promise.resolve(); }
+    createGain() { return { ...node(), gain: param() }; }
+    createOscillator() {
+      return { ...node(), type: '', frequency: param(), start() { window.__audioStarts += 1; }, stop() {} };
+    }
+    createBufferSource() {
+      return { ...node(), buffer: null, start() { window.__audioStarts += 1; }, stop() {} };
+    }
+    createBuffer() { return { getChannelData: () => new Float32Array(1) }; }
+    decodeAudioData() { return Promise.resolve({}); }
+  }
+  window.AudioContext = AudioContextStub;
+};
+
 /* 2) + 3) 默认皮肤：就绪、无报错、元素计数 */
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
 attach(page);
@@ -128,6 +160,87 @@ gate.aiSeat = facts.aiSeat.ai === 3 && facts.aiSeat.humans === 1 && facts.aiSeat
 await aiPage.screenshot({ path: `${OUT}/mono-prod-04-ai-seat.png` });
 await aiPage.close();
 
+/* 8) M11 音频（spec §10.3）：真实手势解锁 / 音效发声 / 静音键语义 / `?audio=0` 不建 ctx */
+const audioPage = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+attach(audioPage);
+await audioPage.addInitScript(audioStub);
+await audioPage.goto(`${ORIGIN}/mono.html?play=1&seed=20260928&nofx=1&humans=4&tour=0`, { waitUntil: 'networkidle' });
+await audioPage.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 20000 });
+
+facts.audioBefore = await audioPage.evaluate(() => window.__audioCtxCount);
+gate.audioLazy = facts.audioBefore === 0;                 // boot 不建 AudioContext（spec §9）
+
+/* 8a) 真实鼠标点击「掷骰」→ pointerdown 解锁 → 单实例 ctx + 真实发声 + 开态图标 */
+await audioPage.locator('#mono-hud button[data-primary]').click();
+await audioPage.waitForTimeout(150);
+facts.audio = await audioPage.evaluate(() => ({
+  ctxCount: window.__audioCtxCount,
+  starts: window.__audioStarts,
+  prefs: window.__monoMain.audio.prefs(),
+  icons: window.__monoMain.scene.instancesOf().filter((i) => i.id.startsWith('ui.sound.')).map((i) => i.id),
+}));
+gate.audioUnlock = facts.audio.ctxCount === 1;
+gate.audioPlay = facts.audio.starts > 0;
+gate.audioPrefsDefault = facts.audio.prefs.sfx === true && facts.audio.prefs.bgm === true;
+gate.audioIconsOn = facts.audio.icons.join(',') === 'ui.sound.on';
+
+await audioPage.screenshot({ path: `${OUT}/mono-prod-05-audio-on.png` });
+
+/* 8b) 点喇叭键 → 图标转「关」态、此后 play() 无声、落库 */
+facts.audioMute = await audioPage.evaluate(() => {
+  const m = window.__monoMain;
+  document.querySelector('#mono-hud button[data-action="audio:sfx"]').click();
+  const n0 = window.__audioStarts;
+  m.audio.play('rent');
+  return {
+    off: m.audio.prefs().sfx === false,
+    muted: window.__audioStarts === n0,
+    stored: window.localStorage.getItem('mono.audio'),
+    icons: m.scene.instancesOf().filter((i) => i.id.startsWith('ui.sound.')).map((i) => i.id),
+  };
+});
+gate.audioMute = facts.audioMute.off && facts.audioMute.muted
+  && facts.audioMute.stored === '{"sfx":false,"bgm":true}'
+  && facts.audioMute.icons.join(',') === 'ui.sound.off';
+
+await audioPage.screenshot({ path: `${OUT}/mono-prod-06-audio-off.png` });
+
+/* 8c) 点回 → 图标转「开」态 + 恢复发声（含一声 `ui` 确认音） */
+facts.audioResume = await audioPage.evaluate(() => {
+  const m = window.__monoMain;
+  const n0 = window.__audioStarts;
+  document.querySelector('#mono-hud button[data-action="audio:sfx"]').click();
+  return { on: m.audio.prefs().sfx === true, resumed: window.__audioStarts > n0 };
+});
+gate.audioResume = facts.audioResume.on && facts.audioResume.resumed;
+
+/* 8d) 两枚静音键在命中层常驻（结算后仍在，spec §7.2 的早退坑回归） */
+facts.audioKeys = await audioPage.evaluate(() => {
+  const count = () => document.querySelectorAll('#mono-hud button[data-action^="audio:"]').length;
+  const before = count();
+  window.__monoMain.sim();
+  return { before, afterOver: count() };
+});
+gate.audioKeys = facts.audioKeys.before === 2 && facts.audioKeys.afterOver === 2;
+await audioPage.close();
+
+/* 8e) `?audio=0`：全静音且**不创建** AudioContext（spec §8.2 / §12） */
+const mutePage = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+attach(mutePage);
+await mutePage.addInitScript(audioStub);
+await mutePage.goto(`${ORIGIN}/mono.html?audio=0&play=1&seed=20260928&nofx=1&humans=4&tour=0`, { waitUntil: 'networkidle' });
+await mutePage.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 20000 });
+await mutePage.locator('#mono-hud button[data-primary]').click();
+await mutePage.evaluate(() => window.__monoMain.audio.startBgm());
+await mutePage.waitForTimeout(80);
+facts.audioForceMute = await mutePage.evaluate(() => ({
+  ctxCount: window.__audioCtxCount, starts: window.__audioStarts, prefs: window.__monoMain.audio.prefs(),
+}));
+gate.audioForceMute = facts.audioForceMute.ctxCount === 0
+  && facts.audioForceMute.starts === 0
+  && facts.audioForceMute.prefs.sfx === false && facts.audioForceMute.prefs.bgm === false;
+await mutePage.close();
+
 /* 7) 无报错 + 汇总 */
 gate.noErrors = errors.length === 0;
 facts.screenshots = [
@@ -136,6 +249,8 @@ facts.screenshots = [
   `${OUT}/mono-prod-02-play.png`,
   `${OUT}/mono-prod-03-skin-photo.png`,
   `${OUT}/mono-prod-04-ai-seat.png`,
+  `${OUT}/mono-prod-05-audio-on.png`,
+  `${OUT}/mono-prod-06-audio-off.png`,
 ];
 
 console.log(JSON.stringify({ origin: ORIGIN, facts, gate, errors }, null, 2));

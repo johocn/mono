@@ -78,6 +78,7 @@ const readState = () => page.evaluate(() => {
     closeEnabled: enabled(panels, 'button[data-action="card:close"]'),
     stockBuyEnabled: enabled(panels, 'button[data-action="stock:buy"]'),
     stockSellEnabled: enabled(panels, 'button[data-action="stock:sell"]'),
+    audioKeys: document.querySelectorAll('#mono-hud button[data-action^="audio:"]').length,
     cardDoubleRentEnabled: enabled(panels, 'button[data-action="card:doubleRent"]'),
   };
 });
@@ -153,6 +154,7 @@ try {
   await page.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 20000 });
 
   let s = await readState();
+  facts.minAudioKeys = s.audioKeys;
   facts.seed = SEED;
   await shot('01-start');
 
@@ -210,6 +212,7 @@ try {
     facts.clicks += 1;
     facts.tally[action] = (facts.tally[action] ?? 0) + 1;
     s = next;
+    facts.minAudioKeys = Math.min(facts.minAudioKeys, s.audioKeys);
 
     if (action === 'buy' && !facts.shots['02-firstbuy']) { await settleFx(); await shot('02-firstbuy'); }
     if (action === 'upgrade' && !facts.shots['03-firstupgrade']) { await settleFx(); await shot('03-firstupgrade'); }
@@ -240,6 +243,7 @@ try {
   gate.reached_by_clicks = facts.clicks > 0 && facts.tally.roll > 0;
   gate.used_card = used.card === true;
   gate.used_trade = used.trade === true;
+  gate.audio_keys = facts.minAudioKeys === 2;   // 静音键在每一阶段（含 over 结算）都常驻命中层
 
   /* 截图断言：7 张齐全、非空、两两不同 */
   const labels = ['01-start', '02-firstbuy', '03-firstupgrade', '04-jail', '05-draw', '06-stock', '07-final'];
@@ -271,6 +275,10 @@ try {
   aiPage.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   await aiPage.goto(`${ORIGIN}/mono.html?play=1&seed=${SEED}&nofx=1&humans=1&tour=0`, { waitUntil: 'networkidle' });
   await aiPage.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 20000 });
+  facts.aiAudioKeys = await aiPage.evaluate(
+    () => document.querySelectorAll('#mono-hud button[data-action^="audio:"]').length,
+  );
+  gate.ai_audio_keys = facts.aiAudioKeys === 2;   // AI 回合图标不被 `if (aiSeat)` 早退吞掉
 
   const tAI = Date.now();
   let aiClicks = 0;
@@ -350,6 +358,8 @@ console.log(JSON.stringify({
   round: finalState?.round ?? null,
   over: finalState?.over ?? null,
   clicks: facts.clicks,
+  minAudioKeys: facts.minAudioKeys,
+  aiAudioKeys: facts.aiAudioKeys ?? null,
   tally: facts.tally,
   final: facts.final ?? null,
   shots: facts.shots,
