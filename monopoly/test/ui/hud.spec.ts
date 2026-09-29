@@ -4,7 +4,8 @@ import {
   buyOffer, hitAreas, hudSpecs, primaryAction, primaryLabel, upgradeOffer, statusText,
 } from '../../src/ui/Hud';
 import {
-  BOTTOM_BTN_Y, DOCK_Y, HUD_BAR_H, HUD_BAR_W, HUD_BTN_AI_W, HUD_BTN_AI_X, HUD_DICE_Y, STAGE_W,
+  AUDIO_BGM_BOX, AUDIO_KEY_SIZE, AUDIO_SFX_BOX, BOTTOM_BTN_Y, DOCK_Y, HUD_BAR_H, HUD_BAR_W,
+  HUD_BTN_AI_W, HUD_BTN_AI_X, HUD_DICE_Y, STAGE_W,
 } from '../../src/skin/layout';
 import type { Dice } from '../../src/core/dice';
 import type { Seat } from '../../src/data/ai';
@@ -121,7 +122,7 @@ describe('hud spec 组装（pass 4 / fixed / depth 顺序）', () => {
     const rs = specs.map((s) => s.r);
     expect([...rs].sort((a, b) => a - b)).toEqual(rs);
     expect(specs[0].id).toBe('ui.dock');
-    expect(specs[specs.length - 1].id.startsWith('ui.button')).toBe(true);
+    expect(specs[specs.length - 1].id.startsWith('ui.music.')).toBe(true);
   });
 
   it('骰面点数取 state.dice（未掷骰时用 face1 且 blank）', () => {
@@ -171,23 +172,28 @@ describe('hud spec 组装（pass 4 / fixed / depth 顺序）', () => {
 });
 
 describe('hud 命中层（透明 DOM 按钮的矩形来源）', () => {
-  it('idle：只有主按钮，且可点', () => {
+  it('idle：两枚静音键常驻 + 主按钮，且都可点', () => {
     const g = createGame({ dice: fixed(1, 1) });
-    expect(hitAreas(g.state)).toEqual([
-      { action: 'roll', x: 146, y: BOTTOM_BTN_Y, w: 98, h: 46, enabled: true },
-    ]);
+    const areas = hitAreas(g.state);
+    expect(areas.map((a) => a.action)).toEqual(['audio:sfx', 'audio:bgm', 'roll']);
+    expect(areas[0]).toEqual({
+      action: 'audio:sfx', x: AUDIO_SFX_BOX.left, y: AUDIO_SFX_BOX.top,
+      w: AUDIO_KEY_SIZE, h: AUDIO_KEY_SIZE, enabled: true,
+    });
+    expect(areas[1].action).toBe('audio:bgm');
+    expect(areas[2].action).toBe('roll');
   });
 
   it('settled + 自有 L1：主按钮为「结束回合」+ 升级按钮（含可用性）', () => {
     const g = settledAt(3);
     g.state.estates[3] = { index: 3, owner: 1, level: 1, processing: false };
     const areas = hitAreas(g.state);
-    expect(areas.map((a) => a.action)).toEqual(['end', 'upgrade']);
-    expect(areas[0].x).toBe(146);
-    expect(areas[1]).toEqual({ action: 'upgrade', x: 249, y: BOTTOM_BTN_Y, w: 110, h: 46, enabled: true });
+    expect(areas.map((a) => a.action)).toEqual(['audio:sfx', 'audio:bgm', 'end', 'upgrade']);
+    expect(areas[2].x).toBe(146);
+    expect(areas[3]).toEqual({ action: 'upgrade', x: 249, y: BOTTOM_BTN_Y, w: 110, h: 46, enabled: true });
 
     g.state.players[0].cash = 10;
-    expect(hitAreas(g.state)[1].enabled).toBe(false);
+    expect(hitAreas(g.state)[3].enabled).toBe(false);
   });
 
   it('命中区都落在舞台宽度内', () => {
@@ -211,7 +217,6 @@ describe('hud spec 组装（AI 回合）', () => {
     expect(byId(specs, 'ui.button.primary').length).toBe(0);
     expect(byId(specs, 'ui.button.secondary').length).toBe(0);
     expect(byId(specs, 'ui.qk').length).toBe(2);
-    expect(specs[specs.length - 1].id).toBe('ui.qk');
     const wide = byId(specs, 'ui.button.wide')[0];
     expect(wide.state!.enabled).toBe(false);
     expect(String(wide.state!.label)).toContain('AI 思考中');
@@ -236,18 +241,18 @@ describe('hud spec 组装（AI 回合）', () => {
     expect(String(fast[0].state!.label)).toContain('✓');
   });
 
-  it('AI 回合命中层：主按钮禁用 + 两枚快捷键可点', () => {
+  it('AI 回合命中层：两枚静音键 + 主按钮禁用 + 两枚快捷键可点', () => {
     const g = createGame({ seed: 1 });
     g.state.current = 2;
     const areas = hitAreas(g.state, seats);
-    expect(areas.length).toBe(3);
-    expect(areas[0].enabled).toBe(false);
-    expect(areas[0].x).toBe(HUD_BTN_AI_X);
-    expect(areas[0].w).toBe(HUD_BTN_AI_W);
-    expect(areas[0].x + areas[0].w).toBeLessThanOrEqual(STAGE_W);
-    expect(areas.map((a) => a.action)).toEqual([expect.any(String), 'ai:fast', 'ai:skip']);
-    expect(areas[1].enabled).toBe(true);
-    expect(areas[2].enabled).toBe(true);
+    expect(areas.length).toBe(5);
+    expect(areas.map((a) => a.action)).toEqual(['audio:sfx', 'audio:bgm', expect.any(String), 'ai:fast', 'ai:skip']);
+    expect(areas[2].enabled).toBe(false);
+    expect(areas[2].x).toBe(HUD_BTN_AI_X);
+    expect(areas[2].w).toBe(HUD_BTN_AI_W);
+    expect(areas[2].x + areas[2].w).toBeLessThanOrEqual(STAGE_W);
+    expect(areas[3].enabled).toBe(true);
+    expect(areas[4].enabled).toBe(true);
   });
 
   it('真人回合不受影响：仍出 primary + 买/升级', () => {
@@ -257,5 +262,62 @@ describe('hud spec 组装（AI 回合）', () => {
     expect(byId(specs, 'ui.button.wide').length).toBe(0);
     expect(byId(specs, 'ui.button.primary').length).toBe(1);
     expect(byId(specs, 'ui.qk').length).toBe(0);
+  });
+});
+
+describe('hud 静音键（M11）', () => {
+  const byId = (specs: ReturnType<typeof hudSpecs>, id: string) => specs.filter((s) => s.id === id);
+
+  it('结算后两枚静音键仍在命中层（`state.over` 早退也不能吞掉）', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    g.state.players[1].bankrupt = true;
+    g.state.players[2].bankrupt = true;
+    g.state.players[3].bankrupt = true;
+    g.rollDice(); g.moveCurrent(); g.settleCurrent(); g.endTurn();
+    expect(g.state.over).toBe(true);
+    const areas = hitAreas(g.state);
+    expect(areas.map((a) => a.action)).toEqual(['audio:sfx', 'audio:bgm']);
+    expect(areas.every((a) => a.enabled)).toBe(true);
+  });
+
+  it('图标 spec：开态推 ui.sound.on / ui.music.on，关态推 .off', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    const on = hudSpecs(g.state, false, [], false, { sfx: true, bgm: true });
+    expect(byId(on, 'ui.sound.on').length).toBe(1);
+    expect(byId(on, 'ui.music.on').length).toBe(1);
+    expect(byId(on, 'ui.sound.off').length).toBe(0);
+
+    const off = hudSpecs(g.state, false, [], false, { sfx: false, bgm: false });
+    expect(byId(off, 'ui.sound.off').length).toBe(1);
+    expect(byId(off, 'ui.music.off').length).toBe(1);
+  });
+
+  it('AI 回合也有两枚图标，且 r 仍严格单调递增', () => {
+    const g = createGame({ seed: 1 });
+    g.state.current = 1;
+    const specs = hudSpecs(g.state, false, [null, 'conservative', 'aggressive', 'speculative'], false, { sfx: true, bgm: false });
+    expect(byId(specs, 'ui.sound.on').length).toBe(1);
+    expect(byId(specs, 'ui.music.off').length).toBe(1);
+    const rs = specs.map((s) => s.r);
+    expect([...rs].sort((a, b) => a - b)).toEqual(rs);
+    expect(specs[specs.length - 1].id).toBe('ui.music.off');
+  });
+
+  it('两枚图标台位取 AUDIO_*_BOX，26×26，落在舞台内', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    const specs = hudSpecs(g.state, false, [], false, { sfx: true, bgm: true });
+    const sfx = byId(specs, 'ui.sound.on')[0];
+    expect(sfx.fixed!.cx).toBe(AUDIO_SFX_BOX.left + AUDIO_KEY_SIZE / 2);
+    expect(sfx.fixed!.cy).toBe(AUDIO_SFX_BOX.top + AUDIO_KEY_SIZE / 2);
+    expect(sfx.pass).toBe(4);
+    const bgm = byId(specs, 'ui.music.on')[0];
+    expect(bgm.fixed!.cx).toBe(AUDIO_BGM_BOX.left + AUDIO_KEY_SIZE / 2);
+    expect(bgm.fixed!.cx + AUDIO_KEY_SIZE / 2).toBeLessThanOrEqual(STAGE_W);
+  });
+
+  it('默认（不传第 5 参）视为全开，不改变既有调用点', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    expect(byId(hudSpecs(g.state), 'ui.sound.on').length).toBe(1);
+    expect(byId(hudSpecs(g.state), 'ui.music.on').length).toBe(1);
   });
 });

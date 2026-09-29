@@ -9,13 +9,15 @@ import {
   BOTTOM_BTN_Y, DOCK_Y, HUD_BAR_GAP, HUD_BAR_H, HUD_BAR_W, HUD_BAR_X0, HUD_BAR_Y,
   HUD_BTN_AI_W, HUD_BTN_AI_X, HUD_BTN_BUY_X, HUD_BTN_H, HUD_BTN_PRIMARY_W, HUD_BTN_PRIMARY_X,
   HUD_BTN_SECONDARY_W, HUD_BTN_UPGRADE_X, HUD_DICE_DX, HUD_DICE_SIZE, HUD_DICE_X0, HUD_DICE_Y,
+  AUDIO_BGM_BOX, AUDIO_KEY_SIZE, AUDIO_SFX_BOX,
   HUD_DOCK_H, HUD_LABEL_SHIFT_X, HUD_LABEL_Y, HUD_PERSONA_DX, HUD_PERSONA_DY,
   HUD_QK_FAST_X, HUD_QK_H, HUD_QK_SKIP_X, HUD_QK_W, HUD_QK_Y, STAGE_W,
 } from '../skin/layout';
 
 /** 主按钮在四个阶段里的动作（spec §5.1 回合流程的显式化）；监狱禁行时为 `skip` */
 export type HudPrimaryAction = 'roll' | 'move' | 'settle' | 'end' | 'skip';
-export type HudActionId = HudPrimaryAction | 'buy' | 'upgrade' | 'ai:fast' | 'ai:skip';
+export type HudActionId =
+  HudPrimaryAction | 'buy' | 'upgrade' | 'ai:fast' | 'ai:skip' | 'audio:sfx' | 'audio:bgm';
 
 export interface HitArea {
   action: HudActionId;
@@ -106,6 +108,7 @@ function barCx(i: number): number {
  */
 export function hudSpecs(
   state: GameState, fxBusy = false, seats: readonly Seat[] = [], fast = false,
+  audio: { sfx: boolean; bgm: boolean } = { sfx: true, bgm: true },
 ): ElementSpec[] {
   const out: ElementSpec[] = [];
   const bar = (id: string, r: number, cx: number, cy: number, st: Record<string, unknown>, s = 1): void => {
@@ -113,6 +116,15 @@ export function hudSpecs(
   };
 
   const aiSeat = state.over ? null : (seats[state.current] ?? null);
+
+  /* 两枚静音键常驻于顶部右侧（spec §7.3）：必须在 AI 分支早退之前推入，且 r 继续递增（13 / 14） */
+  const pushAudioKeys = (): void => {
+    const half = AUDIO_KEY_SIZE / 2;
+    bar(audio.sfx ? 'ui.sound.on' : 'ui.sound.off', 13,
+      AUDIO_SFX_BOX.left + half, AUDIO_SFX_BOX.top + half, { on: audio.sfx });
+    bar(audio.bgm ? 'ui.music.on' : 'ui.music.off', 14,
+      AUDIO_BGM_BOX.left + half, AUDIO_BGM_BOX.top + half, { on: audio.bgm });
+  };
 
   bar('ui.dock', 0, STAGE_W / 2, DOCK_Y + HUD_DOCK_H / 2, { round: state.round });
   /* 状态行：AI 回合把文字左移，给右侧「加速 / 跳过」让位 */
@@ -150,6 +162,7 @@ export function hudSpecs(
     bar('ui.qk', 12, HUD_QK_SKIP_X + HUD_QK_W / 2, HUD_QK_Y + HUD_QK_H / 2, {
       label: '跳过本次', enabled: true,
     });
+    pushAudioKeys();
     return out;
   }
 
@@ -169,20 +182,26 @@ export function hudSpecs(
       action: 'upgrade', label: `升级 ￥${up.cost}`, enabled: up.enabled,
     });
   }
+  pushAudioKeys();
   return out;
 }
 
 /** 透明 DOM 命中层的矩形来源（与 hudSpecs 的按钮台位一一对应） */
 export function hitAreas(state: GameState, seats: readonly Seat[] = []): HitArea[] {
   const out: HitArea[] = [];
+  /* 两枚静音键无条件常驻（spec §7.2）：必须在 `state.over` 与 AI 两条早退路径**之前**推入 */
+  out.push(
+    { action: 'audio:sfx', x: AUDIO_SFX_BOX.left, y: AUDIO_SFX_BOX.top, w: AUDIO_KEY_SIZE, h: AUDIO_KEY_SIZE, enabled: true },
+    { action: 'audio:bgm', x: AUDIO_BGM_BOX.left, y: AUDIO_BGM_BOX.top, w: AUDIO_KEY_SIZE, h: AUDIO_KEY_SIZE, enabled: true },
+  );
   if (state.over) return out;
   /* AI 回合：主按钮整行且禁用；两枚快捷键可点（加速 / 跳过本次） */
   if (seats[state.current]) {
-    return [
+    return out.concat([
       { action: primaryAction(state) ?? 'end', x: HUD_BTN_AI_X, y: BOTTOM_BTN_Y, w: HUD_BTN_AI_W, h: HUD_BTN_H, enabled: false },
       { action: 'ai:fast', x: HUD_QK_FAST_X, y: HUD_QK_Y, w: HUD_QK_W, h: HUD_QK_H, enabled: true },
       { action: 'ai:skip', x: HUD_QK_SKIP_X, y: HUD_QK_Y, w: HUD_QK_W, h: HUD_QK_H, enabled: true },
-    ];
+    ]);
   }
   const pa = primaryAction(state);
   if (pa) {
