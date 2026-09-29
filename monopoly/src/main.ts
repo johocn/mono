@@ -151,12 +151,10 @@ export async function boot(): Promise<void> {
     index, c: CURRENT_CELL[0], r: CURRENT_CELL[1],
   }));
 
-  /* 席位归属：`?humans=` → localStorage → 弹开局面板（spec §6） */
+  /* 席位归属：`?humans=` → localStorage → 弹开局面板（spec §6：选完再 createGame，故 game 惰性创建） */
   const planned = opts.play ? resolveSeats(opts) : null;
   let seats: Seat[] = opts.play ? (planned ?? [null, null, null, null]) : [];
-  let setupDone: Promise<SeatPlan> | null = null;
-  if (opts.play && !planned) setupDone = mountSetup(document.body, readPlan(), () => replayTour());
-  const game = opts.play ? createGame({ seed: opts.seed, playerCount: 4 }) : null;
+  let game: Game | null = null;
   let driver: AiDriver | null = null;
 
   /** 格号 → 屏幕坐标（动效落点用；与 Scene 同一套 iso 变换） */
@@ -210,7 +208,8 @@ export async function boot(): Promise<void> {
   /** 唯一出画口：清 spec → 组视图 → 渲染 → 标签 → HUD / 浮层命中层 */
   const paint = (): void => {
     scene.reset();
-    scene.addMany(game ? playView(game) : demoView());
+    if (game) scene.addMany(playView(game));
+    else if (!opts.play) scene.addMany(demoView());
     scene.render();
     drawLabels(stage.layers.labels, geo, {
       bg: tokens.labelBg ?? '#060a08',
@@ -296,8 +295,9 @@ export async function boot(): Promise<void> {
 
   /** 唯一动作入口：真人 HUD / 浮层点击与 AI 决策层都归一到 AiStep 后走这里 */
   const dispatch = (step: AiStep, withFx = true): void => {
-    if (!game) return;
-    runAction(() => applyStep(game, step), (r: never) => ctxOfStep(step, r as unknown), withFx);
+    const g = game;
+    if (!g) return;
+    runAction(() => applyStep(g, step), (r: never) => ctxOfStep(step, r as unknown), withFx);
   };
 
   /** HUD 点击 → AiStep（`ai:fast` / `ai:skip` 已在回调里拦截，不会传到这里） */
@@ -311,7 +311,17 @@ export async function boot(): Promise<void> {
     return { kind: 'card', card: a.slice('card:'.length) as ItemCardKind, target: typeof target === 'number' ? target : undefined };
   };
 
-  if (game) {
+  /* —— 新手引导（spec §7）：仅在含真人席位的局、首访一次；「重看引导」入口见开局面板 —— */
+  let tutorial: TutorialHandle | null = null;
+  const replayTour = (): void => {
+    tutorial?.destroy();
+    tutorial = mountTutorial(document.body, { onDone: () => { tutorial = null; } });
+  };
+
+  /** 席位确定后开局（spec §6：选完再 createGame）：建 game → 挂 HUD/浮层/驱动器 → 按需弹引导 → 重画 */
+  const startGame = (plan: SeatPlan): void => {
+    seats = plan;
+    game = createGame({ seed: opts.seed, playerCount: 4 });
     hud = mountHud(document.body, game, (a: HudActionId) => {
       if (fx.busy()) fx.skip();   // 点屏加速：状态早已落库，跳过只影响观感时长
       if (a === 'ai:fast') { if (driver) driver.setFast(!driver.isFast()); paint(); return; }
@@ -323,7 +333,6 @@ export async function boot(): Promise<void> {
       if (fx.busy()) fx.skip();
       dispatch(stepOfPanel(a, target));
     });
-
     driver = createAiDriver({
       game, seats: () => seats,
       run: (step, withFx = true) => dispatch(step, withFx),
@@ -331,21 +340,17 @@ export async function boot(): Promise<void> {
       onFlush: () => fx.play({ kind: 'end' }, () => paint()),
     });
     driver.start();
-  }
-
-  /* —— 新手引导（spec §7）：仅在含真人席位的局、首访一次；「重看引导」入口见开局面板 —— */
-  let tutorial: TutorialHandle | null = null;
-  const replayTour = (): void => {
-    tutorial?.destroy();
-    tutorial = mountTutorial(document.body, { onDone: () => { tutorial = null; } });
-  };
-  if (game && shouldShowTutorial(opts, isDone(), seats)) replayTour();
-  /* 开局面板选完 → 换 seats；若面板期间未弹（或席位变为含真人）则补弹，再重画 */
-  void setupDone?.then((plan) => {
-    seats = plan;
-    if (game && shouldShowTutorial(opts, isDone(), plan) && !tutorial) replayTour();
+    if (shouldShowTutorial(opts, isDone(), seats)) replayTour();
+    /* 面板在 boot 之后才 resolve 时，审计对象已建立但 game 仍为 null → 回填 */
+    const api = (window as unknown as Record<string, unknown>).__monoMain as { game?: Game | null } | undefined;
+    if (api) api.game = game;
     paint();
-  });
+  };
+
+  if (opts.play) {
+    if (planned) startGame(planned);
+    else void mountSetup(document.body, readPlan(), () => replayTour()).then(startGame);
+  }
 
   /* —— M8 分享 / 裂变入口：meta 注入 + 常驻 CTA + 微信 JS-SDK（非微信 / 签名不可用自动降级） —— */
   const overCopy = (): { title: string; desc: string } | null => resultCopy(game?.state ?? null);
