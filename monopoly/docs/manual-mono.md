@@ -11,7 +11,7 @@
 | 线上回归 | `npm run check:prod`（打真实 URL `https://game.joho.cn/tour/mono.html`） |
 | 校验 | `npm run check`（lint + lint:skin + test） |
 
-URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围盒/depth/provider 回退级别）· `?seed=<n>` · `?speed=<n>`（动画时轴倍率）· **默认 → 首屏弹开局面板**（选完即开局；`?demo=1` 走演示棋盘）· `?play=1`（等价默认；`?play=0` 同 `?demo=1`）· `?nofx=1`（等价 `speed=999`，动画瞬间到终帧）· `?perf=1`（性能覆盖层 + 帧间隔采样）· `?humans=1..4`（真人数；**缺省 → 首屏弹开局面板**）· `?ai=conservative,aggressive,speculative`（AI 性格序列）· `?tour=1`（强制新手引导）/ `?tour=0`（关闭；缺省首访弹一次）。
+URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围盒/depth/provider 回退级别）· `?seed=<n>` · `?speed=<n>`（动画时轴倍率）· **默认 → 首屏弹开局面板**（选完即开局；`?demo=1` 走演示棋盘）· `?play=1`（等价默认；`?play=0` 同 `?demo=1`）· `?nofx=1`（等价 `speed=999`，动画瞬间到终帧）· `?perf=1`（性能覆盖层 + 帧间隔采样）· `?audio=0`（一键全静音：开关初始全关且不创建 `AudioContext`）· `?humans=1..4`（真人数；**缺省 → 首屏弹开局面板**）· `?ai=conservative,aggressive,speculative`（AI 性格序列）· `?tour=1`（强制新手引导）/ `?tour=0`（关闭；缺省首访弹一次）。
 
 ## 2. 测试用例
 
@@ -233,12 +233,28 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 
 **实现口径**：高亮矩形一律取自 `hitAreas()` / `src/skin/layout.ts` 常量（主按钮 98×46、骰子 `HUD_DICE_X0/Y`、资产条 `HUD_BAR_X0/W/H`、手牌槽 `PANEL_SLOT_X0/HAND_Y`），不另造坐标；文案集中在 `src/data/tutorial.ts`。
 
+### M11 音效与音乐
+
+| # | 步骤 | 期望 | 截图 |
+|---|---|---|---|
+| M11-1 | 手机打开 `mono.html?humans=1&tour=0`，点「掷骰」 | 有骰子抖动音；顶部右侧出现两枚 26×26 图标（喇叭 / 音符），均为「开」态（亮色） | `mono-prod-05-audio-on.png` |
+| M11-2 | 点右侧喇叭键 | 图标转「关」态（压暗 + 45° 斜杠），此后动作无声；`localStorage['mono.audio'] === '{"sfx":false,"bgm":true}'` | `mono-prod-06-audio-off.png` |
+| M11-3 | 再点一次喇叭键 | 图标回「开」态，并补一声确认音（`ui` cue） | — |
+| M11-4 | 点音符键 | BGM 立即停；再点恢复循环（4 小节 Am–F–C–G，整段 8s） | — |
+| M11-5 | 刷新页面 | 两枚图标的开 / 关与刷新前一致（`mono.audio` 持久化；坏 JSON / 缺字段一律按「开」） | — |
+| M11-6 | AI 回合（`?humans=1`）与结算后（`state.over === true`） | 两枚图标仍在且可点（`hitAreas` 的 `over` 早退与 AI 分支均不吞键）；BGM 在 `over` 后停止 | — |
+| M11-7 | `mono.html?audio=0` | 全程静音，且 `window.__audioCtxCount === 0`（**不创建** `AudioContext`） | — |
+| M11-8 | 默认皮肤对局，DevTools Network 面板 | **无任何音频请求**（默认皮肤零素材，全部 Web Audio 程序化合成） | — |
+| M11-9 | `mono.html?nofx=1` | 音效静音、BGM 照旧（`?nofx` 语义是「无演出」不是「无氛围」） | — |
+
+**实现口径**：音效挂在唯一出画口 `runAction` 的 `fx.play` 对偶位置（`if (!ctx) return;` 守卫之后）——AI 与真人天然共用、买地/升级失败（无 fx）不出声；`aiDriver.skipRest()`（`withFx=false`）连带静音；`?nofx` 由 `sfxOn = !opts.nofx` 显式守卫静音。键位常量在 `src/skin/layout.ts`（`AUDIO_KEY_SIZE` / `AUDIO_SFX_BOX` / `AUDIO_BGM_BOX` / `AUDIO_VOL_*` / `AUDIO_BGM_*`），可见像素是 4 个 proc preset（`uiSoundOn/Off`、`uiMusicOn/Off`）可整包换素材；开关落 `localStorage['mono.audio']`。
+
 ### 最终验收（对照 spec §11 硬性标准）
 
 | # | spec §11 条目 | 证据 |
 |---|---|---|
-| 1 | 手机视口截图（390×844 dpr2） | M1–M8 全部 `docs/verify/mono-*.png`（M7 新增线上 `mono-prod-01..03`；M7-4 真实点击整局另出 `mono-e2e-01..07`——首末 `mono-e2e-01-start` / `07-final`，973 次点击跑到 `over=true`；M8 新增 `mono-share-01-cta` / `02-result` / `03-fallback`；M9/M10 新增 `mono-ai-01-setup-skip` / `02-setup` / `03-started` / `04-turn` / `05-tour-1..4` + 线上 `mono-prod-00-default`（开局面板）/ `mono-prod-04-ai-seat` / `mono-e2e-08-ai-final`） |
-| 2 | `src/core` + `src/skin` 单测全覆盖 | `npx vitest run` → **48 文件 / 394 例全绿**（含骰子分布/移动越界/租金/升级互斥/卡牌效果/破产/胜负/回退链；M8 新增 `test/ui/share.spec.ts` 19 例；阶段一新增 `test/skin/shop-config.spec.ts` 9 例 + `instantiate` 覆盖优先级 1 例；本轮新增 `test/core/ai.spec.ts` 10 例 + `test/ui/ai-driver.spec.ts` 8 例 + `test/ui/tutorial.spec.ts` 5 例） |
+| 1 | 手机视口截图（390×844 dpr2） | M1–M8 全部 `docs/verify/mono-*.png`（M7 新增线上 `mono-prod-01..03`；M7-4 真实点击整局另出 `mono-e2e-01..07`——首末 `mono-e2e-01-start` / `07-final`，973 次点击跑到 `over=true`；M8 新增 `mono-share-01-cta` / `02-result` / `03-fallback`；M9/M10 新增 `mono-ai-01-setup-skip` / `02-setup` / `03-started` / `04-turn` / `05-tour-1..4` + 线上 `mono-prod-00-default`（开局面板）/ `mono-prod-04-ai-seat` / `mono-e2e-08-ai-final`；M11 新增 `mono-prod-05-audio-on` / `mono-prod-06-audio-off`） |
+| 2 | `src/core` + `src/skin` 单测全覆盖 | `npx vitest run` → **48 文件 / 394 例全绿**（含骰子分布/移动越界/租金/升级互斥/卡牌效果/破产/胜负/回退链；M8 新增 `test/ui/share.spec.ts` 19 例；阶段一新增 `test/skin/shop-config.spec.ts` 9 例 + `instantiate` 覆盖优先级 1 例；本轮新增 `test/core/ai.spec.ts` 10 例 + `test/ui/ai-driver.spec.ts` 8 例 + `test/ui/tutorial.spec.ts` 5 例；M11 新增 `test/data/audio.spec.ts` 6 例 + `test/ui/audio.spec.ts` 21 例 + `test/render/proc-audio.spec.ts` 6 例 + `test/ui/hud.spec.ts` 增 4 例 + `test/smoke.spec.ts` 增 1 例） |
 | 3 | 视觉回归与 v5 样张对齐 | M2-1..4 / M3-1..3 目视结论 |
 | 4 | 可换素材（`?skin=photo` 零改代码、缺素材走回退） | M3-5 / M7-2；线上 `missingAssets === []`、image 实例 8 |
 | 5 | 性能（中端安卓 60fps、首屏 <3s） | **每帧渲染**（60fps 判定口径）：4× CDP 节流代理 `npm run perf:android` 空闲 p95 4.4–10.0 ms、动效中 p95 3.1–14.7 ms **<16.7ms 帧预算 ✅**；首屏 1.27–1.36s **<3s ✅**；状态切换 `paint()` p95 42–56 ms 属**一次性卡顿**（≈掉 2–3 帧/动作，整局 ≈928 次，架构常态非缺陷）。真机人工勾选 ☐ |
@@ -246,6 +262,7 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 | 7 | 部署（本地构建 → scp → 服务器仅解压） | M7-1 七步输出 |
 | 8 | **M8 微信分享入口（本任务新增，超出 spec §11）** | `node local/mono-share-check.mjs` 13 项 gate 全 true / 退出码 0；线上 `og:image` 200 · `image/png` · 274903 bytes；`local/mono-prod-check.mjs` + `local/mono-e2e-playthrough.mjs` 均退出码 0（详见 M8 节） |
 | 9 | **商业闭环·阶段一「静态认领」配置加载（本任务新增，超出 spec §11）** | `node local/mono-shots-shops.mjs` 8 项 gate 全 true / 退出码 0；4 张 390×844 @dpr2 截图（`docs/verify/mono-shops-01..04`）；`npm run check` 45 文件 / 365 例（详见 §5） |
+| 10 | **M11 音效与音乐（本任务新增，超出 spec §11）** | `npm run check` 全绿（51 文件 / 433 例）/ `registry-ids.json: 237 ids` / `npx tsc --noEmit` 无错；线上 `mono-prod-check.mjs` 9 项音频 gate（`audioLazy` 懒建 ctx / `audioUnlock` 单实例 / `audioPlay` 真实发声 / `audioPrefsDefault` / `audioIconsOn` / `audioMute` 静音后无声 + 落库 / `audioResume` 点回恢复 / `audioKeys` 结算后常驻 / `audioForceMute` `?audio=0` 不建 ctx）、`mono-e2e-playthrough.mjs` 新增 `audio_keys` + `ai_audio_keys`；2 张 390×844 @dpr2 截图（`mono-prod-05-audio-on` / `06-audio-off`）；默认皮肤零音频网络请求 |
 
 **§11.5 性能实测**（两种成本分开测；`node local/mono-perf.mjs` 桌面代理 + `npm run perf:android` CDP 节流代理；受本机负载影响会抖动，同机连测 3 次的区间如下）：
 - 首屏可交互：桌面 default 235–255 ms / photo 1739–1784 ms；4× 节流代理 1.27–1.36 s（门槛 <3000 ✅）
