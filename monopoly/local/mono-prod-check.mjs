@@ -6,12 +6,13 @@ import { mkdirSync } from 'node:fs';
  * CDN 缓存 / 路径 base:'./' 在子目录下解析错」这类只在线上暴露的问题。
  *
  * 断言：
+ *   0 裸入口（无参数）→ 默认即交互局：#mono-hud 存在 390×844、game 就绪、计数 32/4/2/5
  *   1 GET <ORIGIN>/mono.html → 200
  *   2 ?debug=1&play=1&seed=20260928：无 pageerror / 无 console error；__monoMain.game 就绪
  *   3 关键元素计数：board.tile.*=32 / ui.playerBar=4 / dice.body=2 / ui.handSlot=5（与本地闸门一致）
  *   4 ?skin=photo：missingAssets===0 且至少一个元素 providerKind==='image'
  *   5 整局可跑：?play=1 下 __monoMain.sim() 返回 1..4，state.over===true
- *   6 三张 390×844 @dpr2 截图入库 docs/verify/mono-prod-0{1,2,3}-*.png
+ *   6 四张 390×844 @dpr2 截图入库 docs/verify/mono-prod-0{0,1,2,3}-*.png
  *   7 gate 全 true 且 errors===[]，否则 exit(1)
  *
  * MONO_ORIGIN 默认 https://game.joho.cn/tour（可用环境变量覆盖为本地 preview 自测）。
@@ -92,9 +93,45 @@ gate.skinImages = facts.skin.imageInstances >= 1;
 await skinPage.screenshot({ path: `${OUT}/mono-prod-03-skin-photo.png` });
 await skinPage.close();
 
+/* 0) 裸入口（无参数）= 默认即交互局：HUD 必须齐备（本次回归盲点的看守） */
+const entryPage = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+attach(entryPage);
+await entryPage.goto(`${ORIGIN}/mono.html`, { waitUntil: 'networkidle' });
+await entryPage.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 20000 });
+
+facts.defaultEntry = await entryPage.evaluate(() => {
+  const m = window.__monoMain;
+  const hud = document.querySelector('#mono-hud');
+  const ids = m.scene.instancesOf().map((i) => i.id);
+  const r = hud ? hud.getBoundingClientRect() : null;
+  return {
+    hasGame: Boolean(m.game),
+    hasHud: Boolean(hud),
+    hudW: r ? Math.round(r.width) : 0,
+    hudH: r ? Math.round(r.height) : 0,
+    tile: ids.filter((id) => id.startsWith('board.tile.')).length,
+    playerBar: ids.filter((id) => id === 'ui.playerBar').length,
+    diceBody: ids.filter((id) => id === 'dice.body').length,
+    handSlot: ids.filter((id) => id === 'ui.handSlot').length,
+  };
+});
+gate.defaultEntry =
+  facts.defaultEntry.hasGame &&
+  facts.defaultEntry.hasHud &&
+  facts.defaultEntry.hudW === 390 &&
+  facts.defaultEntry.hudH === 844 &&
+  facts.defaultEntry.tile === 32 &&
+  facts.defaultEntry.playerBar === 4 &&
+  facts.defaultEntry.diceBody === 2 &&
+  facts.defaultEntry.handSlot === 5;
+
+await entryPage.screenshot({ path: `${OUT}/mono-prod-00-default.png` });
+await entryPage.close();
+
 /* 7) 无报错 + 汇总 */
 gate.noErrors = errors.length === 0;
 facts.screenshots = [
+  `${OUT}/mono-prod-00-default.png`,
   `${OUT}/mono-prod-01-board.png`,
   `${OUT}/mono-prod-02-play.png`,
   `${OUT}/mono-prod-03-skin-photo.png`,
