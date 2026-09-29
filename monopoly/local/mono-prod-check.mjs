@@ -13,7 +13,12 @@ import { mkdirSync } from 'node:fs';
  *   3 关键元素计数：board.tile.*=32 / ui.playerBar=4 / dice.body=2 / ui.handSlot=5（与本地闸门一致）
  *   4 ?skin=photo（+humans=4&tour=0）：missingAssets===0 且至少一个元素 providerKind==='image'
  *   5 整局可跑：?play=1 下 __monoMain.sim() 返回 1..4，state.over===true
- *   6 五张 390×844 @dpr2 截图入库 docs/verify/mono-prod-0{0,1,2,3}-*.png + mono-prod-04-ai-seat.png
+ *   6 十张 390×844 @dpr2 截图入库 docs/verify/mono-prod-0{0..9}-*.png
+ *     （07 骰面有点数 / 08 棋子移动 / 09 事件浮层 = M12 真机口径回归，spec §5.6）
+ *   6b M11/M12 音频：**真实 AudioContext**（无桩）+ 真实手势解锁
+ *     （audioLazy 懒建 ctx / audioUnlock 已解锁 / audioPlay 零点数∈2..12 且零异常 /
+ *      audioPrefsDefault / audioIconsOn / audioMute 静音后无声 + 落库 / audioResume /
+ *      audioKeys 结算后常驻 / audioForceMute 不建 ctx / fixDice·fixMove·fixEvent）
  *   7 gate 全 true 且 errors===[]，否则 exit(1)
  *
  * MONO_ORIGIN 默认 https://game.joho.cn/tour（可用环境变量覆盖为本地 preview 自测）。
@@ -38,36 +43,23 @@ const attach = (page) => {
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 };
 
-/* 记录「有没有真的发出声音」的 AudioContext 替身（只记次数，不产生声波） */
-const audioStub = () => {
-  window.__audioCtxCount = 0;
+/*
+ * 「有没有真的发声」探针——**不替换 AudioContext**。
+ * 历史教训（2026-09-30 事故）：用 `AudioContextStub` 顶替真机后，假件比真机宽松，
+ * 把 `src.buffer = { noise: true }` 这类真机必抛的 TypeError 吞掉了，线上才炸。
+ * 现在用**真实 AudioContext**，只在 Web Audio 的调度原型上包一层计数：
+ * 统计 `createOscillator()` / `createBufferSource()` 的 `start()` 调用次数。
+ * 断言语义与旧桩一致（都是「排了几次音」），但不放宽任何真机行为。
+ */
+const realAudioProbe = () => {
   window.__audioStarts = 0;
-  const param = () => ({
-    value: 0,
-    setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {},
-  });
-  const node = () => ({ connect() {}, disconnect() {} });
-  class AudioContextStub {
-    constructor() {
-      window.__audioCtxCount += 1;
-      this.currentTime = 0;
-      this.sampleRate = 48000;
-      this.state = 'running';
-      this.destination = {};
-    }
-    resume() { return Promise.resolve(); }
-    close() { return Promise.resolve(); }
-    createGain() { return { ...node(), gain: param() }; }
-    createOscillator() {
-      return { ...node(), type: '', frequency: param(), start() { window.__audioStarts += 1; }, stop() {} };
-    }
-    createBufferSource() {
-      return { ...node(), buffer: null, start() { window.__audioStarts += 1; }, stop() {} };
-    }
-    createBuffer() { return { getChannelData: () => new Float32Array(1) }; }
-    decodeAudioData() { return Promise.resolve({}); }
-  }
-  window.AudioContext = AudioContextStub;
+  const wrap = (proto) => {
+    if (!proto || typeof proto.start !== 'function') return;
+    const start = proto.start;
+    proto.start = function (...a) { window.__audioStarts += 1; return start.apply(this, a); };
+  };
+  wrap(window.AudioBufferSourceNode && window.AudioBufferSourceNode.prototype);
+  wrap(window.OscillatorNode && window.OscillatorNode.prototype);
 };
 
 /* 2) + 3) 默认皮肤：就绪、无报错、元素计数 */
@@ -163,24 +155,31 @@ await aiPage.close();
 /* 8) M11 音频（spec §10.3）：真实手势解锁 / 音效发声 / 静音键语义 / `?audio=0` 不建 ctx */
 const audioPage = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
 attach(audioPage);
-await audioPage.addInitScript(audioStub);
+await audioPage.addInitScript(realAudioProbe);
 await audioPage.goto(`${ORIGIN}/mono.html?play=1&seed=20260928&nofx=1&humans=4&tour=0`, { waitUntil: 'networkidle' });
 await audioPage.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 20000 });
 
-facts.audioBefore = await audioPage.evaluate(() => window.__audioCtxCount);
-gate.audioLazy = facts.audioBefore === 0;                 // boot 不建 AudioContext（spec §9）
+facts.audioBefore = await audioPage.evaluate(() => window.__monoMain.audio.isUnlocked());
+gate.audioLazy = facts.audioBefore === false;             // boot 不建 ctx（spec §9）
 
 /* 8a) 真实鼠标点击「掷骰」→ pointerdown 解锁 → 单实例 ctx + 真实发声 + 开态图标 */
 await audioPage.locator('#mono-hud button[data-primary]').click();
 await audioPage.waitForTimeout(150);
 facts.audio = await audioPage.evaluate(() => ({
-  ctxCount: window.__audioCtxCount,
+  unlocked: window.__monoMain.audio.isUnlocked(),
   starts: window.__audioStarts,
+  dice: window.__monoMain.game.state.dice ? window.__monoMain.game.state.dice.total : null,
   prefs: window.__monoMain.audio.prefs(),
   icons: window.__monoMain.scene.instancesOf().filter((i) => i.id.startsWith('ui.sound.')).map((i) => i.id),
 }));
-gate.audioUnlock = facts.audio.ctxCount === 1;
-gate.audioPlay = facts.audio.starts > 0;
+gate.audioUnlock = facts.audio.unlocked === true;
+/* 真机口径（spec §4.3b）：真实点击后要同时满足三件事——
+ *   ① 页面零异常（旧版在这里抛 TypeError）；
+ *   ② 确实排了音（无桩的真实 AudioContext 上仍计到 start）；
+ *   ③ 画面确实推进过（paint() 执行 → 骰子点数落库在 2..12）。 */
+gate.audioPlay = errors.length === 0
+  && facts.audio.starts > 0
+  && Number.isInteger(facts.audio.dice) && facts.audio.dice >= 2 && facts.audio.dice <= 12;
 gate.audioPrefsDefault = facts.audio.prefs.sfx === true && facts.audio.prefs.bgm === true;
 gate.audioIconsOn = facts.audio.icons.join(',') === 'ui.sound.on';
 
@@ -227,19 +226,95 @@ await audioPage.close();
 /* 8e) `?audio=0`：全静音且**不创建** AudioContext（spec §8.2 / §12） */
 const mutePage = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
 attach(mutePage);
-await mutePage.addInitScript(audioStub);
+await mutePage.addInitScript(realAudioProbe);
 await mutePage.goto(`${ORIGIN}/mono.html?audio=0&play=1&seed=20260928&nofx=1&humans=4&tour=0`, { waitUntil: 'networkidle' });
 await mutePage.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 20000 });
 await mutePage.locator('#mono-hud button[data-primary]').click();
 await mutePage.evaluate(() => window.__monoMain.audio.startBgm());
 await mutePage.waitForTimeout(80);
 facts.audioForceMute = await mutePage.evaluate(() => ({
-  ctxCount: window.__audioCtxCount, starts: window.__audioStarts, prefs: window.__monoMain.audio.prefs(),
+  unlocked: window.__monoMain.audio.isUnlocked(),
+  starts: window.__audioStarts,
+  prefs: window.__monoMain.audio.prefs(),
 }));
-gate.audioForceMute = facts.audioForceMute.ctxCount === 0
+gate.audioForceMute = facts.audioForceMute.unlocked === false
   && facts.audioForceMute.starts === 0
   && facts.audioForceMute.prefs.sfx === false && facts.audioForceMute.prefs.bgm === false;
 await mutePage.close();
+
+/* 8f) 真机口径回归截图（spec §5.6）：真实手势 + 真实 AudioContext —— 无桩因果链上取证 */
+const fixPage = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+attach(fixPage);
+await fixPage.addInitScript(realAudioProbe);
+await fixPage.goto(`${ORIGIN}/mono.html?humans=1&tour=0&seed=20260928`, { waitUntil: 'networkidle' });
+await fixPage.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 20000 });
+
+const fixPrimary = fixPage.locator('#mono-hud button[data-primary]');
+
+/* 07）真实点击「掷骰」→ 等动效到终帧 → 骰面必须显示出点数 */
+await fixPrimary.click();
+await fixPage.waitForFunction(() => window.__monoMain?.game?.state?.dice?.total, null, { timeout: 8000 });
+await fixPage.waitForFunction(() => !window.__monoMain.fx?.busy?.(), null, { timeout: 8000 }).catch(() => {});
+await fixPage.screenshot({ path: `${OUT}/mono-prod-07-dice-pips.png` });
+facts.fixDice = await fixPage.evaluate(() => ({
+  total: window.__monoMain.game.state.dice.total,
+  phase: window.__monoMain.game.state.phase,
+  unlocked: window.__monoMain.audio.isUnlocked(),
+}));
+gate.fixDice = facts.fixDice.unlocked === true
+  && facts.fixDice.phase === 'rolled'
+  && Number.isInteger(facts.fixDice.total)
+  && facts.fixDice.total >= 2 && facts.fixDice.total <= 12;
+
+/* 08）真实点击「前进」→ 动效进行中截「棋子移动」帧 */
+await fixPrimary.click();
+await fixPage.waitForFunction(() => window.__monoMain.fx?.busy?.() === true, null, { timeout: 8000 }).catch(() => {});
+await fixPage.screenshot({ path: `${OUT}/mono-prod-08-pawn-move.png` });
+facts.fixMove = await fixPage.evaluate(() => ({
+  phase: window.__monoMain.game.state.phase,
+  pos: window.__monoMain.game.state.players.map((p) => p.pos),
+}));
+gate.fixMove = facts.fixMove.pos[0] > 0;   // 以「人物确实前进了」为准（不依赖能否抓到中间帧）
+
+/* 09）继续推进（AI 回合走 skipRest）直到落事件格、浮层展开，再截图 */
+for (let i = 0; i < 80; i += 1) {
+  const st = await fixPage.evaluate(() => {
+    const m = window.__monoMain;
+    const s = m.game.state;
+    return {
+      over: s.over,
+      isHuman: m.seats[s.current] === null,
+      phase: s.phase,
+      lastDraw: Boolean(s.lastDraw),
+      drawClose: document.querySelector('#mono-panels button[data-action="card:close"]') !== null,
+    };
+  });
+  if (st.over || (st.phase === 'settled' && st.lastDraw)) break;
+  if (st.isHuman) {
+    const sel = st.drawClose
+      ? '#mono-panels button[data-action="card:close"]'
+      : '#mono-hud button[data-primary]';
+    await fixPage.locator(sel).click({ timeout: 5000 }).catch(() => {});
+    await fixPage.waitForTimeout(40);
+  } else {
+    await fixPage.evaluate(() => window.__monoMain.aiDriver.skipRest());
+    await fixPage.waitForTimeout(20);
+  }
+}
+await fixPage.waitForFunction(() => !window.__monoMain.fx?.busy?.(), null, { timeout: 8000 }).catch(() => {});
+await fixPage.screenshot({ path: `${OUT}/mono-prod-09-event.png` });
+facts.fixEvent = await fixPage.evaluate(() => {
+  const s = window.__monoMain.game.state;
+  const panels = document.querySelector('#mono-panels');
+  return {
+    overlayDraw: s.phase === 'settled' && Boolean(s.lastDraw),
+    deck: s.lastDraw ? s.lastDraw.deck : null,
+    round: s.round,
+    panels: panels ? panels.children.length : 0,
+  };
+});
+gate.fixEvent = facts.fixEvent.overlayDraw === true;
+await fixPage.close();
 
 /* 7) 无报错 + 汇总 */
 gate.noErrors = errors.length === 0;
@@ -251,6 +326,9 @@ facts.screenshots = [
   `${OUT}/mono-prod-04-ai-seat.png`,
   `${OUT}/mono-prod-05-audio-on.png`,
   `${OUT}/mono-prod-06-audio-off.png`,
+  `${OUT}/mono-prod-07-dice-pips.png`,
+  `${OUT}/mono-prod-08-pawn-move.png`,
+  `${OUT}/mono-prod-09-event.png`,
 ];
 
 console.log(JSON.stringify({ origin: ORIGIN, facts, gate, errors }, null, 2));

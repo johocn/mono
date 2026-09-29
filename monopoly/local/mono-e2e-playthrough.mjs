@@ -15,6 +15,8 @@ import { mkdirSync } from 'node:fs';
  *   1 线上 URL（?play=1&seed=20260928&nofx=1）就绪、无 pageerror / 无 console error
  *   2 逐步点击：点前读 `window.__monoMain.game.state` 决定动作，点后比对状态签名，
  *     若某次点击**未改变状态** → 判 UI 缺陷，立即失败并 dump 状态
+ *   2b 首个动作点击用 Playwright **真实鼠标点击**（会派发 `pointerdown` → `audio.unlock()`）；
+ *     其余仍用合成 `click` 以守住墙钟预算。gate `audio_unlocked` 证明 ctx 真被建起（spec §4.3c）
  *   3 合法路径：idle→掷骰 / rolled→前进 / moved→结算 / settled→(用卡 ≥1 次 · 买地 · 升级 · 结束回合)；
  *     jail 禁行→跳过；到手牌/股票浮层时用一次卡、做一笔股票交易
  *   4 state.over===true 且结算面板给出胜者与 4 行名次（由点击到达，非 sim()）
@@ -36,7 +38,7 @@ const md5 = (buf) => createHash('md5').update(buf).digest('hex');
 
 const errors = [];
 const gate = {};
-const facts = { tally: {}, clicks: 0, shots: {} };
+const facts = { tally: {}, clicks: 0, shots: {}, audioUnlocked: null };
 const problems = [];
 
 const browser = await chromium.launch();
@@ -106,21 +108,25 @@ const settleFx = async () => {
 };
 
 /**
- * 真实交互：按选择器解析透明命中层的 `<button>` 并派发真实 `click` 事件
- * （走 `mountHud`/`mountPanels` 的 onclick → runAction → 引擎，与 M4 闸门同一口径；
- * 不用 `sim()`、不按坐标、不直接调引擎）。
+ * 真实交互：默认在命中层派发合成 `click`（快，撑得住近千次点击的墙钟预算）；
+ * `real === true` 时改用 Playwright **真实鼠标点击**——只有它会派发 `pointerdown`，
+ * 从而触发 `main.ts` 的 `audio.unlock()`（spec §4.3c）。
  * 若元素缺失或 disabled → 直接抛错（即 UI 命中层缺陷），不静默跳过。
  * 只在「状态未变」时重试，杜绝重复触发。
  */
-const click = async (sel, sigBefore) => {
+const click = async (sel, sigBefore, real = false) => {
   for (let i = 0; i < 3; i += 1) {
     try {
-      await page.evaluate((s) => {
-        const el = document.querySelector(s);
-        if (!el) throw new Error(`命中层缺失 ${s}`);
-        if (el.disabled) throw new Error(`命中键被禁用 ${s}`);
-        el.click();
-      }, sel);
+      if (real) {
+        await page.locator(sel).click({ timeout: 5000 });
+      } else {
+        await page.evaluate((s) => {
+          const el = document.querySelector(s);
+          if (!el) throw new Error(`命中层缺失 ${s}`);
+          if (el.disabled) throw new Error(`命中键被禁用 ${s}`);
+          el.click();
+        }, sel);
+      }
     } catch (e) {
       if (i === 2) throw e;
     }
@@ -204,12 +210,15 @@ try {
     const before = sig(s);
     const landedPos = s.phase === 'moved' ? s.pos[s.current] : null;
     /* eslint-disable no-await-in-loop */
-    const next = await click(sel, before);
+    const next = await click(sel, before, facts.clicks === 0);   // 首个动作走真实手势 → pointerdown → unlock()
     if (sig(next) === before) {
       throw new Error(`点击未改变状态：${action} @phase=${s.phase} round=${s.round}`
         + ` selector=${sel} → 仍为 phase=${next.phase}`);
     }
     facts.clicks += 1;
+    if (facts.clicks === 1) {
+      facts.audioUnlocked = await page.evaluate(() => window.__monoMain.audio.isUnlocked());
+    }
     facts.tally[action] = (facts.tally[action] ?? 0) + 1;
     s = next;
     facts.minAudioKeys = Math.min(facts.minAudioKeys, s.audioKeys);
@@ -244,6 +253,7 @@ try {
   gate.used_card = used.card === true;
   gate.used_trade = used.trade === true;
   gate.audio_keys = facts.minAudioKeys === 2;   // 静音键在每一阶段（含 over 结算）都常驻命中层
+  gate.audio_unlocked = facts.audioUnlocked === true;   // 首个真实手势确实建起了 AudioContext（spec §4.3c）
 
   /* 截图断言：7 张齐全、非空、两两不同 */
   const labels = ['01-start', '02-firstbuy', '03-firstupgrade', '04-jail', '05-draw', '06-stock', '07-final'];
@@ -359,6 +369,7 @@ console.log(JSON.stringify({
   over: finalState?.over ?? null,
   clicks: facts.clicks,
   minAudioKeys: facts.minAudioKeys,
+  audioUnlocked: facts.audioUnlocked,
   aiAudioKeys: facts.aiAudioKeys ?? null,
   tally: facts.tally,
   final: facts.final ?? null,
