@@ -11,7 +11,7 @@
 | 线上回归 | `npm run check:prod`（打真实 URL `https://game.joho.cn/tour/mono.html`） |
 | 校验 | `npm run check`（lint + lint:skin + test） |
 
-URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围盒/depth/provider 回退级别）· `?seed=<n>` · `?speed=<n>`（动画时轴倍率）· **默认即交互局**（裸链接进站即玩）· `?demo=1`（演示棋盘，= 旧裸入口行为）· `?play=1`（等价默认；`?play=0` 同 `?demo=1`）· `?nofx=1`（等价 `speed=999`，动画瞬间到终帧）· `?perf=1`（性能覆盖层 + 帧间隔采样）。
+URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围盒/depth/provider 回退级别）· `?seed=<n>` · `?speed=<n>`（动画时轴倍率）· **默认 → 首屏弹开局面板**（选完即开局；`?demo=1` 走演示棋盘）· `?play=1`（等价默认；`?play=0` 同 `?demo=1`）· `?nofx=1`（等价 `speed=999`，动画瞬间到终帧）· `?perf=1`（性能覆盖层 + 帧间隔采样）· `?humans=1..4`（真人数；**缺省 → 首屏弹开局面板**）· `?ai=conservative,aggressive,speculative`（AI 性格序列）· `?tour=1`（强制新手引导）/ `?tour=0`（关闭；缺省首访弹一次）。
 
 ## 2. 测试用例
 
@@ -206,12 +206,39 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 
 **环境偏差**：`?perf=1` 的性能覆盖层（`left:4, top:4`）与 CTA（`left:8, top:5`）同在左上角，**仅调试开关下**会轻微重叠；正常访问（不带 `?perf=1`）无冲突。若后续要并存，可把 CTA 右移或把覆盖层下移。
 
+### M9 AI 对手与开局
+
+| # | 步骤 | 期望 | 截图 |
+|---|---|---|---|
+| M9-1 | 手机打开 `mono.html`（无参数） | 首屏为开局面板：标题「大富翁 · 双阳」+ 2×2 人数大卡（默认 1 人）+ 3 枚性格徽标卡（保守/激进/投机）+「开始游戏」 | `mono-ai-02-setup.png` |
+| M9-2 | 点「开始游戏」 | 面板消失、HUD 就绪；4 条资产条中 3 条带性格徽标，第 1 条（你）无徽标 | `mono-ai-03-started.png` |
+| M9-3 | `mono.html?humans=1&tour=0` | 不弹面板直接开局；3 席为 AI，AI 回合主按钮整行显示「AI 思考中 · 保守」且不可点 | `mono-ai-01-setup-skip.png` |
+| M9-4 | 观察 AI 回合 | 状态行右侧出现「加速 ×2」「跳过本次」；点「加速 ×2」文案变「加速 ✓」且推进更快；点「跳过本次」当前 AI 回合立刻走完并停在下一个真人席位 | `mono-ai-04-turn.png` |
+| M9-5 | 三种性格行为 | 保守：现金 < ￥400 不买地；激进：炸弹/路障打净资产领先者；投机：`round ≥ 8` 才针对领先者，且会迁点到股票交易所抄底 | — |
+| M9-6 | `mono.html?humans=4&tour=0` | 与改前 `?play=1` 完全一致（4 真人、无徽标、无快捷键） | — |
+| M9-7 | 跑 `node local/mono-shots-ai.mjs` | 8 张 390×844 @dpr2 截图入库，`gate` 全 `true`、`errors` 为空 | 上述全部 |
+
+**口径说明**：本设计让裸入口先出开局面板（`__monoMain.game === null`，`createGame` 在选完席位后才执行），所有 play 模式闸门脚本已统一补 `humans=4&tour=0` 保持旧行为；线上回归的裸入口 gate 改为断言「面板存在 + game 为 null」，并新增 `?humans=1&tour=0` 的 3 席 AI gate。
+
+### M10 新手引导（四步蒙层）
+
+| # | 步骤 | 期望 | 截图 |
+|---|---|---|---|
+| M10-1 | `mono.html?humans=1&tour=1` | 首屏即弹蒙层第 1 步「点这里掷骰」，高亮主按钮 + 两枚骰面 | `mono-ai-05-tour-1.png` |
+| M10-2 | 点「下一步」 | 第 2 步「买地与升级」，高亮底坞左右两枚次要按钮位 | `mono-ai-05-tour-2.png` |
+| M10-3 | 点「下一步」 | 第 3 步「资产与手牌」，高亮第 0 条资产条 + 5 个手牌槽 | `mono-ai-05-tour-3.png` |
+| M10-4 | 点「下一步」 | 第 4 步「其余是 AI」，高亮第 1 条资产条（AI 席位）；末步按钮文案「开始」 | `mono-ai-05-tour-4.png` |
+| M10-5 | 点「开始」/「跳过」 | 蒙层消失、游戏可操作；`localStorage['mono.tour.done'] === '1'` | — |
+| M10-6 | 再开 `mono.html` | 不再自动弹；`?tour=1` 仍强制弹；`?tour=0` 不弹 | — |
+
+**实现口径**：高亮矩形一律取自 `hitAreas()` / `src/skin/layout.ts` 常量（主按钮 98×46、骰子 `HUD_DICE_X0/Y`、资产条 `HUD_BAR_X0/W/H`、手牌槽 `PANEL_SLOT_X0/HAND_Y`），不另造坐标；文案集中在 `src/data/tutorial.ts`。
+
 ### 最终验收（对照 spec §11 硬性标准）
 
 | # | spec §11 条目 | 证据 |
 |---|---|---|
-| 1 | 手机视口截图（390×844 dpr2） | M1–M8 全部 `docs/verify/mono-*.png`（M7 新增线上 `mono-prod-01..03`；M7-4 真实点击整局另出 `mono-e2e-01..07`——首末 `mono-e2e-01-start` / `07-final`，973 次点击跑到 `over=true`；M8 新增 `mono-share-01-cta` / `02-result` / `03-fallback`） |
-| 2 | `src/core` + `src/skin` 单测全覆盖 | `npx vitest run` → **45 文件 / 365 例全绿**（含骰子分布/移动越界/租金/升级互斥/卡牌效果/破产/胜负/回退链；M8 新增 `test/ui/share.spec.ts` 19 例；阶段一新增 `test/skin/shop-config.spec.ts` 9 例 + `instantiate` 覆盖优先级 1 例） |
+| 1 | 手机视口截图（390×844 dpr2） | M1–M8 全部 `docs/verify/mono-*.png`（M7 新增线上 `mono-prod-01..03`；M7-4 真实点击整局另出 `mono-e2e-01..07`——首末 `mono-e2e-01-start` / `07-final`，973 次点击跑到 `over=true`；M8 新增 `mono-share-01-cta` / `02-result` / `03-fallback`；M9/M10 新增 `mono-ai-01-setup-skip` / `02-setup` / `03-started` / `04-turn` / `05-tour-1..4` + 线上 `mono-prod-00-default`（开局面板）/ `mono-prod-04-ai-seat` / `mono-e2e-08-ai-final`） |
+| 2 | `src/core` + `src/skin` 单测全覆盖 | `npx vitest run` → **48 文件 / 394 例全绿**（含骰子分布/移动越界/租金/升级互斥/卡牌效果/破产/胜负/回退链；M8 新增 `test/ui/share.spec.ts` 19 例；阶段一新增 `test/skin/shop-config.spec.ts` 9 例 + `instantiate` 覆盖优先级 1 例；本轮新增 `test/core/ai.spec.ts` 10 例 + `test/ui/ai-driver.spec.ts` 8 例 + `test/ui/tutorial.spec.ts` 5 例） |
 | 3 | 视觉回归与 v5 样张对齐 | M2-1..4 / M3-1..3 目视结论 |
 | 4 | 可换素材（`?skin=photo` 零改代码、缺素材走回退） | M3-5 / M7-2；线上 `missingAssets === []`、image 实例 8 |
 | 5 | 性能（中端安卓 60fps、首屏 <3s） | **每帧渲染**（60fps 判定口径）：4× CDP 节流代理 `npm run perf:android` 空闲 p95 4.4–10.0 ms、动效中 p95 3.1–14.7 ms **<16.7ms 帧预算 ✅**；首屏 1.27–1.36s **<3s ✅**；状态切换 `paint()` p95 42–56 ms 属**一次性卡顿**（≈掉 2–3 帧/动作，整局 ≈928 次，架构常态非缺陷）。真机人工勾选 ☐ |
