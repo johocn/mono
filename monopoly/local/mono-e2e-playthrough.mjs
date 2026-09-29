@@ -146,7 +146,7 @@ try {
   await blank.close();
   const blankHash = md5(blankBuf);
 
-  const url = `${ORIGIN}/mono.html?play=1&seed=${SEED}&nofx=1`;
+  const url = `${ORIGIN}/mono.html?play=1&seed=${SEED}&nofx=1&humans=4&tour=0`;
   facts.url = url;
   facts.origin = ORIGIN;
   await page.goto(url, { waitUntil: 'networkidle' });
@@ -253,6 +253,72 @@ try {
   problems.push(String(e && e.stack ? e.stack : e));
 } finally {
   gate.noErrors = errors.length === 0;
+}
+
+/*
+ * 追加：AI 局（1 真人 + 3 AI）跑到 over=true。
+ * 真人回合沿用**真实点击**推进（与上面整局用例同口径）；AI 回合调用 `__monoMain.aiDriver.skipRest()`
+ * —— 即 HUD「跳过本次」的同一公开 API（decideTurn → applyStep → runAction 全链路照跑），
+ * 只是省去 450ms/步 的演出等待：否则 60 轮 × 3 AI × ~5 步会把整局拖过墙钟超时。
+ */
+try {
+  const aiPage = await browser.newPage({ viewport, deviceScaleFactor: 2 });
+  aiPage.on('pageerror', (e) => errors.push(String(e)));
+  aiPage.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  await aiPage.goto(`${ORIGIN}/mono.html?play=1&seed=${SEED}&nofx=1&humans=1&tour=0`, { waitUntil: 'networkidle' });
+  await aiPage.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 20000 });
+
+  const tAI = Date.now();
+  let aiClicks = 0;
+  while (Date.now() - tAI < 180000) {
+    const st = await aiPage.evaluate(() => {
+      const m = window.__monoMain;
+      const s = m.game.state;
+      return {
+        over: s.over,
+        isHuman: m.seats[s.current] === null,
+        phase: s.phase,
+        lastDraw: Boolean(s.lastDraw),
+        pos: s.players[s.current].pos,
+      };
+    });
+    if (st.over) break;
+    if (st.isHuman) {
+      /* 真人回合：浮层先关（抽卡），否则走主按钮（roll/move/settle/skip/end） */
+      const sel = st.phase === 'settled' && st.lastDraw && st.pos !== 19
+        ? '#mono-panels button[data-action="card:close"]'
+        : '#mono-hud button[data-primary]';
+      await aiPage.evaluate((x) => {
+        const el = document.querySelector(x);
+        if (el && !el.disabled) el.click();
+      }, sel);
+      aiClicks += 1;
+      await aiPage.waitForTimeout(20);
+    } else {
+      /* AI 回合：等价于点「跳过本次」——把本席位一次走完 */
+      await aiPage.evaluate(() => window.__monoMain.aiDriver.skipRest());
+      await aiPage.waitForTimeout(10);
+    }
+  }
+
+  facts.aiGame = await aiPage.evaluate(() => {
+    const m = window.__monoMain;
+    const s = m.game.state;
+    return {
+      over: s.over,
+      round: s.round,
+      aiSeats: m.seats.filter((x) => x !== null).length,
+      humans: m.seats.filter((x) => x === null).length,
+    };
+  });
+  facts.aiClicks = aiClicks;
+  gate.aiGame = facts.aiGame.over === true;
+  await aiPage.screenshot({ path: `${OUT}/mono-e2e-08-ai-final.png` });
+  facts.shots['08-ai-final'] = { file: `${OUT}/mono-e2e-08-ai-final.png` };
+  await aiPage.close();
+} catch (e) {
+  gate.aiGame = false;
+  problems.push(String(e && e.stack ? e.stack : e));
 }
 
 await browser.close();

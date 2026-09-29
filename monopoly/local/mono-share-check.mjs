@@ -44,7 +44,7 @@ const rectOf = (page, sel) => page.evaluate((s) => {
 /* —— 1) 非微信 · play 模式 —— */
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
 attach(page);
-await page.goto(`${ORIGIN}/mono.html?play=1&seed=20260928&nofx=1`, { waitUntil: 'networkidle' });
+await page.goto(`${ORIGIN}/mono.html?play=1&seed=20260928&nofx=1&humans=4&tour=0`, { waitUntil: 'networkidle' });
 await page.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 20000 });
 await page.waitForSelector('#mono-share button[data-action="share"]', { timeout: 5000 });
 
@@ -115,7 +115,7 @@ await page.close();
 /* —— 6) ?debug=1：CTA 不与右上切换器相交 —— */
 const dbg = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
 attach(dbg);
-await dbg.goto(`${ORIGIN}/mono.html?debug=1&play=1&seed=20260928&nofx=1`, { waitUntil: 'networkidle' });
+await dbg.goto(`${ORIGIN}/mono.html?debug=1&play=1&seed=20260928&nofx=1&humans=4&tour=0`, { waitUntil: 'networkidle' });
 await dbg.waitForSelector('#mono-share button[data-action="share"]', { timeout: 5000 });
 const ctaDbg = await rectOf(dbg, '#mono-share button[data-action="share"]');
 const sw = await rectOf(dbg, '#mono-views');
@@ -137,7 +137,7 @@ await wx.addInitScript(() => {
 });
 /* 5) 模拟「签名端点未配置」：返回 200 但无 signature → 走 fallback（无网络层报错，避免把浏览器资源加载失败误判为应用报错） */
 await wx.route('**/v1/auth/jssdk-signature', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
-await wx.goto(`${ORIGIN}/mono.html?play=1&seed=20260928&nofx=1`, { waitUntil: 'networkidle' });
+await wx.goto(`${ORIGIN}/mono.html?play=1&seed=20260928&nofx=1&humans=4&tour=0`, { waitUntil: 'networkidle' });
 await wx.waitForFunction(() => window.__monoShareStatus !== undefined, null, { timeout: 20000 });
 await wx.waitForTimeout(200);
 facts.statusInWechatFallback = await wx.evaluate(() => window.__monoShareStatus);

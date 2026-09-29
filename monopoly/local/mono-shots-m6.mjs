@@ -44,7 +44,7 @@ const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
-await page.goto(`${ORIGIN}/mono.html?debug=1&play=1&seed=20260928&speed=${SPEED}`, { waitUntil: 'networkidle' });
+await page.goto(`${ORIGIN}/mono.html?debug=1&play=1&seed=20260928&speed=${SPEED}&humans=4&tour=0`, { waitUntil: 'networkidle' });
 await page.waitForFunction(() => Boolean(window.__monoMain?.scene), null, { timeout: 20000 });
 
 /* 先进到 rolled 阶段（动画不得改状态，故全程 phase 必须恒为 rolled） */

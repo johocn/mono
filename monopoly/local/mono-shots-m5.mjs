@@ -14,7 +14,7 @@ const page = await browser.newPage({ viewport: { width: 390, height: 844 }, devi
 page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 
-await page.goto(`${ORIGIN}/mono.html?debug=1&play=1&seed=20260928`, { waitUntil: 'networkidle' });
+await page.goto(`${ORIGIN}/mono.html?debug=1&play=1&seed=20260928&humans=4&tour=0`, { waitUntil: 'networkidle' });
 await page.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 15000 });
 
 /* 1) 开局：手牌 5 槽常驻（无浮层，5 个 card:* 命中键） */

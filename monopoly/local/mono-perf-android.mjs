@@ -27,7 +27,7 @@ import { chromium } from 'playwright';
  */
 
 const ORIGIN = process.env.MONO_ORIGIN || 'https://game.joho.cn/tour';
-const QUERY = 'play=1&nofx=1&perf=1';
+const QUERY = 'play=1&nofx=1&perf=1&humans=4&tour=0';
 const SAMPLES = 50;          // 每项采样总帧数
 const WARMUP = 10;           // 丢弃前 N 帧预热 → 有效样本 = 40（≥30）
 const RATES = [1, 4, 6];     // 1× 基线 / 4× 中端安卓代理（判定）/ 6× 低端压力

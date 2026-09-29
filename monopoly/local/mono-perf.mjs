@@ -87,8 +87,8 @@ async function sample(query, label) {
   return f;
 }
 
-const main = await sample('debug=1&play=1&perf=1', 'default');
-const photo = await sample('debug=1&play=1&perf=1&skin=photo', 'photo');
+const main = await sample('debug=1&play=1&perf=1&humans=4&tour=0', 'default');
+const photo = await sample('debug=1&play=1&perf=1&skin=photo&humans=4&tour=0', 'photo');
 
 gate.interactive = main.firstInteractiveMs < BUDGET.interactiveMs;
 gate.redrawP95 = main.redrawP95 <= BUDGET.redrawP95Ms;
