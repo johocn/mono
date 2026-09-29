@@ -1,3 +1,5 @@
+import type { BgmVoice, SfxKind, SfxVoice } from '../data/audio';
+
 export type Mount = 'ground' | 'wall' | 'roof';
 export type ProviderKind = 'proc' | 'image' | 'atlas' | 'frames';
 
@@ -9,6 +11,23 @@ export interface AtlasSpec { kind: 'atlas'; src: string; frame: string; anchor?:
 export interface FramesSpec { kind: 'frames'; src: string[]; fps: number; anchor?: [number, number] }
 
 export type ProviderSpec = ProcSpec | ImageSpec | AtlasSpec | FramesSpec;
+
+/* —— 音源双轨制（spec §4.1）：与 `ProviderKind` 完全同构 —— 默认程序化，可整包换音频文件 —— */
+
+export type SoundProviderKind = 'proc' | 'file';
+
+/** `proc`：程序化合成，`voice` 取自 `src/data/audio.ts` 的音色原型表 */
+export interface ProcSoundSpec { kind: 'proc'; voice: SfxVoice | BgmVoice }
+/** `file`：音频文件（手势解锁后异步 `decodeAudioData`；缺失 / 解码失败 → 回退 proc） */
+export interface FileSoundSpec { kind: 'file'; src: string; volume?: number }
+export type SoundSpec = ProcSoundSpec | FileSoundSpec;
+
+/** 皮肤包顶层 `sound` 段（spec §4.1）；缺省 / 坏数据 = 全内建程序化音源 */
+export interface SoundPack {
+  sfx?: Partial<Record<SfxKind, SoundSpec>>;
+  bgm?: SoundSpec;
+  volume?: { sfx?: number; bgm?: number };
+}
 
 /** 皮肤包的动效 token 段（spec §5.6 / M6 契约①）：缓动 + 震动 + 落尘数（美术参数，允许写在 skin.json） */
 export interface FxTokens {
@@ -25,6 +44,8 @@ export interface SkinPack {
   elements: Record<string, ProviderSpec>;
   /** 顶层 `fx` 段：`fx.ts` 经 `resolveMotion()` 消费，缺省时用 layout 的 FX_* 兜底 */
   fx?: FxTokens;
+  /** 顶层 `sound` 段：`src/ui/audio.ts` 经 `resolveSound()` 消费，缺省时用内建程序化音源 */
+  sound?: SoundPack;
 }
 
 export interface RegistryEntry {

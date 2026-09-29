@@ -203,3 +203,27 @@ export const AI_SKIP_MAX_STEPS = 64;             // skipRest 单次上限（防�
 
 /* —— 新手引导（spec §7.3）—— */
 export const TUTORIAL_GAP = 12;                  // 气泡与高亮框边距
+
+/* —— M11 音效与音乐（spec §7.1 / §8.1）：静音键键位 + 音量 + BGM 排程参数 ——
+   本文件不在 `tools/check-hardcoded.mjs` 的 gate 作用域内（该 gate 只扫 `src/render/`），
+   故裸时长 / 增益 / BPM 一律集中声明在这里——与 `FX_*` 的既有归置一致。 */
+export const AUDIO_KEY_SIZE = 26;
+/** 音效键左上角（390 − 8 − 26 − 6 − 26 = 324；与 `HUD_TOP_H = 30` 内的分享键 8..86 零冲突） */
+export const AUDIO_SFX_BOX = { left: 324, top: 5 };
+/** 音乐键左上角（390 − 8 − 26 = 356） */
+export const AUDIO_BGM_BOX = { left: 356, top: 5 };
+
+/* 音量（spec §8.2，可被 skin.json 的 sound.volume 覆盖） */
+export const AUDIO_VOL_SFX = 0.8;
+export const AUDIO_VOL_BGM = 0.35;
+
+/* BGM 排程（spec §6.1：120 BPM → 1 拍 500ms；4 拍/小节 → 2s/小节；4 小节 → 8s 整段） */
+export const AUDIO_BGM_BEATS_PER_BAR = 4;
+export const AUDIO_BGM_BARS = 4;
+export const AUDIO_BGM_BEAT_MS = 500;
+export const AUDIO_BGM_BASS_MS = 800;              // 低音衰减
+export const AUDIO_BGM_BASS_ATTACK_MS = 20;        // 低音起音
+export const AUDIO_BGM_PAD_ATTACK_MS = 300;        // 三和弦起音
+export const AUDIO_BGM_PAD_GAIN = 0.35;            // 铺底相对增益
+export const AUDIO_BGM_LOOKAHEAD_MS = 100;         // 排程器轮询间隔
+export const AUDIO_BGM_SCHEDULE_AHEAD_S = 0.3;     // 提前排程窗口
