@@ -22,6 +22,10 @@
     "shake": { "amp": 6, "ms": 180 },
     "dust": { "count": 6 }
   },
+  "sound": {
+    "volume": { "sfx": 0.8, "bgm": 0.35 },
+    "bgm": { "kind": "proc", "voice": "pad" }
+  },
   "elements": {
     "token.bg": { "kind": "proc", "preset": "bgGradient", "params": { "top": "#1a2b2a", "bottom": "#0c1513" } },
     "token.gold": { "kind": "proc", "preset": "solid", "params": { "fill": "#f5c451" } },
@@ -124,6 +128,10 @@
     "ui.button.wide": { "kind": "proc", "preset": "uiButton", "params": {} },
     "ui.qk": { "kind": "proc", "preset": "uiButton", "params": { "btnFs": 11, "btnR": 6 } },
     "ui.personaTag": { "kind": "proc", "preset": "uiBadge", "params": { "badgeFs": 9 } },
+    "ui.sound.on": { "kind": "proc", "preset": "uiSoundOn", "params": {} },
+    "ui.sound.off": { "kind": "proc", "preset": "uiSoundOff", "params": {} },
+    "ui.music.on": { "kind": "proc", "preset": "uiMusicOn", "params": {} },
+    "ui.music.off": { "kind": "proc", "preset": "uiMusicOff", "params": {} },
 
     "fx.coin": { "kind": "proc", "preset": "fxCoin", "params": {} },
     "fx.stamp": { "kind": "proc", "preset": "fxStamp", "params": {} },

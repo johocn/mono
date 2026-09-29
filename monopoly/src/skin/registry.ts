@@ -1,3 +1,4 @@
+import { AUDIO_KEY_SIZE } from './layout';
 import type { RegistryEntry } from './types';
 
 export const BUILDING_HEIGHTS: Record<number, number> = { 1: 26, 2: 46, 3: 72 };
@@ -143,11 +144,16 @@ reg['ui.button.secondary'] = { id: 'ui.button.secondary', box: { w: 110, d: 1, h
 reg['ui.button.wide'] = { id: 'ui.button.wide', box: { w: 328, d: 1, h: 46 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image', 'atlas'] };
 reg['ui.qk'] = { id: 'ui.qk', box: { w: 72, d: 1, h: 22 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image', 'atlas'] };
 reg['ui.personaTag'] = { id: 'ui.personaTag', box: { w: 34, d: 1, h: 13 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image'] };
+/* M11 音效与音乐（spec §7.3）：顶部右侧两枚 26×26 常驻静音键；开/关各一个 id（共 4 个） */
+reg['ui.sound.on'] = showcaseEntry('ui.sound.on', { w: AUDIO_KEY_SIZE, d: 1, h: AUDIO_KEY_SIZE });
+reg['ui.sound.off'] = showcaseEntry('ui.sound.off', { w: AUDIO_KEY_SIZE, d: 1, h: AUDIO_KEY_SIZE });
+reg['ui.music.on'] = showcaseEntry('ui.music.on', { w: AUDIO_KEY_SIZE, d: 1, h: AUDIO_KEY_SIZE });
+reg['ui.music.off'] = showcaseEntry('ui.music.off', { w: AUDIO_KEY_SIZE, d: 1, h: AUDIO_KEY_SIZE });
 
 // —— 地块橱窗（B 版式）：全部 ground 挂载，台位由 ElementSpec.fixed 给（不走 resolvePlacement） ——
-const showcaseEntry = (id: string, box: { w: number; d: number; h: number }): RegistryEntry => ({
-  id, box, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image'],
-});
+function showcaseEntry(id: string, box: { w: number; d: number; h: number }): RegistryEntry {
+  return { id, box, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image'] };
+}
 const SC_PANEL = { w: 370, d: 1, h: 300 };
 reg['showcase.panel'] = showcaseEntry('showcase.panel', SC_PANEL);
 reg['showcase.sky'] = showcaseEntry('showcase.sky', { w: 370, d: 1, h: 180 });
