@@ -14,6 +14,7 @@ import { applyStep, type AiStep } from './core/ai';
 import { hudSpecs, mountHud, type HudActionId, type HudHandle } from './ui/Hud';
 import { mountPanels, panelSpecs, type PanelActionId, type PanelHandle } from './ui/panels';
 import { createAiDriver, type AiDriver } from './ui/aiDriver';
+import { createAudioEngine } from './ui/audio';
 import { mountSetup, readPlan, resolveSeats, type SeatPlan } from './ui/setup';
 import { isDone, mountTutorial, shouldShowTutorial, type TutorialHandle } from './ui/tutorial';
 import { parsePersonaList, type Persona, type Seat } from './data/ai';
@@ -50,6 +51,8 @@ export interface UrlOptions {
   ai: Persona[];
   /** `?tour=1` 强制引导 / `?tour=0` 关闭；缺省 = 首访自动弹一次（spec §7.1） */
   tour?: boolean;
+  /** `?audio=0`：一键全静音（开关初始全关且**不创建** `AudioContext`）；缺省 = 有声（spec §8.2） */
+  audio: boolean;
 }
 
 /** v5 样张 line 63：当前格 index 4（太平温泉）在 (5,9)，四枚棋子同格 */
@@ -82,7 +85,17 @@ export function parseOptions(search: string): UrlOptions {
     })(),
     ai: parsePersonaList(q.get('ai')),
     tour: q.get('tour') === '1' ? true : q.get('tour') === '0' ? false : undefined,
+    /* 音频（spec §8.2）：`?audio=0` 一键全静音；裸链接 / `?audio=1` 一律有声 */
+    audio: q.get('audio') !== '0',
   };
+}
+
+/**
+ * `localStorage` 包装：隐私模式 / 禁用 Cookie 下**属性访问本身**会抛，故不能直接传 `window.localStorage`
+ * （引擎只在 `readPrefs` / `writePrefs` 内部 try/catch，挡不住取值这一步）。与 `setup.ts` 同规。
+ */
+function safeStorage(): Storage | null {
+  try { return window.localStorage; } catch { return null; }
 }
 
 /**
@@ -108,6 +121,14 @@ export async function boot(): Promise<void> {
   const skin = opts.skin === 'default' ? defaultSkin : await loadSkin(opts.skin);
   const geo = skin?.geo ?? defaultSkin?.geo ?? DEFAULT_GEO;
   const tokens = { ...(defaultSkin?.tokens ?? {}), ...(skin?.tokens ?? {}) };
+
+  /* —— M11 音效与音乐（spec §3 / §9）：此处置装配，但**不建 `AudioContext`**——等首次手势解锁 —— */
+  const audio = createAudioEngine({ storage: safeStorage(), forceMute: !opts.audio });
+  audio.applySound((skin ?? defaultSkin)?.sound ?? null);
+  /* 首次手势解锁（spec §9）：capture + once，开局面板「开始」/ HUD 点击都算解锁点 */
+  window.addEventListener('pointerdown', () => { audio.unlock(); }, { capture: true, once: true });
+  /* spec §8.2：`?nofx` 只静音**音效**（BGM 仍由音乐键控制）——见本 Task 顶部「第四处澄清」 */
+  const sfxOn = !opts.nofx;
 
   /* 图片素材必须同步可用：render() 是同步的，故在此把所有素材先装载进纹理表 */
   const missingAssets = [
@@ -195,7 +216,7 @@ export async function boot(): Promise<void> {
       ...showcaseSpecs({
         slot: currentPlayer(g.state).pos, owner: ownedOf(currentPlayer(g.state).pos), play: true, brandOf: shops.brandAt,
       }),
-      ...hudSpecs(g.state, fxPending || fx.busy(), seats, driver?.isFast() ?? false),
+      ...hudSpecs(g.state, fxPending || fx.busy(), seats, driver?.isFast() ?? false, audio.prefs()),
       /* M5 浮层：手牌 5 槽常驻 + 抽卡翻牌 / 股票盘 / 结算面板（未触发时为空） */
       ...panelSpecs(g.state),
     ];
@@ -207,6 +228,7 @@ export async function boot(): Promise<void> {
 
   /** 唯一出画口：清 spec → 组视图 → 渲染 → 标签 → HUD / 浮层命中层 */
   const paint = (): void => {
+    if (game?.state.over) audio.stopBgm();   // spec §6.2：结算即停 BGM（幂等，重复调用无副作用）
     scene.reset();
     if (game) scene.addMany(playView(game));
     else if (!opts.play) scene.addMany(demoView());
@@ -235,6 +257,8 @@ export async function boot(): Promise<void> {
       paint();
       return;
     }
+    /* 与 `fx.play` 同刻、同判空（spec §5.3）：`buy`/`upgrade` 失败无 fx → 也不出声 */
+    if (sfxOn) audio.play(ctx.kind);
     fxPending = true;
     paint();
     fx.play(ctx, () => { fxPending = false; paint(); });
@@ -300,8 +324,10 @@ export async function boot(): Promise<void> {
     runAction(() => applyStep(g, step), (r: never) => ctxOfStep(step, r as unknown), withFx);
   };
 
-  /** HUD 点击 → AiStep（`ai:fast` / `ai:skip` 已在回调里拦截，不会传到这里） */
-  const stepOfHud = (a: Exclude<HudActionId, 'ai:fast' | 'ai:skip'>): AiStep =>
+  /** HUD 点击 → AiStep（`ai:fast` / `ai:skip` / `audio:*` 已在回调里拦截，不会传到这里） */
+  const stepOfHud = (
+    a: Exclude<HudActionId, 'ai:fast' | 'ai:skip' | 'audio:sfx' | 'audio:bgm'>,
+  ): AiStep =>
     a === 'buy' ? { kind: 'buy' } : a === 'upgrade' ? { kind: 'upgrade' } : { kind: a };
 
   const stepOfPanel = (a: PanelActionId, target?: number | string): AiStep => {
@@ -323,6 +349,12 @@ export async function boot(): Promise<void> {
     seats = plan;
     game = createGame({ seed: opts.seed, playerCount: 4 });
     hud = mountHud(document.body, game, (a: HudActionId) => {
+      /* 静音键（spec §7.4）：翻转 → 落库 → 立即重画图标；不跳动画、不推进状态 */
+      if (a === 'audio:sfx' || a === 'audio:bgm') {
+        audio.toggle(a === 'audio:sfx' ? 'sfx' : 'bgm');
+        paint();
+        return;
+      }
       if (fx.busy()) fx.skip();   // 点屏加速：状态早已落库，跳过只影响观感时长
       if (a === 'ai:fast') { if (driver) driver.setFast(!driver.isFast()); paint(); return; }
       if (a === 'ai:skip') { driver?.skipRest(); return; }
@@ -340,6 +372,8 @@ export async function boot(): Promise<void> {
       onFlush: () => fx.play({ kind: 'end' }, () => paint()),
     });
     driver.start();
+    /* BGM 起播（spec §6.2）：未解锁时只记「想要」，首次手势 `unlock()` 时随解锁一起起播 */
+    audio.startBgm();
     if (shouldShowTutorial(opts, isDone(), seats)) replayTour();
     /* 面板在 boot 之后才 resolve 时，审计对象已建立但 game 仍为 null → 回填 */
     const api = (window as unknown as Record<string, unknown>).__monoMain as { game?: Game | null } | undefined;
@@ -428,7 +462,7 @@ export async function boot(): Promise<void> {
 
   (window as unknown as Record<string, unknown>).__monoMain = {
     stage, scene, opts, geo, skin, missingAssets, game, paint, sim, fx, fxPreview, perf, shops, VERSION,
-    seats, aiDriver: driver, hudSeats: () => seats,
+    audio, seats, aiDriver: driver, hudSeats: () => seats,
     tutorial: () => tutorial, mountTutorial: replayTour,
   };
 }

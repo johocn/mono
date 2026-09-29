@@ -11,14 +11,14 @@ describe('parseOptions', () => {
   it('缺省：进站即交互局（play=true）；humans/ai/tour 缺省为 undefined（走开局面板）', () => {
     expect(parseOptions('')).toEqual({
       skin: 'default', debug: false, seed: 1, speed: 1, show: 'b', play: true, nofx: false, perf: false,
-      humans: undefined, ai: [], tour: undefined,
+      audio: true, humans: undefined, ai: [], tour: undefined,
     });
   });
   it('解析 ?skin ?debug ?seed ?speed（play 仍默认 true）', () => {
     expect(parseOptions('?skin=photo&debug=1&seed=7&speed=4'))
       .toEqual({
         skin: 'photo', debug: true, seed: 7, speed: 4, show: 'b', play: true, nofx: false, perf: false,
-        humans: undefined, ai: [], tour: undefined,
+        audio: true, humans: undefined, ai: [], tour: undefined,
       });
   });
   it('解析 ?humans / ?ai / ?tour（AI 对手 + 新手引导）', () => {
@@ -46,5 +46,10 @@ describe('parseOptions', () => {
   it('非法数字回落到缺省', () => {
     expect(parseOptions('?seed=abc&speed=-2').seed).toBe(1);
     expect(parseOptions('?speed=-2').speed).toBe(1);
+  });
+  it('解析 ?audio=0（一键全静音，spec §8.2）', () => {
+    expect(parseOptions('').audio).toBe(true);
+    expect(parseOptions('?audio=1').audio).toBe(true);
+    expect(parseOptions('?audio=0').audio).toBe(false);
   });
 });
