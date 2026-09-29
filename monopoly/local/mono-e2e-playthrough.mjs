@@ -260,7 +260,11 @@ try {
  * 真人回合沿用**真实点击**推进（与上面整局用例同口径）；AI 回合调用 `__monoMain.aiDriver.skipRest()`
  * —— 即 HUD「跳过本次」的同一公开 API（decideTurn → applyStep → runAction 全链路照跑），
  * 只是省去 450ms/步 的演出等待：否则 60 轮 × 3 AI × ~5 步会把整局拖过墙钟超时。
+ *
+ * 先关掉上一局那个页面：它已结算但仍在逐帧渲染（软件 GL），实测会让本页的每次
+ * `evaluate` 排队近 500ms（180s 只跑到第 55 轮）；关掉后恢复常态，留足 300s 预算。
  */
+await page?.close();
 try {
   const aiPage = await browser.newPage({ viewport, deviceScaleFactor: 2 });
   aiPage.on('pageerror', (e) => errors.push(String(e)));
@@ -270,7 +274,11 @@ try {
 
   const tAI = Date.now();
   let aiClicks = 0;
-  while (Date.now() - tAI < 180000) {
+  let iterations = 0;
+  let skipCalls = 0;
+  let lastSt = null;
+  while (Date.now() - tAI < 300000) {
+    iterations += 1;
     const st = await aiPage.evaluate(() => {
       const m = window.__monoMain;
       const s = m.game.state;
@@ -282,6 +290,7 @@ try {
         pos: s.players[s.current].pos,
       };
     });
+    lastSt = st;
     if (st.over) break;
     if (st.isHuman) {
       /* 真人回合：浮层先关（抽卡），否则走主按钮（roll/move/settle/skip/end） */
@@ -296,10 +305,17 @@ try {
       await aiPage.waitForTimeout(20);
     } else {
       /* AI 回合：等价于点「跳过本次」——把本席位一次走完 */
+      skipCalls += 1;
       await aiPage.evaluate(() => window.__monoMain.aiDriver.skipRest());
       await aiPage.waitForTimeout(10);
     }
   }
+
+  facts.aiDiag = {
+    elapsedMs: Date.now() - tAI, iterations, aiClicks, skipCalls, lastSt,
+    seats: await aiPage.evaluate(() => window.__monoMain.seats),
+    hasDriver: await aiPage.evaluate(() => Boolean(window.__monoMain.aiDriver)),
+  };
 
   facts.aiGame = await aiPage.evaluate(() => {
     const m = window.__monoMain;
@@ -339,6 +355,9 @@ console.log(JSON.stringify({
   shots: facts.shots,
   blankHash: facts.blankHash ?? null,
   gate,
+  ai: facts.aiGame ?? null,
+  aiDiag: facts.aiDiag ?? null,
+  problems,
   errors,
 }, null, 2));
 
