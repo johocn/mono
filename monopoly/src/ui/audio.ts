@@ -119,7 +119,18 @@ export interface ParamLike {
 export interface NodeLike { connect(n: unknown): void; disconnect?(): void }
 export interface GainLike extends NodeLike { gain: ParamLike }
 export interface OscLike extends NodeLike { type: string; frequency: ParamLike; start(t?: number): void; stop(t?: number): void }
-export interface SrcLike extends NodeLike { buffer: unknown; start(t?: number): void; stop(t?: number): void }
+/**
+ * `AudioBuffer` 的最小结构子集（只声明本项目用到的部分）。
+ * 真实 `AudioContext.decodeAudioData()` 返回的 `AudioBuffer` 结构上满足它，默认路径无需改动。
+ */
+export interface AudioBufferLike { getChannelData(channel: number): Float32Array }
+
+/**
+ * `AudioBufferSourceNode.buffer` 是 WebIDL 类型化属性：赋非 `AudioBuffer` 必抛 `TypeError`。
+ * 2026-09-30 线上事故（骰子无点数 / 棋子不动 / 无事件提醒）就源于此——故把类型收紧到
+ * `AudioBufferLike | null`，让「随手塞个占位对象」在 `tsc` 阶段直接失败。
+ */
+export interface SrcLike extends NodeLike { buffer: AudioBufferLike | null; start(t?: number): void; stop(t?: number): void }
 
 /** Web Audio 的最小子集（只声明本项目用到的部分，便于注入假件） */
 export interface AudioCtxLike {
@@ -132,8 +143,8 @@ export interface AudioCtxLike {
   createGain(): GainLike;
   createOscillator(): OscLike;
   createBufferSource(): SrcLike;
-  createBuffer(channels: number, length: number, rate: number): { getChannelData(i: number): Float32Array };
-  decodeAudioData(data: ArrayBuffer): Promise<unknown>;
+  createBuffer(channels: number, length: number, rate: number): AudioBufferLike;
+  decodeAudioData(data: ArrayBuffer): Promise<AudioBufferLike>;
 }
 
 export interface AudioDeps {
@@ -143,7 +154,7 @@ export interface AudioDeps {
   /** 首次手势解锁时创建（默认 `new AudioContext()`；测试注入假件） */
   createCtx?: () => AudioCtxLike | null;
   /** file 轨装载（默认 `fetch` + `decodeAudioData`；测试注入） */
-  loadBuffer?: (src: string, ctx: AudioCtxLike) => Promise<unknown | null>;
+  loadBuffer?: (src: string, ctx: AudioCtxLike) => Promise<AudioBufferLike | null>;
   setInterval?: (fn: () => void, ms: number) => ReturnType<typeof setInterval>;
   clearInterval?: (t: ReturnType<typeof setInterval>) => void;
 }
@@ -176,7 +187,7 @@ function defaultCreateCtx(): AudioCtxLike | null {
 }
 
 /** 默认 file 轨装载：`fetch` → `decodeAudioData`；任何失败 → null（由调用方回退 proc） */
-async function defaultLoadBuffer(src: string, ctx: AudioCtxLike): Promise<unknown | null> {
+async function defaultLoadBuffer(src: string, ctx: AudioCtxLike): Promise<AudioBufferLike | null> {
   try {
     const res = await fetch(src);
     if (!res.ok) return null;
@@ -196,7 +207,7 @@ export function createAudioEngine(deps: AudioDeps = {}): AudioEngine {
   let ctx: AudioCtxLike | null = null;
   let sfxGain: GainLike | null = null;
   let bgmGain: GainLike | null = null;
-  const buffers = new Map<string, unknown>();
+  const buffers = new Map<string, AudioBufferLike>();
   const dead = new Set<string>();          // 解码失败 → 该 src 永久回退（spec §4.3）
   const miss: string[] = [];
   const live: Array<{ node: { stop(t?: number): void }; endsAt: number }> = [];
@@ -231,10 +242,13 @@ export function createAudioEngine(deps: AudioDeps = {}): AudioEngine {
     env.connect(o.dst);
     if (o.noise) {
       const len = Math.max(1, Math.floor(ctx.sampleRate * (o.decayMs / 1000)));
-      const ch = ctx.createBuffer(1, len, ctx.sampleRate).getChannelData(0);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const ch = buf.getChannelData(0);
       for (let i = 0; i < ch.length; i += 1) ch[i] = Math.random() * 2 - 1;
       const src = ctx.createBufferSource();
-      src.buffer = { noise: true };
+      /* 必须赋真 buffer（`SrcLike.buffer` 已收紧为 `AudioBufferLike | null`）——
+         历史上这里写成 `{ noise: true }`，真机必抛 TypeError 并导致整局卡死 */
+      src.buffer = buf;
       src.connect(env);
       src.start(o.at);
       src.stop(o.at + total / 1000);
@@ -333,25 +347,33 @@ export function createAudioEngine(deps: AudioDeps = {}): AudioEngine {
     },
 
     play(kind: SfxKind): void {
-      if (!prefs.sfx || !ctx || !sfxGain) return;      // 未解锁 / 音效关 → 直接丢弃（spec §9）
-      const spec = table.sfx[kind] ?? { kind: 'proc', voice: sfxFor(kind) };
-      const at = ctx.currentTime;
-      if (spec.kind === 'file') {
-        const buf = buffers.get(spec.src);
-        if (buf) {
-          const src = ctx.createBufferSource();
-          src.buffer = buf;
-          const g = ctx.createGain();
-          g.gain.value = spec.volume ?? 1;
-          src.connect(g);
-          g.connect(sfxGain);
-          src.start(at);
-          live.push({ node: src, endsAt: at + 1 });
-          return;
+      /*
+       * 护栏收口在引擎内（spec §4.2）：音频的任何失败都不得把异常抛到调用点。
+       * 调用点 `main.ts` 的 `runAction` 里 `audio.play()` 位于 `paint()` 之前，
+       * 一旦上抛就会造成「状态已落库、画面停帧」的失同步（2026-09-30 事故）。
+       * **不在 `runAction` 加 catch**：那会把状态机自身的真实缺陷一并吞掉。
+       */
+      try {
+        if (!prefs.sfx || !ctx || !sfxGain) return;      // 未解锁 / 音效关 → 直接丢弃（spec §9）
+        const spec = table.sfx[kind] ?? { kind: 'proc', voice: sfxFor(kind) };
+        const at = ctx.currentTime;
+        if (spec.kind === 'file') {
+          const buf = buffers.get(spec.src);
+          if (buf) {
+            const src = ctx.createBufferSource();
+            src.buffer = buf;
+            const g = ctx.createGain();
+            g.gain.value = spec.volume ?? 1;
+            src.connect(g);
+            g.connect(sfxGain);
+            src.start(at);
+            live.push({ node: src, endsAt: at + 1 });
+            return;
+          }
+          if (!dead.has(spec.src)) void loadTrack(spec.src);   // 未就绪 → 触发异步装载，本次先用 proc 顶上
         }
-        if (!dead.has(spec.src)) void loadTrack(spec.src);   // 未就绪 → 触发异步装载，本次先用 proc 顶上
-      }
-      playProc(sfxFor(kind), at);
+        playProc(sfxFor(kind), at);
+      } catch { /* 静默：音频失败不影响玩法（页面级异常仍由闸门 errors 断言兜住） */ }
     },
 
     toggle(key: AudioPrefKey): AudioPrefs {

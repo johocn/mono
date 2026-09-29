@@ -221,7 +221,7 @@ describe('audio 引擎：解锁与音效（spec §5.3 / §9）', () => {
 
   it('file 轨解码成功 → 用 buffer source 播放（不走 proc 振荡器）', async () => {
     const f = fakeCtx();
-    const e = engineWith({ createCtx: () => f.ctx, storage: fakeStorage(), loadBuffer: async () => ({ ok: true }) });
+    const e = engineWith({ createCtx: () => f.ctx, storage: fakeStorage(), loadBuffer: async (_src, ctx) => ctx.createBuffer(1, 1, ctx.sampleRate) });
     e.applySound({ sfx: { dice: { kind: 'file', src: 'sfx/dice.mp3' } } });
     e.unlock();
     await Promise.resolve();
