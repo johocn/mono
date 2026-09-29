@@ -112,13 +112,22 @@ describe('audio 纯函数：BGM 排程口径（spec §6.1）', () => {
 
 /* ——————————————————— 装配层：假 AudioContext（spec §10.2 断言语义，不断言声波） ——————————————————— */
 
-interface FakeCtx { ctx: AudioCtxLike; starts: number[]; freqs: number[]; sources: number }
+interface FakeCtx {
+  ctx: AudioCtxLike;
+  starts: number[];
+  freqs: number[];
+  sources: number;
+  /** 真正被赋给 `src.buffer` 的值（真机语义下只可能是本 ctx `createBuffer()` / `decodeAudioData()` 的返回值） */
+  bufAssigns: unknown[];
+}
 
-/** 记录「哪一刻请求播放了哪个频率」，不产生真实声波 */
+/** 记录「哪一刻请求播放了哪个频率」，不产生真实声波；`buffer` 走 setter 校验以复刻真机语义 */
 function fakeCtx(): FakeCtx {
   const starts: number[] = [];
   const freqs: number[] = [];
-  const out: FakeCtx = { ctx: null as unknown as AudioCtxLike, starts, freqs, sources: 0 };
+  const out: FakeCtx = {
+    ctx: null as unknown as AudioCtxLike, starts, freqs, sources: 0, bufAssigns: [],
+  };
   const node = () => ({ connect: () => {}, disconnect: () => {} });
   const param = () => ({
     value: 0,
@@ -126,6 +135,13 @@ function fakeCtx(): FakeCtx {
     linearRampToValueAtTime: () => {},
     exponentialRampToValueAtTime: () => {},
   });
+  /** 本 ctx 产出的合法 buffer（真机：只有 `AudioBuffer` 能赋给 `AudioBufferSourceNode.buffer`） */
+  const legal = new Set<object>();
+  const makeBuffer = (len: number) => {
+    const b = { getChannelData: () => new Float32Array(len) };
+    legal.add(b);
+    return b;
+  };
   out.ctx = {
     currentTime: 0,
     sampleRate: 48000,
@@ -139,10 +155,22 @@ function fakeCtx(): FakeCtx {
     },
     createBufferSource: () => {
       out.sources += 1;
-      return { ...node(), buffer: null, start: (t = 0) => { starts.push(t); }, stop: () => {} };
+      const src: Record<string, unknown> = { ...node(), start: (t = 0) => { starts.push(t); }, stop: () => {} };
+      let buf: unknown = null;
+      Object.defineProperty(src, 'buffer', {
+        get: () => buf,
+        set: (v: unknown) => {
+          if (v !== null && !legal.has(v as object)) {
+            throw new TypeError("Failed to set the 'buffer' property on 'AudioBufferSourceNode'");
+          }
+          buf = v;
+          out.bufAssigns.push(v);
+        },
+      });
+      return src;
     },
-    createBuffer: (_c: number, len: number) => ({ getChannelData: () => new Float32Array(len) }),
-    decodeAudioData: async () => ({}),
+    createBuffer: (_c: number, len: number) => makeBuffer(len),
+    decodeAudioData: async () => makeBuffer(1),
   } as unknown as AudioCtxLike;
   return out;
 }
@@ -173,6 +201,23 @@ describe('audio 引擎：解锁与音效（spec §5.3 / §9）', () => {
     expect(e.isUnlocked()).toBe(true);
     e.play('dice');
     expect(f.starts.length).toBeGreaterThan(0);
+  });
+
+  it('噪声 cue（dice，唯一 noise 音色）不抛错，且 src.buffer 恒等于本 ctx createBuffer() 的返回值', () => {
+    const f = fakeCtx();
+    const e = engineWith({ createCtx: () => f.ctx, storage: fakeStorage() });
+    e.unlock();
+    expect(() => e.play('dice')).not.toThrow();
+    /* 旧实现在这里赋 `{ noise: true }` → 真机抛 TypeError（本断言会拿到 0 次赋值） */
+    expect(f.bufAssigns.length).toBe(1);
+  });
+
+  it('引擎内部异常不外抛（spec §4.2 护栏）：createOscillator 抛错时 play() 仅静默、不影响调用点', () => {
+    const f = fakeCtx();
+    f.ctx.createOscillator = () => { throw new Error('boom'); };
+    const e = engineWith({ createCtx: () => f.ctx, storage: fakeStorage() });
+    e.unlock();
+    expect(() => e.play('hop')).not.toThrow();   // hop 走振荡器路径 → 命中抛错并在引擎内吞掉
   });
 
   it('音效关 → 无新发声；开启那一下补一声 ui 确认音（spec §7.4）', () => {
