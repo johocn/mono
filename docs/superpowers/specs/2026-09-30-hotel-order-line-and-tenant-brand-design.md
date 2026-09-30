@@ -95,6 +95,7 @@
   - `isHotel: boolean`
   - `hotelCheckIn: string | null`、`hotelCheckOut: string | null`、`hotelNights: number | null`
   - `hotelNightly: Array<{ date: string; priceCent: number; type: string }> | null`（非酒店行一律 null）
+  - `productSlug: string | null`（供前端「修改日期」跳回 `/product/{slug}?checkIn=&checkOut=`；非酒店行也可为 null）
 - 逐晚明细**由后端计算**（与计价策略同一纯函数），与行小计同源，前端不重算、不可篡改。
 - `src/plugin.ts` 的 `OrderBoxLine` typedef（L2068-L2078）同步补字段，并新增 `type HotelNightPrice { date: String!, priceCent: Int!, type: String! }`。
 
