@@ -4,6 +4,7 @@ import { loadSkin } from './skin/skinLoader';
 import { Scene } from './render/Scene';
 import { boardCells, boardTileSpecs } from './render/BoardView';
 import { innerSpecs, fountainSpec } from './render/InnerView';
+import { atmosphereSpecs } from './render/AtmosphereView';
 import { PAWN_COUNT, pawnSpecs } from './render/PieceView';
 import { buildingSpecs, slotLevelsOf, streetPropSpecs } from './render/BuildingView';
 import { showcaseSpecs } from './render/ShowcaseView';
@@ -262,6 +263,8 @@ export async function boot(): Promise<void> {
   const paint = (): void => {
     if (game?.state.over) audio.stopBgm();   // spec §6.2：结算即停 BGM（幂等，重复调用无副作用）
     scene.reset();
+    /* 环境层（夜空/星/月/远山/街市/街灯/灯笼串）：静态底遍，插在最前 ⇒ 压在所有棋盘元素之下 */
+    scene.addMany(atmosphereSpecs());
     if (game) scene.addMany(playView(game));
     else if (!opts.play) scene.addMany(demoView());
     scene.render();

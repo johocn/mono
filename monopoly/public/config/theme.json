@@ -65,6 +65,8 @@
     { "match": "prop.*", "palette": "warm-market" },
     { "match": "prop.signTower", "palette": "papercut" },
 
+    { "match": "bg.*", "palette": "warm-market" },
+
     { "match": "board.tile.core", "palette": "warm-market" },
     { "match": "board.tile.shop", "palette": "warm-market" },
     { "match": "board.tile.chance", "palette": "night-neon" },

@@ -179,6 +179,16 @@ reg['showcase.tree'] = showcaseEntry('showcase.tree', { w: 14, d: 8, h: 30 });
 reg['showcase.lamp'] = showcaseEntry('showcase.lamp', { w: 8, d: 4, h: 28 });
 reg['showcase.mini'] = showcaseEntry('showcase.mini', { w: 160, d: 1, h: 210 });
 
+/* —— 环境层（spec §3.2 背景）：7 个 id，全部 ground 挂载 + fixed 定格台位（pass 1 底遍）——
+   尺寸只声明各自作画包围盒；台位由 AtmosphereView 的常量表给，颜色吃 config/theme.json 的 palette —— */
+reg['bg.sky'] = showcaseEntry('bg.sky', { w: 390, d: 1, h: 844 });
+reg['bg.stars'] = showcaseEntry('bg.stars', { w: 390, d: 1, h: 240 });
+reg['bg.moon'] = showcaseEntry('bg.moon', { w: 60, d: 1, h: 60 });
+reg['bg.ridge'] = showcaseEntry('bg.ridge', { w: 390, d: 1, h: 90 });
+reg['bg.street'] = showcaseEntry('bg.street', { w: 390, d: 1, h: 130 });
+reg['bg.streetLamp'] = showcaseEntry('bg.streetLamp', { w: 40, d: 1, h: 70 });
+reg['bg.lanternString'] = showcaseEntry('bg.lanternString', { w: 390, d: 1, h: 30 });
+
 // —— M5 浮层（手牌 / 卡面 / 行情 / 结算 / 角标）：全部 ground 挂载 + fixed 定格台位 ——
 reg['ui.handSlot'] = showcaseEntry('ui.handSlot', { w: 68, d: 1, h: 52 });
 reg['ui.card'] = showcaseEntry('ui.card', { w: 66, d: 1, h: 88 });

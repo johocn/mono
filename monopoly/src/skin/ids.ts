@@ -1,5 +1,5 @@
 export const NAMESPACES = [
-  'token', 'board.tile', 'board.inner', 'board.center',
+  'token', 'bg', 'board.tile', 'board.inner', 'board.center',
   'building', 'prop', 'piece', 'dice', 'card', 'fx', 'ui', 'showcase',
 ] as const;
 

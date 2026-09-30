@@ -121,6 +121,9 @@ import {
   lionStone, rooftopBox, signTower, snowPile, steamVent, stoneLantern, tree,
 } from './proc-props';
 import { showcaseGround, showcaseHud, showcaseMini, showcasePanel, showcaseSky, showcaseSkyline } from './proc-showcase';
+import {
+  lanternString, moonDisc, ridgeSilhouette, skyGradient, starField, streetBand, streetLamp,
+} from './proc-atmosphere';
 import { diceBody, diceFace, uiButton, uiDock, uiLabel, uiPanel, uiPlayerBar } from './proc-hud';
 import { uiMusicOff, uiMusicOn, uiSoundOff, uiSoundOn } from './proc-audio';
 import {
@@ -165,6 +168,13 @@ export const PROC_PRESETS: Record<string, ProcPreset> = {
   showcaseGround,
   showcaseHud,
   showcaseMini,
+  skyGradient,
+  starField,
+  moonDisc,
+  ridgeSilhouette,
+  streetBand,
+  streetLamp,
+  lanternString,
   uiDock,
   uiPanel,
   uiPlayerBar,

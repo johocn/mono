@@ -5,6 +5,7 @@ describe('ids', () => {
   it('接受注册表里各命名空间的合法 ID', () => {
     for (const id of [
       'token.gold', 'token.bg', 'token.tile.shop',
+      'bg.sky', 'bg.lanternString',
       'board.tile.shop', 'board.tile.fate.edge',
       'board.inner.deco', 'board.center.fountain',
       'building.s4.l2', 'building.s4.sign',
@@ -32,7 +33,7 @@ describe('ids', () => {
 
   it('NAMESPACES 全覆盖 spec §3.6.1 表', () => {
     expect(NAMESPACES).toEqual([
-      'token', 'board.tile', 'board.inner', 'board.center',
+      'token', 'bg', 'board.tile', 'board.inner', 'board.center',
       'building', 'prop', 'piece', 'dice', 'card', 'fx', 'ui', 'showcase',
     ]);
   });

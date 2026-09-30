@@ -103,6 +103,14 @@
     "prop.steamVent": { "kind": "proc", "preset": "steamVent", "params": {} },
     "prop.stoneLantern": { "kind": "proc", "preset": "stoneLantern", "params": {} },
 
+    "bg.sky": { "kind": "proc", "preset": "skyGradient", "params": {} },
+    "bg.stars": { "kind": "proc", "preset": "starField", "params": {} },
+    "bg.moon": { "kind": "proc", "preset": "moonDisc", "params": {} },
+    "bg.ridge": { "kind": "proc", "preset": "ridgeSilhouette", "params": {} },
+    "bg.street": { "kind": "proc", "preset": "streetBand", "params": {} },
+    "bg.streetLamp": { "kind": "proc", "preset": "streetLamp", "params": {} },
+    "bg.lanternString": { "kind": "proc", "preset": "lanternString", "params": {} },
+
     "showcase.panel": { "kind": "proc", "preset": "showcasePanel", "params": { "fill": "#0f1a18", "edge": "hsla(45,70%,55%,.5)", "radius": 16, "edgeW": 1 } },
     "showcase.sky": { "kind": "proc", "preset": "showcaseSky", "params": { "gy": 0.6, "bands": 24, "t1": 0.6, "t2": 0.85, "top": "#0d1b2a", "mid": "#16302f", "bottom": "#1e2f2a", "moonX": 0.855, "moonY": 0.3, "moonR": 13, "moon": "#e8f0ff", "moonA": 0.85, "haloF": 1.69, "haloA": 0.1 } },
     "showcase.skyline": { "kind": "proc", "preset": "showcaseSkyline", "params": { "gy": 0.6, "fill": "#131f1c", "win": "rgba(255,214,130,.5)" } },
