@@ -37,18 +37,35 @@ await expectText(page, '¥1000', '详情页-逐晚价(节假日)');
 await expectText(page, '¥880', '详情页-逐晚价(平日)');
 await page.screenshot({ path: `${OUT}/01-detail-datebar.png`, fullPage: false });
 
-// 加入购物车
+// 加入购物车 → 打开侧滑购物车面板（无独立 /cart 路由）
+// 首帧 hydration 未完成时首次点击可能落空（刚 pm2 restart 时尤甚），故按「面板是否含 共 2 晚」判定并重试；
+// 仅在面板确为「购物车是空的」时才补点「加入购物车」，避免重复加购把数量变成 2、导致金额断言失配。
 const addBtn = page.getByRole('button', { name: /加入购物车|Add to cart/ }).first();
 await addBtn.waitFor({ timeout: 15000 });
-await addBtn.click();
-
-// 购物车为页头触发的侧滑面板（无独立 /cart 路由）
 const cartTrigger = page.locator('header button:has([class*="shopping-cart"])');
-await cartTrigger.first().waitFor({ timeout: 15000 });
-await cartTrigger.first().click();
-await page.waitForSelector('[role="dialog"]', { timeout: 15000 });
-const dialog = page.locator('[role="dialog"]').last();
-await dialog.getByText('共 2 晚', { exact: false }).first().waitFor({ timeout: 15000 });
+let dialog = page.locator('[role="dialog"]').last();
+const closeCart = async () => {
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('[role="dialog"]', { state: 'hidden', timeout: 10000 }).catch(() => {});
+  await page.waitForTimeout(800);
+};
+let needAdd = true;
+for (let attempt = 1; attempt <= 3; attempt++) {
+  if (needAdd) await addBtn.click();
+  await cartTrigger.first().click();
+  await page.waitForSelector('[role="dialog"]', { timeout: 15000 });
+  dialog = page.locator('[role="dialog"]').last();
+  const ok = await dialog
+    .getByText('共 2 晚', { exact: false })
+    .first()
+    .waitFor({ state: 'visible', timeout: 10000 })
+    .then(() => true)
+    .catch(() => false);
+  if (ok) break;
+  needAdd = (await dialog.getByText('购物车是空的', { exact: false }).count()) > 0;
+  console.log(`  购物车面板未出现「共 2 晚」（第 ${attempt} 次，面板${needAdd ? '为空' : '非空'}），关闭后重试…`);
+  await closeCart();
+}
 await expectText(dialog, '共 2 晚', '购物车-晚数');
 await expectText(dialog, '1880.00', '购物车-金额');
 await expectText(dialog, '2026-10-07 至 2026-10-09', '购物车-日期区间');
@@ -266,6 +283,58 @@ console.log(`${sizeOk ? 'PASS' : 'FAIL'}  06-checkout-normal-product.png 尺寸�
 if (!sizeOk) failures.push('尺寸 06-checkout-normal-product.png');
 
 await ctx2.close();
+
+// ============ 商品卡价格本地化：¥ 前缀（改前为「168.00 CNY」且币种缺省 EUR）============
+const CAT = process.env.CAT_SLUG || '休闲娱乐';
+// 卡片容器口径因页而异：分类页走 ProductCard（<article>），首页装修楼层走 JdProductGrid /
+// GoodsCardBlock（NuxtLink 卡片，无 <article>）→ 统一按「卡片根 = article 或指向商品的链接」取样。
+const CARD_SEL = 'article, a[href*="/product/"]';
+const cardPrices = () =>
+  page.evaluate((sel) => {
+    const out = [];
+    for (const root of document.querySelectorAll(sel)) {
+      if (out.length >= 6) break;
+      // 首页轮播/多屏滑片会同时存在不可见副本，只取真实可见卡片
+      const r = root.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8) continue;
+      if (getComputedStyle(root).visibility === 'hidden') continue;
+      const hit = [...root.querySelectorAll('span, p, b, strong')]
+        .map((s) => (s.textContent || '').trim())
+        .filter((t) => t.length <= 24 && /\d/.test(t) && /(¥|CN¥|CNY|EUR|USD)/.test(t));
+      if (hit.length) out.push(hit[0]);
+    }
+    return out;
+  }, CARD_SEL);
+
+for (const [label, url] of [['分类页', `${BASE}/category/${encodeURIComponent(CAT)}`], ['首页', BASE]]) {
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  await page.locator(`${CARD_SEL}:visible`).first().waitFor({ timeout: 30000 });
+  await page.waitForTimeout(1000);
+  const prices = await cardPrices();
+  console.log(`  ${label}商品卡价格:`, JSON.stringify(prices));
+  // 断言：卡片价格不得出现裸币种代码（改前形如「168.00 CNY」/ 缺省 EUR），且至少一条带 ¥ 符号
+  const noBareCode = prices.every((p) => !/(CNY|EUR|USD)/.test(p));
+  const ok = prices.length > 0 && noBareCode && prices.some((p) => p.includes('¥'));
+  console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}-价格本地化：无裸币种代码且带 ¥ 符号（改前形如「168.00 CNY」）`);
+  if (!ok) failures.push(`${label}-价格本地化`);
+  // 截图要能看到卡片价格：首页首屏只有轮播 / 金刚区，需滚到「首个含价格的可见卡片」再截（留 80px 上边距）
+  await page.evaluate((sel) => {
+    for (const root of document.querySelectorAll(sel)) {
+      const r = root.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8) continue;
+      if (getComputedStyle(root).visibility === 'hidden') continue;
+      const hit = [...root.querySelectorAll('span, p, b, strong')].some(
+        (s) => /\d/.test(s.textContent || '') && /(¥|CN¥|CNY|EUR|USD)/.test(s.textContent || ''),
+      );
+      if (hit) {
+        window.scrollTo({ top: window.scrollY + r.top - 80, behavior: 'instant' });
+        return;
+      }
+    }
+  }, CARD_SEL);
+  await page.waitForTimeout(600);
+  await page.screenshot({ path: `${OUT}/${label === '首页' ? '08-home-price' : '07-category-price'}.png`, fullPage: false });
+}
 
 await browser.close();
 console.log('screenshots →', OUT);

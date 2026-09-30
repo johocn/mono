@@ -1825,3 +1825,32 @@ git commit -m "test(hotel): 酒店订单行 e2e 脚本、手机视口截图与�
 - 前端 `pnpm build` 成功；`node scripts/deploy.mjs` 部署 → 生产 `pm2 restart nshop`（online）
 - 生产实测（390×844 dpr=2，`scripts/_shot-hotel-checkout.mjs` 新增页头段）：结算页/首页 `scrollWidth ≤ 390`、logo 可用宽 ≥80px，全部 PASS；酒店行与普通商品行既有断言无回归
 - 手册 `docs/manual/product-detail/index.md`：6.2 页头验收点与 05 图 alt 更新、6.6 i18n 已知边界改写、新增 6.10
+
+### 收口补记 · 商品卡价格本地化 + 币种缺省修正（2026-10-01）
+
+计划外追加。起因：390px 巡检顺带核对首页/分类页商品卡时发现价格渲染为 `168.00 CNY`（值 + 空格 + 裸币种代码），与详情页 / 购物车 / 结算页的 `¥168.00` 两套写法并存。
+
+根因：
+- `layers/base/app/components/product/ProductCard.vue` 价格用模板字符串硬拼 `${值} ${币种}`，未走货币本地化格式化 → 与站点语言无关（浏览器语言为英文时渲染成 `CNY 168.00`）；
+- 同一处币种缺省值写成 `"EUR"`（`product.currencyCode ?? "EUR"`），本店结算币种为 CNY，字段缺失时会显示欧元；
+- 同源问题：`pages/product/[slug].vue` 的 Schema.org `offers.priceCurrency` 缺省值同为 `"EUR"`（结构化数据币种错误影响搜索引擎价格展示）。
+
+改动：
+
+| 文件 | 改前 | 改后 |
+| --- | --- | --- |
+| `components/product/ProductCard.vue` L26-40 | `${值} ${币种}` + `?? "EUR"` | 复用 `utils/format-money.ts` 的 `formatMoney(值, 币种, locale.value)`；缺省改 `"CNY"`；`useI18n()` 增取 `locale` |
+| `pages/product/[slug].vue` L165 | `priceCurrency: ... ?? "EUR"` | `?? "CNY"` |
+
+验证：
+- 各语言输出（`formatMoney(16800,"CNY",locale)`）：`zh-CN→¥168.00`、`en-US→CN¥168.00`、`ja-JP→元 168.00`、`de-DE→168,00 CN¥`
+- 前端 `pnpm build` 成功、`pnpm typecheck` 保持 18 条既有基线（无新增）；`node scripts/deploy.mjs` 部署 → 生产 `pm2 restart nshop`（online）
+- 生产实测（`scripts/_shot-hotel-checkout.mjs` 新增价格段）：分类页 `["¥168.00","¥880.00","¥688.00","¥198.00"]`、首页 `["¥168.00 ¥215.00","¥880.00 ¥1120.00","¥688.00 ¥880.00","¥198.00 ¥255.00","¥20.00 ¥35.00","¥0.00 ¥10.00"]`，均无裸币种代码，PASS；截图 `07-category-price.png` / `08-home-price.png`（780×1688）
+- 手册 `docs/manual/product-detail/index.md` 新增 6.11
+
+脚本可重入性一并加固（`scripts/_shot-hotel-checkout.mjs`）：
+- 价格段取样口径由 `article` 改为「卡片根 = `article` 或 `a[href*="/product/"]`」：分类页卡片根为 `ProductCard` 的 `<article>`，首页装修楼层为 `JdProductGrid` / `GoodsCardBlock` 的 NuxtLink 卡片（无 `<article>`），原结构性定位在首页必然超时；并只取真实可见卡片（首页轮播含不可见副本）。
+- 加购 → 开购物车面板段加重试：首帧 hydration 未完成时首次点击可能落空，按「面板是否含 `共 2 晚`」判定，且仅在面板确为「购物车是空的」时才补点加购，避免重复加购把数量变成 2 致金额断言失配。
+- 价格段截图前滚动到「首个含价格的可见卡片」再截，否则首页首屏（轮播 / 金刚区）看不到价格，截图无法作为证据。
+
+已知边界（未处理，待决策）：首页「为你推荐」区块在 t2 商品数少时，`useCuratedGoods.ts` 去重（排除同页「热门商品」已展示项）后可能为空 → `GoodsCardBlock.vue` 渲染「当前城市/配送方式下暂无可用商品」空态，措辞具有误导性。候选修法：A 去重后为空则回退未去重列表；B 区块为空时整块隐藏。属首页数据契约变更，未在本轮改动。
