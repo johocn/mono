@@ -276,8 +276,11 @@ facts.fixMove = await fixPage.evaluate(() => ({
 }));
 gate.fixMove = facts.fixMove.pos[0] > 0;   // 以「人物确实前进了」为准（不依赖能否抓到中间帧）
 
-/* 09）继续推进（AI 回合走 skipRest）直到落事件格、浮层展开，再截图 */
-for (let i = 0; i < 80; i += 1) {
+/* 09）继续推进（AI 回合走 skipRest）直到落事件格、浮层展开，再截图
+ * 预算 300 次：真人一回合要 4 次点击（掷骰/前进/结算/结束）+ 每轮 3 个 AI 回合，
+ * 约 7 次/轮；seed=20260928 下真人首次落到命运/机会格在第 14 轮（≈98 次），
+ * 故 80 次预算必然跑不到，曾导致 fixEvent 恒 false。 */
+for (let i = 0; i < 300; i += 1) {
   const st = await fixPage.evaluate(() => {
     const m = window.__monoMain;
     const s = m.game.state;
