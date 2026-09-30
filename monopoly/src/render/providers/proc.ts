@@ -6,6 +6,7 @@ import { ptsToPoly } from '../paint';
 import type { Box, ProviderSpec } from '../../skin/types';
 import { fountain } from './proc-fountain';
 import { pawn } from './proc-pawn';
+import { bubble } from './proc-bubble';
 
 /** preset 的文字输出请求（Graphics 画不了旋转文字，统一交给 Scene 落地） */
 export interface TextRequest {
@@ -139,6 +140,7 @@ export const PROC_PRESETS: Record<string, ProcPreset> = {
   builtin,
   fountain,
   pawn,
+  bubble,
   shop,
   sign,
   stall,

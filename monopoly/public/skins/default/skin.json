@@ -131,6 +131,7 @@
     "ui.stockChart": { "kind": "proc", "preset": "uiStockChart", "params": {} },
     "ui.settleRow": { "kind": "proc", "preset": "uiSettleRow", "params": {} },
     "ui.badge": { "kind": "proc", "preset": "uiBadge", "params": {} },
+    "ui.bubble": { "kind": "proc", "preset": "bubble", "params": {} },
     "ui.tradeBuy": { "kind": "proc", "preset": "uiButton", "params": { "btnFs": 14 } },
     "ui.tradeSell": { "kind": "proc", "preset": "uiButton", "params": { "btnFs": 14 } },
     "ui.panelClose": { "kind": "proc", "preset": "uiButton", "params": { "btnFs": 12, "btnR": 7 } },

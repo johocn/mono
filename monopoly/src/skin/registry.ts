@@ -1,4 +1,4 @@
-import { AUDIO_KEY_SIZE } from './layout';
+import { AUDIO_KEY_SIZE, BUBBLE_H, BUBBLE_W } from './layout';
 import type { RegistryEntry } from './types';
 
 export const BUILDING_HEIGHTS: Record<number, number> = { 1: 26, 2: 46, 3: 72 };
@@ -112,11 +112,14 @@ reg['prop.clothesline'] = prop('clothesline', { w: 30, d: 2, h: 12 }, 0.9);
 reg['prop.steamVent'] = prop('steamVent', { w: 12, d: 7, h: 10 }, 0, 'ground');
 reg['prop.stoneLantern'] = prop('stoneLantern', { w: 8, d: 5, h: 20 }, 0, 'ground');
 
-// —— 玩家棋子 4 色（Q 版小朋友：二头身，box 放大到 12×6×20 < 格宽 48） ——
+/* —— 玩家棋子 4 色（Q 版小朋友：二头身，box 放大到 12×6×20 < 格宽 48）——
+   盒高同时是「头顶气泡」的锚定基准（BubbleView 读这一份，故不另存第二处） */
+export const PAWN_BOX = { w: 12, d: 6, h: 20 };
+
 for (let p = 1; p <= 4; p++) {
   reg[`piece.p${p}`] = {
     id: `piece.p${p}`,
-    box: { w: 12, d: 6, h: 20 },
+    box: PAWN_BOX,
     anchor: [0.5, 0.5], baseline: 0, mount: 'ground',
     providerKinds: ['proc', 'image', 'atlas', 'frames'],
   };
@@ -201,6 +204,9 @@ reg['ui.badge'] = showcaseEntry('ui.badge', { w: 120, d: 1, h: 26 });
 reg['ui.tradeBuy'] = showcaseEntry('ui.tradeBuy', { w: 150, d: 1, h: 38 });
 reg['ui.tradeSell'] = showcaseEntry('ui.tradeSell', { w: 150, d: 1, h: 38 });
 reg['ui.panelClose'] = showcaseEntry('ui.panelClose', { w: 76, d: 1, h: 28 });
+/* 停留事件头顶气泡（spec §6.7）：棋盘上的「即时事件图」，与底部地块卡一上一下分工；
+   台位 = 当前玩家棋子头顶上方 BUBBLE_GAP（BubbleView 给 fixed），不进任何命中区 */
+reg['ui.bubble'] = showcaseEntry('ui.bubble', { w: BUBBLE_W, d: 1, h: BUBBLE_H });
 
 export const REGISTRY: Record<string, RegistryEntry> = reg;
 

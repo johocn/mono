@@ -250,5 +250,6 @@
   "ui.badge",
   "ui.tradeBuy",
   "ui.tradeSell",
-  "ui.panelClose"
+  "ui.panelClose",
+  "ui.bubble"
 ]

@@ -23,26 +23,40 @@ export interface PawnState {
   active?: boolean;
 }
 
+/** 同格错开后的落位（`pawnSpecs` 与头顶气泡共用同一分组口径，避免两处漂移） */
+export interface PawnPlace {
+  pw: PawnState;
+  c: number;
+  r: number;
+  pawnIndex: number;
+}
+
+/**
+ * 按格分组 → 组内序号。棋子的横向错开由 Scene 按 `pawnIndex` 算，
+ * 视图侧只负责「谁和谁同格、谁排第几」。
+ */
+export function pawnPlaces(pawns: PawnState[]): PawnPlace[] {
+  const byCell = new Map<string, PawnState[]>();
+  for (const pw of pawns) {
+    const k = `${pw.c},${pw.r}`;
+    byCell.set(k, [...(byCell.get(k) ?? []), pw]);
+  }
+  const out: PawnPlace[] = [];
+  for (const [, group] of byCell) {
+    const { c, r } = group[0];
+    group.forEach((pw, pawnIndex) => out.push({ pw, c, r, pawnIndex }));
+  }
+  return out;
+}
+
 /**
  * 生成棋子 spec（第三遍）：同格四人靠 spec.pawnIndex 让 Scene 横向错开，
  * 自己不算坐标（spec §3.7.1「渲染层禁止直接画」）。
  * 造型（`params.style`）按 pid 写在 skin.json（p1 短发 / p2 双马尾 / p3 小帽 / p4 丸子头）。
  */
 export function pawnSpecs(pawns: PawnState[]): ElementSpec[] {
-  const byCell = new Map<string, PawnState[]>();
-  for (const pw of pawns) {
-    const k = `${pw.c},${pw.r}`;
-    byCell.set(k, [...(byCell.get(k) ?? []), pw]);
-  }
-  const out: ElementSpec[] = [];
-  for (const [, group] of byCell) {
-    const { c, r } = group[0];
-    group.forEach((pw, i) => {
-      out.push({
-        id: `piece.p${pw.index + 1}`, slot: null, c, r, pawnIndex: i,
-        state: { owner: pw.index + 1, mood: pw.mood ?? 'calm', active: pw.active === true },
-      });
-    });
-  }
-  return out;
+  return pawnPlaces(pawns).map(({ pw, c, r, pawnIndex }) => ({
+    id: `piece.p${pw.index + 1}`, slot: null, c, r, pawnIndex,
+    state: { owner: pw.index + 1, mood: pw.mood ?? 'calm', active: pw.active === true },
+  }));
 }

@@ -2,10 +2,12 @@ import { createStage } from './render/stage';
 import { createDebugPanel } from './debug/panel';
 import { loadSkin } from './skin/skinLoader';
 import { Scene } from './render/Scene';
+import type { PlacementOpts } from './render/Scene';
 import { boardCells, boardTileSpecs } from './render/BoardView';
 import { innerSpecs, fountainSpec } from './render/InnerView';
 import { atmosphereSpecs } from './render/AtmosphereView';
-import { PAWN_COUNT, pawnSpecs, type PawnMood } from './render/PieceView';
+import { PAWN_COUNT, pawnSpecs, type PawnMood, type PawnState } from './render/PieceView';
+import { bubbleOfStep, bubbleSpecs, type BubbleContent } from './render/BubbleView';
 import { buildingSpecs, slotLevelsOf, streetPropSpecs } from './render/BuildingView';
 import { showcaseSpecs } from './render/ShowcaseView';
 import { drawLabels } from './render/LabelView';
@@ -27,7 +29,7 @@ import { SHARE_VERSION } from './data/share';
 import { FATE_DECK, type ItemCardKind } from './data/cards';
 import { DEMO_OWNER } from './data/board';
 import { STOCK_TILE_INDEX } from './data/stocks';
-import { BUILDING_SCALE, BUILDING_Y_OFFSET, DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED, LABEL_GROUND } from './skin/layout';
+import { BUILDING_SCALE, BUILDING_Y_OFFSET, BUBBLE_HOLD_MS, DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED, LABEL_GROUND } from './skin/layout';
 import { SHOP_DEFAULTS, parseShopConfig, type ShopConfig } from './skin/shop-config';
 import { allElementIds } from './skin/registry';
 import {
@@ -178,6 +180,11 @@ export async function boot(): Promise<void> {
   const stage = await createStage(canvas, { bg: BG_FALLBACK, dpr: window.devicePixelRatio || 2 });
   /* 地块序号 → 建筑层级（与楼体、楼顶名牌同源一份） */
   const slotLevels = slotLevelsOf();
+  /* 台位（唯一一份）：Scene 构造与「气泡锚在棋子头顶」共用同一组参数 */
+  const PLACEMENT: PlacementOpts = {
+    pawnGap: 9.6, pawnFrontDy: 1.45, pawnScale: 0.62,
+    buildingScale: BUILDING_SCALE, buildingYOffset: BUILDING_Y_OFFSET,
+  };
   const scene = new Scene({
     layers: stage.layers,
     geo,
@@ -185,10 +192,8 @@ export async function boot(): Promise<void> {
     instantiateDeps: {
       skin, defaultSkin, overrides: shops.overrides, theme: themePatch, slotLevels,
     },
-    placement: {
-      pawnGap: 9.6, pawnFrontDy: 1.45, pawnScale: 0.62,
-      buildingScale: BUILDING_SCALE, buildingYOffset: BUILDING_Y_OFFSET,
-    },
+    /* 台位（唯一一份）：Scene 的落位与「气泡锚在棋子头顶」共用，改这里即两处同步 */
+    placement: PLACEMENT,
     assetBase: './skins',
     skinIds: skinPackIds,
   });
@@ -208,6 +213,22 @@ export async function boot(): Promise<void> {
   /** 无动效的动作（如进监狱）也能出表情：由落库事件兜底 */
   const MOOD_BY_EVENT = (e: { kind: string } | null | undefined): PawnMood => (e?.kind === 'jail' ? 'sad' : 'calm');
   let mood: PawnMood = 'calm';
+  /** 停留事件气泡（spec §6.7）：一次性出现、`fx` 结束时消失（与 mood 同一生命周期） */
+  let bubble: BubbleContent | null = null;
+  /** 无动效的停留事件（如进监狱）没有 `fx` 结束回调可用，靠这个定时器收起气泡 */
+  let bubbleTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * 气泡的唯一起落口：`holdMs > 0` 走定时器收起（无动效事件），`0` 交给 `fx.play` 的结束回调。
+   * 两者互斥——先清掉上一枚定时器，避免上一枚把新气泡提前抹掉。
+   */
+  const setBubble = (content: BubbleContent | null, holdMs: number): void => {
+    if (bubbleTimer !== null) { clearTimeout(bubbleTimer); bubbleTimer = null; }
+    bubble = content;
+    if (content && holdMs > 0) {
+      bubbleTimer = setTimeout(() => { bubbleTimer = null; bubble = null; paint(); }, holdMs);
+    }
+  };
 
   const ownerOf = (i: number): number | null => DEMO_OWNER[i] ?? null;
 
@@ -250,17 +271,20 @@ export async function boot(): Promise<void> {
   const playView = (g: Game): ElementSpec[] => {
     const alive = g.state.players.filter((p) => !p.bankrupt);
     const curId = currentPlayer(g.state).id;
+    const pawnStates: PawnState[] = alive.map((p) => ({
+      index: p.id - 1, c: cells[p.pos].c, r: cells[p.pos].r,
+      mood: p.id === curId ? mood : 'calm',
+      active: p.id === curId,
+    }));
     return [
       ...boardTileSpecs(currentPlayer(g.state).pos, ownedOf),
       ...innerSpecs(),
       fountainSpec(),
       ...buildingSpecs({ ownerOf: ownedOf, brandOf: shops.brandAt }),
       ...streetPropSpecs(),
-      ...pawnSpecs(alive.map((p) => ({
-        index: p.id - 1, c: cells[p.pos].c, r: cells[p.pos].r,
-        mood: p.id === curId ? mood : 'calm',
-        active: p.id === curId,
-      }))),
+      ...pawnSpecs(pawnStates),
+      /* 停留事件气泡（spec §6.7）：当前玩家棋子头顶，跟 pawnSpecs 同一分组口径 */
+      ...bubbleSpecs(pawnStates, bubble, geo, PLACEMENT),
       /* spec §6 版式 A：中部 = 当前玩家落点地块的橱窗（复用 B 版式构图；随 paint() 同步） */
       ...showcaseSpecs({
         slot: currentPlayer(g.state).pos, owner: ownedOf(currentPlayer(g.state).pos), play: true, brandOf: shops.brandAt,
@@ -303,10 +327,19 @@ export async function boot(): Promise<void> {
   /**
    * 动作 → 状态先落库（同步）→ 立即重画（权威画面）→ 动效只回放。
    * `?nofx` / `fx.speed(999)` 时 play() 瞬间到终帧，等价无动画。
+   * `bubbleOf` 从动作结果（`applyStep` 返回值）推气泡文案，随 fx 结束清空（spec §6.7）。
    */
-  const runAction = (fn: () => unknown, ctxOf: (r: never) => FxContext | null, withFx = true): void => {
+  const runAction = (
+    fn: () => unknown,
+    ctxOf: (r: never) => FxContext | null,
+    withFx = true,
+    bubbleOf?: (r: unknown) => BubbleContent | null,
+  ): void => {
     const result = fn();
     const ctx = withFx ? ctxOf(result as never) : null;
+    /* 气泡文案与动效同源：有动效 → 随 `fx` 结束收起；无动效（如进监狱）→ 定时器兜底收起 */
+    const content = withFx ? (bubbleOf?.(result) ?? null) : null;
+    setBubble(content, ctx ? 0 : BUBBLE_HOLD_MS);
     mood = ctx ? (MOOD_BY_FX[ctx.kind] ?? 'calm') : MOOD_BY_EVENT(game?.state.lastEvent);
     if (!ctx) {
       fxPending = false;
@@ -317,7 +350,12 @@ export async function boot(): Promise<void> {
     if (sfxOn) audio.play(ctx.kind);
     fxPending = true;
     paint();
-    fx.play(ctx, () => { fxPending = false; mood = 'calm'; paint(); });
+    /* 动效元素在 `paint()` 之后才追加进 `fx` 层，必然盖住正好落在棋子头顶的气泡（买地印章 / 金币）：
+       先把气泡容器留一手（行号最大 ⇒ 此刻恒为 `fx` 层最后一项），`play()` 之后重挂回最上（spec §6.7）。 */
+    const fxLayer = stage.layers.fx;
+    const bubbleTop = bubble ? fxLayer.children[fxLayer.children.length - 1] : null;
+    fx.play(ctx, () => { fxPending = false; mood = 'calm'; setBubble(null, 0); paint(); });
+    if (bubbleTop) fxLayer.addChild(bubbleTop);
   };
 
   /** 落格结算结果 → 动画上下文（纯映射；位置取自 iso） */
@@ -377,7 +415,13 @@ export async function boot(): Promise<void> {
   const dispatch = (step: AiStep, withFx = true): void => {
     const g = game;
     if (!g) return;
-    runAction(() => applyStep(g, step), (r: never) => ctxOfStep(step, r as unknown), withFx);
+    runAction(
+      () => applyStep(g, step),
+      (r: never) => ctxOfStep(step, r as unknown),
+      withFx,
+      /* 气泡四态（spec §6.7）：文案取「动作落库后」的所在格短名 + 本次抽卡名 */
+      (r: unknown) => bubbleOfStep(step, r, shops.shortAt(currentPlayer(g.state).pos), g.state.lastDraw?.title ?? null),
+    );
   };
 
   /** HUD 点击 → AiStep（`ai:fast` / `ai:skip` / `audio:*` 已在回调里拦截，不会传到这里） */

@@ -80,6 +80,11 @@ export const TILE_CARD_H = 76;
 export const BUBBLE_W = 100;
 export const BUBBLE_H = 44;
 export const BUBBLE_GAP = 8;
+/* 气泡在 pass 4 内的行号：必须大于 HUD（0..14）与浮层（0..12）的最大行号，
+   否则棋盘下缘的棋子头顶会被底坞 / 浮层盖住（下缘几格正好落在浮层覆盖区） */
+export const BUBBLE_DEPTH = 20;
+/** 无动效的停留事件（如进监狱）没有 `fx` 结束回调可用，气泡靠这个时长自动收起 */
+export const BUBBLE_HOLD_MS = 1100;
 
 /* —— M5 浮层（手牌 / 股票盘 / 抽卡翻牌 / 结算面板；元素一律 pass 4 + 定格台位） —— */
 /* 手牌行：5 槽横排，落在底坞（606）之上 */
