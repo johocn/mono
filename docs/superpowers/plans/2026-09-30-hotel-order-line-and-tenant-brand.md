@@ -371,6 +371,90 @@ git commit -m "feat(hotel): 注册 OrderLine 入住日期与晚数 customFields"
 
 ---
 
+### Task 2.5: 后端 — OrderLine 酒店字段列补齐 migration（计划缺口补充）
+
+**背景（计划外补充）：** `dev-config.ts` 的 `dbConnectionOptions.synchronize = false`（L210），Vendure 不会自动为新增 customFields 建列。若缺此步，插件启动后 `order_line` 表无 `customFieldsHotelcheckin` 等列，查询订单行将报 `column does not exist`。仓库既有同类补列范式：`src/migrations/migrate-tenant-member-column.ts`、`migrate-collection-icon.ts`（`OnApplicationBootstrap` + `hasColumn` → `addColumn`，幂等、失败不阻塞启动）。
+
+**Files:**
+- Create: `d:\zhao\vendure\packages\cjk-plugin\src\migrations\migrate-hotel-order-line-columns.ts`
+- Modify: `d:\zhao\vendure\packages\cjk-plugin\src\migrations\index.ts`（追加 export）
+- Modify: `d:\zhao\vendure\packages\cjk-plugin\src\plugin.ts`（import 行 ~L74 追加；providers 列表 ~L212 之后追加）
+
+- [ ] **Step 1: 创建 migration**
+
+列名规则：Vendure 自定义字段列名 = `customFields` + 字段名（首字母大写、其余小写），例如 `stockLocationId` → `customFieldsStocklocationid`。
+
+```ts
+// 确保 order_line 表存在酒店订单行自定义字段列（入住/离店/晚数）。
+// Vendure 自定义字段列名规则 = customFields + 首字母大写字段名，其余小写：
+//   hotelCheckIn → customFieldsHotelcheckin
+//   hotelCheckOut → customFieldsHotelcheckout
+//   hotelNights → customFieldsHotelnights
+// 生产（PostgreSQL）与本地开发（SQLite）均可能关闭 synchronize，故此 migration 幂等地补列；
+// 失败仅 console.error，不阻塞启动。
+import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { InjectConnection } from '@nestjs/typeorm';
+import { Connection, TableColumn } from 'typeorm';
+
+@Injectable()
+export class HotelOrderLineColumnMigration implements OnApplicationBootstrap {
+    constructor(@InjectConnection() private connection: Connection) {}
+
+    async onApplicationBootstrap() {
+        try {
+            const tableName = this.connection.getMetadata('OrderLine').tableName;
+            const qr = this.connection.createQueryRunner();
+            try {
+                const ensure = async (name: string, type: string) => {
+                    if (!(await qr.hasColumn(tableName, name))) {
+                        await qr.addColumn(tableName, new TableColumn({ name, type, isNullable: true }));
+                        // eslint-disable-next-line no-console
+                        console.log(`[HotelOrderLineColumnMigration] added ${tableName}.${name}`);
+                    }
+                };
+                await ensure('customFieldsHotelcheckin', 'varchar(255)');
+                await ensure('customFieldsHotelcheckout', 'varchar(255)');
+                await ensure('customFieldsHotelnights', 'integer');
+            } finally {
+                await qr.release();
+            }
+        } catch (e: any) {
+            // 补列失败不阻塞启动，等待下次启动重试
+            // eslint-disable-next-line no-console
+            console.error('[HotelOrderLineColumnMigration] failed to ensure columns:', e?.message);
+        }
+    }
+}
+```
+
+- [ ] **Step 2: 在 `src/migrations/index.ts` 追加 export**
+
+```ts
+export { HotelOrderLineColumnMigration } from './migrate-hotel-order-line-columns';
+```
+
+- [ ] **Step 3: 在 `src/plugin.ts` 注册 provider**
+
+3a. L74 的 `import { ... } from './migrations';` 大括号内追加 `HotelOrderLineColumnMigration`。
+
+3b. providers 列表中（`CollectionIconMigration,` 之后）追加：
+
+```ts
+        HotelOrderLineColumnMigration,
+```
+
+- [ ] **Step 4: 类型检查并提交**
+
+Run（cwd `d:\zhao\vendure\packages\cjk-plugin`）：`npm run build`
+Expected: 编译通过、无 TS 报错
+
+```bash
+git add packages/cjk-plugin/src/migrations/migrate-hotel-order-line-columns.ts packages/cjk-plugin/src/migrations/index.ts packages/cjk-plugin/src/plugin.ts
+git commit -m "feat(hotel): 幂等补 order_line 酒店订单行字段列"
+```
+
+---
+
 ### Task 3: 后端 — 酒店订单行单价计价策略
 
 **Files:**
@@ -1557,8 +1641,9 @@ const assertions = [
 const boxes = await gql(`query { orderBoxes { lines { orderLineId isHotel hotelCheckIn hotelCheckOut hotelNights productSlug hotelNightly { date priceCent type } } } }`);
 const boxLine = boxes.orderBoxes.flatMap(b => b.lines).find(l => l.hotelCheckIn === CHECK_IN);
 assertions.push(['orderBoxes.isHotel=true', boxLine?.isHotel === true]);
-assertions.push(['逐晚 02-14=100000/holiday', boxLine?.hotelNightly?.[0]?.priceCent === 100000 && boxLine.hotelNightly[0].type === 'holiday']);
-assertions.push(['逐晚 02-15=88000', boxLine?.hotelNightly?.[1]?.priceCent === 88000]);
+// 真实数据：02-14（周六，非节假日）取 basePriceCent 88000；02-15 命中春节 holiday 段 = 100000
+assertions.push(['逐晚 02-14=88000/weekend', boxLine?.hotelNightly?.[0]?.priceCent === 88000 && boxLine.hotelNightly[0].type === 'weekend']);
+assertions.push(['逐晚 02-15=100000/holiday', boxLine?.hotelNightly?.[1]?.priceCent === 100000 && boxLine.hotelNightly[1].type === 'holiday']);
 assertions.push(['productSlug 非空（供修改日期跳回）', !!boxLine?.productSlug]);
 
 let failed = 0;
@@ -1660,5 +1745,12 @@ git commit -m "test(hotel): 酒店订单行 e2e 脚本、手机视口截图与�
 
 ## 执行前必做
 
-1. 核查「国信南山温泉节假日房间」各变体的 `trackInventory` / 库存设置：若开启库存追踪，先在后台关闭或把库存设足（否则晚数会被 `constrainQuantityToSaleable` 截断为 `InsufficientStockError`）。
-2. 记录酒店变体 ID 与商品 slug，供 Task 13 的 e2e 与截图脚本使用。
+1. ~~核查「国信南山温泉节假日房间」各变体的 `trackInventory` / 库存设置~~ **已完成（2026-09-30）**：3 个 `hotelRoomConfig` 非空变体（id 58 / 64 / 69）原本 `trackInventory = 'TRUE'`，经用户确认已改为 `'FALSE'`（关闭库存追踪）；备份表 `_bak_hotel_trackinventory_20260930`（生产库 vendure）。原因：晚数即数量后，「件数库存」既会截断晚数（`constrainQuantityToSaleable` → `InsufficientStockError`），也会被逐晚扣减，语义不再成立。
+2. **记录酒店变体 ID 与商品 slug**（供 Task 13 e2e/截图）：
+   - 国信南山温泉节假日房间：variantId `58`，product slug `国信南山温泉节假日房间`，basePriceCent `88000`，minNights 1 / maxNights 30
+   - 国信南山温泉工作日房间（验收商品-图片库存11351）：variantId `64`，basePriceCent `68800`
+   - 酒店测试-豪华套房（hotel-suite-test）：variantId `69`，basePriceCent `88800`
+   - t2 渠道 token：`66ruvnhh34svhckaa2i`；线上 Shop API：`http://39.97.54.5/shop-api`（服务器 API_PORT=3020）
+3. **补充缺口**：本仓库 `synchronize: false`，新增 OrderLine customFields 必须配套补列 migration（见 Task 2.5），否则启动后查询订单行报 `column does not exist`。
+4. **节假日上浮数据（已按用户确认配置，2026-09-30）**：变体 58 的 `hotelRoomConfig` 原本**没有 `priceCalendar`**，故「1000元」在数据中并不存在、无法复现用户场景。已给其补 `priceCalendar = [{"type":"holiday","priceCent":100000,"dates":["2026-02-15"…"2026-02-22"]}]`（依据国务院办公厅《关于2026年部分节假日安排的通知》：2026 春节 2/15–2/23 放假，2/14 为调休上班日）。备份表 `_bak_hotelroomconfig_20260930`（生产库 vendure）。`basePriceCent` 88000 / minNights 1 / maxNights 30 未改动。
+   - 由此 Task 13 验证口径为：**02-14（周六，非节假日）¥880 + 02-15（春节）¥1000 = ¥1880，均价 ¥940**（合计与设计文档一致，仅逐晚顺序互换）。

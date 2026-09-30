@@ -187,22 +187,27 @@
 
 - 选择入住/离店日期后：**晚数 = 离店 − 入住**（入住当日计第 1 晚），并作为下单数量 `quantity`
 - 单价 = 逐晚价格合计 ÷ 晚数；逐晚价格类型判定优先级：`custom > holiday > weekend > weekday`
-- 例（e2e 口径）：入住 `2026-02-14`、离店 `2026-02-16`（2 晚）→ `quantity=2`、`unitPriceWithTax=94000`、`linePriceWithTax=188000`；逐晚 `2026-02-14=88000/weekend`、`2026-02-15=100000/holiday`
+- 例（e2e 默认口径）：入住 `2026-02-14`、离店 `2026-02-16`（2 晚）→ `quantity=2`、`unitPriceWithTax=94000`、`linePriceWithTax=188000`；逐晚 `2026-02-14=88000/weekend`、`2026-02-15=100000/holiday`
+- 例（C 端可复现口径，即本文截图口径）：入住 `2026-10-07`、离店 `2026-10-09`（2 晚）→ `quantity=2`、`unitPriceWithTax=94000`、`linePriceWithTax=188000`；逐晚 `2026-10-07=100000/holiday`（国庆）、`2026-10-08=88000/weekday`。即「一晚 1000、一晚 880，合计 1880」
 
 ### 6.2 C 端验收点（手机视口 390×844 dpr=2）
 
-![详情页：入住/离店日期条 + 逐日计价 + 预估总价](../shots/2026-09-30-hotel-orderline/01-detail-datebar.png)
+> 截图口径：入住 `2026-10-07`、离店 `2026-10-09`（2 晚），即用户报的「节假日上浮、一晚 1000 一晚 880」场景。
+> 录图脚本 `scripts/_shot-hotel-checkout.mjs`（默认指向生产 t2），脚本内对页面文本做断言，断言失败退出码非 0。
 
-![购物车：酒店行显示「共 N 晚 · 起止日期」与修改日期/删除](../shots/2026-09-30-hotel-orderline/02-cart-hotel-line.png)
+![详情页：入住/离店日期条（共 2 晚）+ 逐日计价（10-07 节假日 ¥1000 / 10-08 ¥880）+ 预估总价 ¥1880](../shots/2026-09-30-hotel-orderline/01-detail-datebar.png)
 
-![结算页（折叠）：酒店行显示晚数与日期区间](../shots/2026-09-30-hotel-orderline/03-checkout-collapsed.png)
+![购物车：酒店行显示「共 2 晚 · 2026-10-07 至 2026-10-09」与 1880.00 CNY，有修改日期/删除、无步进器](../shots/2026-09-30-hotel-orderline/02-cart-hotel-line.png)
 
-![结算页（展开逐晚明细）：每晚日期 + 类型 + 价格](../shots/2026-09-30-hotel-orderline/04-checkout-expanded.png)
+![结算页（折叠）：酒店行显示「共 2 晚」+「逐晚明细 ▾」+ 行金额 ¥1880.00](../shots/2026-09-30-hotel-orderline/03-checkout-collapsed.png)
+
+![结算页（展开逐晚明细）：明细块独占整行，10-07 节假日 ¥1000.00 / 10-08 ¥880.00 / 住宿合计 ¥1880.00](../shots/2026-09-30-hotel-orderline/04-checkout-expanded.png)
 
 ![页头品牌去重：品牌位仅一个标识，不再重复渲染租户名](../shots/2026-09-30-hotel-orderline/05-header-brand.png)
 
-- 详情页：日期条可改期；底部「加入购物车/立即购买」受库存与晚数范围校验
-- 购物车/结算/订单：酒店行统一显示「共 N 晚 · YYYY-MM-DD 至 YYYY-MM-DD」，结算页可展开「逐晚明细」
+- 详情页：日期条可改期；「逐日计价」逐晚列出日期 + 日类型 + 价格，底部「预估总价 / 日均价」；加入购物车/立即购买受库存与晚数范围校验
+- 购物车/结算/订单：酒店行统一显示「共 N 晚 · YYYY-MM-DD 至 YYYY-MM-DD」，**不显示单价、无数量步进器**（晚数由日期决定，不可步进）
+- 结算页：金额只在行内显示合计（¥1880.00），点「逐晚明细」展开逐晚价格与「住宿合计」；明细块独占整行
 - 页头：品牌位（Logo）与租户名切换器去重，不再叠加渲染租户名文本
 
 ### 6.3 后台配置：房源与逐晚价
@@ -215,36 +220,59 @@
   "minNights": 1,
   "maxNights": 30,
   "priceCalendar": [
-    { "type": "holiday", "priceCent": 100000, "dates": ["2026-02-15", "2026-02-16"] }
+    { "type": "holiday", "priceCent": 100000, "dates": ["2026-02-15", "2026-02-16"] },
+    { "type": "holiday", "priceCent": 100000, "dates": ["2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04", "2026-10-05", "2026-10-06", "2026-10-07"] }
   ]
 }
 ```
 
 - `priceCalendar[].type`：`weekday | weekend | holiday | custom`；`rate`（相对 `basePriceCent` 的系数）与 `priceCent`（固定价）二选一；`holiday/custom` 需带 `dates`
 - 未命中任何段时回退 `basePriceCent`；`longStayDiscount`（连住折扣）可选
+- **日期必须落在 C 端可选范围内才可能在页面上复现**：日期条限定「明天 ~ 今天+`advanceDays`」（本商品 `advanceDays=30`），过期 holiday 日期只在接口层可验证、页面上选不到。上例第二段（国庆 `2026-10-01~10-07`）就是为此追加的；如用于演示需按当前日期滚动更新。
 
 ### 6.4 自动化回归（对生产 e2e）
+
+入离日期由环境变量 `CHECK_IN` / `CHECK_OUT` 指定（默认 `2026-02-14` / `2026-02-16`），**所有断言由日期推导**，换日期无需改脚本：
 
 ```
 $env:SHOP_API='https://www.youshop.cn/shop-api'
 $env:HOTEL_VARIANT_ID='58'
 $env:CHANNEL_TOKEN='66ruvnhh34svhckaa2i'
+$env:CHECK_IN='2026-10-07'; $env:CHECK_OUT='2026-10-09'   # 省略则用默认口径
 node scripts/hotel-orderline-e2e.mjs
 ```
 
-脚本 `scripts/hotel-orderline-e2e.mjs` 断言 7 条（运行输出原文）：
+断言（8 条，`scripts/hotel-orderline-e2e.mjs` 运行输出原文，国庆口径）：
 
 ```
-PASS  数量=2
-PASS  单价=94000
-PASS  行小计=188000
+场景：2026-10-07 → 2026-10-09（2 晚）
+
+逐晚明细：
+  2026-10-07  holiday  ¥1000.00
+  2026-10-08  weekday  ¥880.00
+推导合计：¥1880.00（188000 分 / 2 晚，日均 ¥940.00）
+
+PASS  数量=2（=晚数）
+PASS  unitPriceWithTax=94000（=逐晚合计/晚数）
+PASS  linePriceWithTax=188000（=逐晚价之和）
 PASS  orderBoxes.isHotel=true
-PASS  逐晚 02-14=88000/weekend
-PASS  逐晚 02-15=100000/holiday
+PASS  orderBoxes.hotelNights=2
+PASS  逐晚条数=2
+PASS  逐晚日期自 checkIn 起逐日连续
 PASS  productSlug 非空（供修改日期跳回）
 ```
 
+默认口径（`2026-02-14 → 2026-02-16`，不设 `CHECK_IN/CHECK_OUT`）同样 8/8 PASS（逐晚 `02-14 weekend ¥880` + `02-15 holiday ¥1000`），用于防止旧场景回归。
+
 > 注意：Shop API 以 cookie 关联匿名活动订单，脚本内已用 cookieJar 维持同一会话，否则 `orderBoxes` 查不到刚加购的行。
+
+### 6.4.1 录图脚本
+
+```
+node scripts/_shot-hotel-checkout.mjs     # 默认 BASE=https://www.youshop.cn/t2、国庆 2 晚场景
+```
+
+可用环境变量覆盖：`BASE`、`HOTEL_SLUG`、`CHECK_IN`、`CHECK_OUT`。脚本内含页面文本断言（详情页 ¥1880 / ¥1000 / ¥880，购物车「共 2 晚」/1880.00，结算页展开后「住宿合计」/1880.00），断言失败以非 0 退出码结束。
 
 ### 6.5 普通商品回归
 
@@ -272,7 +300,16 @@ PASS  productSlug 非空（供修改日期跳回）
 
 - 后端（vendure，`d:\zhao\vendure`）：本地改 `src` → `packages/core` 执行 `npm run build` 重建 `dist`（dist 受控入库）→ commit + push → 服务器 `cd /www/apps/vendure && git pull --ff-only && pm2 restart vendure vendure-worker`
 - 前端（nshop，`d:\zhao\nshop`）：本地 `npm run build` → `node scripts/deploy.mjs`（scp 产物 → 服务器解压 → `pm2 restart nshop`）
-- **回滚**：`git revert <commit>` 后重跑上述部署即可；重新录图用 `scripts/_shot-hotel-checkout.mjs`（环境变量 `BASE`、`HOTEL_SLUG`）
+- **回滚**：`git revert <commit>` 后重跑上述部署即可；重新录图用 `scripts/_shot-hotel-checkout.mjs`（环境变量 `BASE`、`HOTEL_SLUG`、`CHECK_IN`、`CHECK_OUT`）
+
+### 6.9 结算页酒店行 390px 布局修复（2026-10-01）
+
+首次归档的截图为默认 1 晚且结算页展开态出现「日期文案逐字竖排换行」。复盘为两个独立问题，均已修复并重新部署：
+
+- **口径问题（证据不实）**：原录图脚本未设置入离日期，取到详情页默认 1 晚，未能复现用户报的 2 晚/节假日场景。→ 脚本改为用查询串预填日期（`?checkIn=&checkOut=`）并加页面文本断言；服务端 `priceCalendar` 追加国庆段（见 6.3）使场景在 C 端可选范围内真实可复现。
+- **布局缺陷（真实代码问题）**：`layers/base/app/components/checkout/BoxLines.vue` 的商品行 `<li>` 是 `flex`（默认 `nowrap`），展开的「逐晚明细」块虽写了 `w-full basis-full` 却**无法换行**，被压缩挤在同一行内，导致中间描述列宽度趋近于 0、日期文案逐字竖排；同时酒店行多了一个独立「共 N 晚」定宽列（`w-14`），进一步挤占描述列。→ 修法：酒店行的 `<li>` 追加 `flex-wrap`（普通商品行不加，保持原单行布局）；去掉独立晚数列，把「共 N 晚」并入描述列与「逐晚明细」同排；日期行加 `truncate`、操作行加 `whitespace-nowrap` 兜底。
+- 修复后：折叠态日期单行显示、展开态明细块独占整行横跨（见 6.2 第 3、4 张图）；普通商品行未受影响。
+
 
 ---
 
