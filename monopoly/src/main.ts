@@ -1,5 +1,6 @@
 import { createStage } from './render/stage';
 import { createDebugPanel } from './debug/panel';
+import { createThemeConsole, type ThemeConsoleHandle } from './ui/themeConsole';
 import { loadSkin } from './skin/skinLoader';
 import { Scene } from './render/Scene';
 import type { PlacementOpts } from './render/Scene';
@@ -38,7 +39,7 @@ import {
 } from './skin/theme';
 import { preloadRelative, preloadSkinAssets } from './render/assets';
 import { createFx, motionFor, timeScaleFrom, type FxContext, type FxHandle, type FxKind } from './render/fx';
-import type { ElementSpec } from './skin/instantiate';
+import type { ElementSpec, InstantiateDeps } from './skin/instantiate';
 
 export const VERSION = '0.1.0';
 
@@ -185,13 +186,15 @@ export async function boot(): Promise<void> {
     pawnGap: 9.6, pawnFrontDy: 1.45, pawnScale: 0.62,
     buildingScale: BUILDING_SCALE, buildingYOffset: BUILDING_Y_OFFSET,
   };
+  /* 主题补丁挂在一个**可变对象**上：`?debug=1` 的风格控制台就地改写 `theme` 字段即可实时预览（spec §9） */
+  const instantiateDeps: InstantiateDeps = {
+    skin, defaultSkin, overrides: shops.overrides, theme: themePatch, slotLevels,
+  };
   const scene = new Scene({
     layers: stage.layers,
     geo,
     bg: { color: tokens.bgBottom ?? '#0c1513', alpha: 1 },
-    instantiateDeps: {
-      skin, defaultSkin, overrides: shops.overrides, theme: themePatch, slotLevels,
-    },
+    instantiateDeps,
     /* 台位（唯一一份）：Scene 的落位与「气泡锚在棋子头顶」共用，改这里即两处同步 */
     placement: PLACEMENT,
     assetBase: './skins',
@@ -511,6 +514,8 @@ export async function boot(): Promise<void> {
 
   paint();
 
+  /** 风格控制台句柄（仅 `?debug=1` 有值；同时挂到 `__monoMain` 供闸门 V3/V4 程序化驱动） */
+  let themeConsole: ThemeConsoleHandle | null = null;
   if (opts.debug) {
     const panel = createDebugPanel();
     panel.mount(document.body);
@@ -519,6 +524,18 @@ export async function boot(): Promise<void> {
       next.searchParams.set('show', v);
       location.href = next.toString();
     });
+
+    /* —— 风格控制台（spec §9）：逐栋选色 / 批量指派 / 单素材 params / 导出 theme.json ——
+       改动只在内存：每次写回都从「基准补丁 ⊕ 内存改动」重算，故永不累积漂移；`?theme=off` 下
+       基准为空表，控制台仍可当纯预览用。 */
+    const basePatch = themePatch ?? {};
+    themeConsole = createThemeConsole({
+      theme, ids, geo, placement: PLACEMENT,
+      instances: () => scene.instancesOf(),
+      patchOf: (id) => instantiateDeps.theme?.[id],
+      apply: (edits) => { instantiateDeps.theme = mergePatches(basePatch, edits); paint(); },
+    });
+    themeConsole.mount(document.body);
   }
 
   /** 端到端整局：headless 跑到分出胜负并重画，返回胜者 id（1..4） */
@@ -575,7 +592,7 @@ export async function boot(): Promise<void> {
   (window as unknown as Record<string, unknown>).__monoMain = {
     stage, scene, opts, geo, skin, missingAssets, game, paint, sim, fx, fxPreview, perf, shops, VERSION,
     audio, seats, aiDriver: driver, hudSeats: () => seats,
-    tutorial: () => tutorial, mountTutorial: replayTour,
+    tutorial: () => tutorial, mountTutorial: replayTour, themeConsole,
   };
 }
 
