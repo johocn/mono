@@ -243,11 +243,47 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 | M11-4 | 点音符键 | BGM 立即停；再点恢复循环（4 小节 Am–F–C–G，整段 8s） | — |
 | M11-5 | 刷新页面 | 两枚图标的开 / 关与刷新前一致（`mono.audio` 持久化；坏 JSON / 缺字段一律按「开」） | — |
 | M11-6 | AI 回合（`?humans=1`）与结算后（`state.over === true`） | 两枚图标仍在且可点（`hitAreas` 的 `over` 早退与 AI 分支均不吞键）；BGM 在 `over` 后停止 | — |
-| M11-7 | `mono.html?audio=0` | 全程静音，且 `window.__audioCtxCount === 0`（**不创建** `AudioContext`） | — |
+| M11-7 | `mono.html?audio=0` | 全程静音，且 `window.__monoMain.audio.isUnlocked() === false`（**不创建** `AudioContext`） | — |
 | M11-8 | 默认皮肤对局，DevTools Network 面板 | **无任何音频请求**（默认皮肤零素材，全部 Web Audio 程序化合成） | — |
 | M11-9 | `mono.html?nofx=1` | 音效静音、BGM 照旧（`?nofx` 语义是「无演出」不是「无氛围」） | — |
 
 **实现口径**：音效挂在唯一出画口 `runAction` 的 `fx.play` 对偶位置（`if (!ctx) return;` 守卫之后）——AI 与真人天然共用、买地/升级失败（无 fx）不出声；`aiDriver.skipRest()`（`withFx=false`）连带静音；`?nofx` 由 `sfxOn = !opts.nofx` 显式守卫静音。键位常量在 `src/skin/layout.ts`（`AUDIO_KEY_SIZE` / `AUDIO_SFX_BOX` / `AUDIO_BGM_BOX` / `AUDIO_VOL_*` / `AUDIO_BGM_*`），可见像素是 4 个 proc preset（`uiSoundOn/Off`、`uiMusicOn/Off`）可整包换素材；开关落 `localStorage['mono.audio']`。
+
+### M12 真机音频解锁回归（2026-09-30 事故修复）
+
+> 事故现象（同源四症状）：**骰子没有点数 · 游戏无法运行 · 人物没有前进 · 没有事件提醒**。
+> 根因：`src/ui/audio.ts` 的 `tone()` 噪声分支把占位对象 `{ noise: true }` 赋给 `AudioBufferSourceNode.buffer`
+> ——真机 WebIDL 类型化属性必抛 `TypeError`。唯一噪声音色 `rattle` 就是默认的掷骰音（`DEFAULT_SFX.dice`），
+> 而 `audio.play()` 在 `main.ts` 的 `runAction` 里位于 `paint()` **之前** → 异常逃逸 ⇒
+> 状态已落库（`phase='rolled'`、点数已生成）但画面停帧（`pos` 不变、骰面无点数、面板不更新）；
+> 第二次点主按钮直接报 `[mono] rollDice @phase=rolled`，整局卡死。
+>
+> 闸门盲区（为什么 433 例单测 + 两个线上闸门全绿却线上坏）：
+>
+> | 覆盖方 | 真实手势（`pointerdown` → `unlock()`） | 真实 `AudioContext` | 结果 |
+> |---|---|---|---|
+> | `test/ui/audio.spec.ts` | 不适用（纯注入装配） | ❌ 假件 `createBufferSource()` 是普通对象，`buffer` 赋值静默成功 | 测不到 |
+> | `local/mono-prod-check.mjs` | ✅ `locator().click()` | ❌ `addInitScript` 装了 `AudioContextStub` | 假件吞掉 `TypeError` |
+> | `local/mono-e2e-playthrough.mjs` | ❌ 全是合成 `el.click()`（不派发 `pointerdown`） | ✅ 无桩 | `ctx === null` → `play()` 早退 |
+>
+> 修复三处：① 噪声分支保留 `createBuffer()` 的返回值赋给 `src.buffer`；② `SrcLike.buffer` 收紧为
+> `AudioBufferLike | null`（同类 bug 从此在 `npx tsc --noEmit` 阶段即失败）；③ `play()` 整体 `try/catch`
+> ——护栏在引擎内部收口，**不在** `runAction` 加 catch（那会吞掉状态机自身缺陷）。
+
+| # | 步骤 | 期望 | 截图 |
+|---|---|---|---|
+| M12-1 | 手机打开 `mono.html?humans=1&tour=0`，点「掷骰」 | **骰面显示出点数**（2..12）、主按钮转「前进」、全程无 `pageerror` | `mono-prod-07-dice-pips.png` |
+| M12-2 | 点「前进」 | **棋子逐格前进**（`pos[0] > 0`）、落格结算正常 | `mono-prod-08-pawn-move.png` |
+| M12-3 | 继续推进到命运 / 机会格 | **事件浮层正常展开**（`phase='settled'` 且 `lastDraw` 非空） | `mono-prod-09-event.png` |
+| M12-4 | 刷新后重复 M12-1..3 | 不再出现「第二次点主按钮报 `rollDice @phase=rolled`」的卡死 | — |
+
+**新增闸门口径**（`local/mono-prod-check.mjs`）：
+- 探针从「替换 `AudioContext` 的假件」改为「真实 `AudioContext` + 在 `AudioBufferSourceNode.prototype` / `OscillatorNode.prototype` 上计数 `start()`」；
+- `audioLazy` / `audioUnlock` / `audioForceMute` 改走既有探针 `window.__monoMain.audio.isUnlocked()`；
+- `audioPlay` = 页面零 `errors` **且** 真实点击后 `game.state.dice.total ∈ 2..12`（证明 `paint()` 确实执行过）；
+- 新增 `fixDice` / `fixMove` / `fixEvent` 三项与 3 张截图。其中 M12-3 的循环推进预算为 300 次：真人一回合要 4 次点击、每轮另有 3 个 AI 回合（≈7 次/轮），`seed=20260928` 下真人首次落到命运/机会格在第 14 轮（≈98 次），预算不足会令 `fixEvent` 恒 false。
+
+**新增闸门口径**（`local/mono-e2e-playthrough.mjs`）：首个动作点击改走 Playwright **真实鼠标点击**（其余保持合成以守住墙钟预算），新增 `gate.audio_unlocked`（真实手势确实建起了 `AudioContext`）；`gate.noErrors` 原本已有。
 
 ### 最终验收（对照 spec §11 硬性标准）
 
@@ -263,6 +299,7 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 | 8 | **M8 微信分享入口（本任务新增，超出 spec §11）** | `node local/mono-share-check.mjs` 13 项 gate 全 true / 退出码 0；线上 `og:image` 200 · `image/png` · 274903 bytes；`local/mono-prod-check.mjs` + `local/mono-e2e-playthrough.mjs` 均退出码 0（详见 M8 节） |
 | 9 | **商业闭环·阶段一「静态认领」配置加载（本任务新增，超出 spec §11）** | `node local/mono-shots-shops.mjs` 8 项 gate 全 true / 退出码 0；4 张 390×844 @dpr2 截图（`docs/verify/mono-shops-01..04`）；`npm run check` 45 文件 / 365 例（详见 §5） |
 | 10 | **M11 音效与音乐（本任务新增，超出 spec §11）** | `npm run check` 全绿（51 文件 / 433 例）/ `registry-ids.json: 237 ids` / `npx tsc --noEmit` 无错；线上 `mono-prod-check.mjs` 9 项音频 gate（`audioLazy` 懒建 ctx / `audioUnlock` 单实例 / `audioPlay` 真实发声 / `audioPrefsDefault` / `audioIconsOn` / `audioMute` 静音后无声 + 落库 / `audioResume` 点回恢复 / `audioKeys` 结算后常驻 / `audioForceMute` `?audio=0` 不建 ctx）、`mono-e2e-playthrough.mjs` 新增 `audio_keys` + `ai_audio_keys`；2 张 390×844 @dpr2 截图（`mono-prod-05-audio-on` / `06-audio-off`）；默认皮肤零音频网络请求 |
+| 11 | **M12 真机音频解锁回归（本任务新增，超出 spec §11）** | `npm run check` 全绿（51 文件 / 435 例）/ `npx tsc --noEmit` 无错；本地 preview（52301）与线上双闸门全绿且 `errors=[]`，`mono-prod-check.mjs` 全部 gate 为 `true`（音频项改真机口径：`audioLazy`/`audioUnlock`/`audioForceMute` 走 `isUnlocked()`、`audioPlay` 走 `dice.total`；并新增 `fixDice`/`fixMove`/`fixEvent`）、`mono-e2e-playthrough.mjs` 新增 `audio_unlocked`；3 张 390×844 @dpr2 截图（`mono-prod-07-dice-pips` / `-08-pawn-move` / `-09-event`）；根因与闸门盲区详见 M12 节 |
 
 **§11.5 性能实测**（两种成本分开测；`node local/mono-perf.mjs` 桌面代理 + `npm run perf:android` CDP 节流代理；受本机负载影响会抖动，同机连测 3 次的区间如下）：
 - 首屏可交互：桌面 default 235–255 ms / photo 1739–1784 ms；4× 节流代理 1.27–1.36 s（门槛 <3000 ✅）
