@@ -7,8 +7,8 @@
  * 授权与命名依据见 `docs/manual-mono.md` §4「替换为真实双阳商家数据」的对照表。
  * 后续增补 / 撤换商家，仍须走「取得授权 → 改数据或 `public/config/shops.json` → 部署」流程。
  */
-export const BOARD_COLS = 9;
-export const BOARD_ROWS = 9;
+export const BOARD_COLS = 11;
+export const BOARD_ROWS = 7;
 
 export type TileType = 'core' | 'shop' | 'chance' | 'fate' | 'bonus' | 'jail' | 'stock';
 

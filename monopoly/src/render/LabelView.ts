@@ -5,7 +5,8 @@ import { BOARD_COLS, BOARD_ROWS, ringPath, shortAt } from '../data/board';
 import { BUILDING_HEIGHTS } from '../skin/registry';
 import {
   BUILDING_SCALE, BUILDING_Y_OFFSET, LABEL_CURRENT_RING, LABEL_CURRENT_SCALE, LABEL_CURRENT_TEXT,
-  LABEL_MAX_CHARS, LABEL_RING, LABEL_ROOF, LABEL_STROKE_CUR, LABEL_TRI_H, LABEL_TRI_W,
+  LABEL_EDGE_PAD, LABEL_MAX_CHARS, LABEL_RING, LABEL_ROOF, LABEL_STROKE_CUR, LABEL_TRI_H, LABEL_TRI_W,
+  STAGE_W,
 } from '../skin/layout';
 import type { ElementSpec } from '../skin/instantiate';
 
@@ -102,16 +103,18 @@ export function drawLabels(
     const size = onRoof ? labelSize(text, cur) : { fs: label.fs * k, w: text.length * label.fs * k + label.padX, h: label.h };
     const padTop = onRoof ? size.h / 2 : label.padTop * k;
     const rx = onRoof ? LABEL_ROOF.rx : label.rx;
+    /* 名牌比地砖宽 ⇒ 最左/最右角格的名牌会被舞台边缘裁掉；把名牌中心夹进舞台内（地砖金环仍按格心画） */
+    const cx = Math.min(Math.max(p.cx, size.w / 2 + LABEL_EDGE_PAD), STAGE_W - size.w / 2 - LABEL_EDGE_PAD);
 
     const bg = new Graphics();
-    bg.roundRect(p.cx - size.w / 2, p.cy - padTop, size.w, size.h, rx)
+    bg.roundRect(cx - size.w / 2, p.cy - padTop, size.w, size.h, rx)
       .fill({ color: params.bg, alpha: 1 })
       .stroke({ color: LABEL_CURRENT_RING, width: cur ? LABEL_STROKE_CUR : LABEL_ROOF.strokeW });
     if (cur) {
       const ty = p.cy - padTop + size.h;
-      bg.moveTo(p.cx - LABEL_TRI_W / 2, ty)
-        .lineTo(p.cx + LABEL_TRI_W / 2, ty)
-        .lineTo(p.cx, ty + LABEL_TRI_H)
+      bg.moveTo(cx - LABEL_TRI_W / 2, ty)
+        .lineTo(cx + LABEL_TRI_W / 2, ty)
+        .lineTo(cx, ty + LABEL_TRI_H)
         .fill({ color: LABEL_CURRENT_RING, alpha: 1 });
     }
 
@@ -127,7 +130,7 @@ export function drawLabels(
       },
     });
     t.anchor.set(0.5);
-    t.position.set(p.cx, p.cy);
+    t.position.set(cx, p.cy);
     layer.addChild(bg, t);
   });
 }

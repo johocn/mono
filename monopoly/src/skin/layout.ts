@@ -3,8 +3,9 @@ export const STAGE_W = 390;
 export const STAGE_H = 844;
 export const HUD_TOP_H = 30;
 export const BOARD_TOP = 34;
-export const SHOWCASE_Y = 322;
-export const SHOWCASE_H = 268;
+/** 中部街市带（play 版式）：棋盘底角到 y=406，故街市带从 406 起、高 102（原 322/268 是为 9×9 方形棋盘留的） */
+export const SHOWCASE_Y = 406;
+export const SHOWCASE_H = 102;
 export const DOCK_Y = 606;
 export const BOTTOM_BTN_Y = 738;
 export const CARD_W = 66;
@@ -46,8 +47,13 @@ export const HUD_LABEL_SHIFT_X = -90;
 export const HUD_PERSONA_DX = 26;
 export const HUD_PERSONA_DY = -11;
 
-/** 默认皮肤几何（= public/skins/default/skin.json 的 geo；供渲染层免写死引用） */
-export const DEFAULT_GEO = { hw: 24, hh: 13, ox: 195, oy: 104 };
+/** 默认皮肤几何（= public/skins/default/skin.json 的 geo；供渲染层免写死引用）
+ *  v6：棋盘由 9×9 正方形改为 11×7 倾斜长方形 —— `cols+rows` 仍为 18，
+ *  故环长 2(cols+rows)-4=32 不变；放大来自 hh 13→18（棋盘高 234→324 = 屏高 38%，过 V7「≥1/3」闸门）。
+ *  hw=21.5 ⇒ 外框宽 18×hw=387 ≤ 390（**不再左右出血被裁**：9×9 时 18×24=432，左右各被切 21px）。
+ *  ox=195−2×hw 使 (c−r) 的 −6..10 居中于屏幕；oy=64 让顶端地块（index 26，L2 楼 46 高）连同楼顶名牌
+ *  恰好落在顶部 HUD（30）之下，同时棋盘底角收到 y=406 与街市带相接。 */
+export const DEFAULT_GEO = { hw: 21.5, hh: 18, ox: 152, oy: 64 };
 
 /* —— 楼顶名牌（spec §6.2/§6.3）：纵向被 2×hh=26 / 13 锁死，故胶囊 h=13、字号靠横向吃满格宽 —— */
 export const LABEL_ROOF = { fs: 10, fsShort: 11, fsNarrow: 8, padX: 6, h: 13, rx: 6, lift: 5, strokeW: 1.1 };
@@ -55,6 +61,9 @@ export const LABEL_ROOF = { fs: 10, fsShort: 11, fsNarrow: 8, padX: 6, h: 13, rx
 export const LABEL_GROUND = { dy: 0.46, fs: 6.2, padX: 5, padTop: 6.6, h: 9.4, rx: 3.2 };
 export const LABEL_CURRENT_SCALE = 1.25;
 export const LABEL_MAX_CHARS = 4;            // >4 字截断加 '…'
+/** 名牌横向内缩量：11×7 盘的最左/最右角格楼顶名牌比地砖宽，原名牌中心对齐格心会被舞台左右边缘裁掉，
+   故 `drawLabels` 把名牌中心夹到 [w/2+pad, STAGE_W−w/2−pad]，保证整块名牌可读（残影对齐不变） */
+export const LABEL_EDGE_PAD = 3;
 
 /* —— 当前格三重标记（spec §6.3）：地砖金环（`drawLabels` 画在标签层，恒在楼体之上）
    + 名牌描边/放大 + 指示三角 —— */
@@ -82,11 +91,17 @@ export const TILE_CARD_BTN_Y = TILE_CARD_Y + 40;
 export const BUBBLE_W = 100;
 export const BUBBLE_H = 44;
 export const BUBBLE_GAP = 8;
+/** 气泡横向内缩量：11×7 盘最左/最右格心 x≈44.5，半宽 50 会把气泡推出舞台左右边缘被裁，
+   故 `bubbleSpecs` 把中心夹到 [w/2+pad, STAGE_W−w/2−pad]（与 `LABEL_EDGE_PAD` 同口径） */
+export const BUBBLE_EDGE_PAD = 4;
 /* 气泡在 pass 4 内的行号：必须大于 HUD（0..18，末段为落地地块卡的两枚次要键）与浮层（0..12）的最大行号，
    否则棋盘下缘的棋子头顶会被底坞 / 浮层盖住（下缘几格正好落在浮层覆盖区） */
 export const BUBBLE_DEPTH = 20;
 /** 无动效的停留事件（如进监狱）没有 `fx` 结束回调可用，气泡靠这个时长自动收起 */
 export const BUBBLE_HOLD_MS = 1100;
+/** 前进播报（「谁前进几步」）改成定时器收起：hop 动效仅 FX_HOP_MS(320ms)，
+    随 fx 收起等于一闪而过读不完；此处给足停留（略小于 AI_STEP_MS，不拖进下一步） */
+export const BUBBLE_MOVE_HOLD_MS = 820;
 
 /* —— M5 浮层（手牌 / 股票盘 / 抽卡翻牌 / 结算面板；元素一律 pass 4 + 定格台位） —— */
 /* 手牌行：5 槽横排，落在底坞（606）之上 */
@@ -124,24 +139,28 @@ export const PANEL_TRADE_W = 150;
 export const PANEL_TRADE_H = 38;
 export const PANEL_TRADE_GAP = 30;
 
-/* 抽卡翻牌：复用 B 版式橱窗构图（夜空 + 广场 + 居中卡面） */
-export const PANEL_DRAW_X = 10;                  // 左上（与 B 版式橱窗同位）
-export const PANEL_DRAW_Y = 322;
+/* 抽卡翻牌（事件卡 ×2）：卡面 66×88 × 3.2 = 211×282，370×300 的老底板装不下，
+   故改用新增注册项 `showcase.panelTall`（370×480），底板从 150 铺到 630（不压底坞资产条 632）。
+   自上而下：角标 → 卡面 → 关闭键 → 手牌行（PANEL_HAND_Y 不变，恰好落在面板之内）。 */
+export const PANEL_TALL_W = 370;                 // = showcase.panelTall 的 box 宽
+export const PANEL_TALL_H = 480;                 // = showcase.panelTall 的 box 高
+export const PANEL_DRAW_X = 10;                  // 左上
+export const PANEL_DRAW_Y = 150;
 export const PANEL_CARD_CX = 195;                // 卡面中心
-export const PANEL_CARD_CY = 404;
-export const PANEL_CARD_S = 1.6;
-export const PANEL_BADGE_DRAW_Y = 500;           // 抽卡角标中心（在卡面之下）
+export const PANEL_CARD_CY = 336;                // 卡面 195.2..476.8
+export const PANEL_CARD_S = 3.2;                 // 事件卡 2 倍（66×88 → 211×282）
+export const PANEL_BADGE_DRAW_Y = 174;           // 抽卡角标中心（在卡面之上）
 
 /* 结算面板 */
 export const PANEL_SETTLE_ROW_H = 40;
 export const PANEL_SETTLE_ROW_Y = 340;
 export const PANEL_SETTLE_ROW_GAP = 8;
 
-/* 浮层关闭键（抽卡翻牌用；放面板右上角，避开手牌行） */
-export const PANEL_CLOSE_X = 294;                // 左
-export const PANEL_CLOSE_Y = 336;                // 顶
-export const PANEL_CLOSE_W = 76;
-export const PANEL_CLOSE_H = 28;
+/* 浮层关闭键（抽卡翻牌用）：卡面放大后移到卡面正下方、水平居中（卡底 476.8 → 键 488..524） */
+export const PANEL_CLOSE_W = 140;
+export const PANEL_CLOSE_H = 36;
+export const PANEL_CLOSE_X = (STAGE_W - PANEL_CLOSE_W) / 2;   // 125
+export const PANEL_CLOSE_Y = 488;
 
 /* —— play 版式中部橱窗（spec §6 版式 A「中 = 当前地块橱窗」）——
    棋盘底 ≈ 276，底坞顶 = DOCK_Y(606)，中间条带 ≈ 300..606；橱窗**完整复用** B 版式构图（§3.5）与
@@ -152,6 +171,24 @@ export const PANEL_CLOSE_H = 28;
 export const PLAY_SHOWCASE_Y = 300;              // 橱窗面板左上角 y（与 B 版式同 x=10）
 export const PLAY_HUD_BAR_DY = -40;              // 信息条相对默认位上移（默认 248 → 208，落在手牌行之上）
 export const PLAY_SHOP_S = 2.6;                  // 楼体缩放（略收小，让楼顶落在面板之内）
+
+/* —— 棋盘两处三角空位（spec §6 版式 A 补全）——
+   11×7 倾斜长方形在 390×844 舞台里天然留出两块三角空白：右上（棋盘右上斜边之外）与左下
+   （棋盘左下斜边之外）。留白会让人误以为画面失衡，故各放一个内容位：
+     右上 = 广告 / 城市主题插画 / 规则小贴士**轮播**（内容来自 `public/config/board-slots.json`）
+     左下 = 事件战报**滚动条**（记录每一步「谁 · 做了什么」）
+   两个矩形都是「三角形内接矩形」——右上矩形的下缘、左下矩形的上缘都落在棋盘斜边之内
+   （斜边斜率 = hh/hw = 18/21.5），不会再压到棋盘本体。 */
+export const BOARD_SLOT_AD_X = 214;
+export const BOARD_SLOT_AD_Y = 72;
+export const BOARD_SLOT_AD_W = 176;
+export const BOARD_SLOT_AD_H = 60;
+export const BOARD_SLOT_AD_MS = 5200;            // 单条轮播停留时长（毫秒）
+export const BOARD_SLOT_LOG_X = 0;
+export const BOARD_SLOT_LOG_Y = 342;
+export const BOARD_SLOT_LOG_W = 160;
+export const BOARD_SLOT_LOG_H = 64;
+export const BOARD_SLOT_LOG_KEEP = 4;            // 战报最多保留条数（超出滚动丢弃）
 
 /* —— M6 动效参数（spec §5.6 全清单）：`src/render/fx.ts` 唯一取值来源 ——
    `fx.ts` 处于「禁写死」gate 作用域内，裸时长/弧高/粒子数一律集中在此（本文件不在 gate 内）。
@@ -237,7 +274,7 @@ export const PERF_FRAME_P95_BUDGET_MS = 20;      // 帧间隔 p95（headless 代
 export const PERF_DRAW_BUDGET = 200;             // 单帧绘制元素数
 
 /* —— AI 驱动器（spec §5.3）—— */
-export const AI_STEP_MS = 450;                   // 步间停顿（默认）
+export const AI_STEP_MS = 900;                   // 步间停顿（默认；AI 行走原来 450ms 太快，看不清前进过程）
 export const AI_FAST_FACTOR = 2;                 // 「加速 ×2」倍率
 export const AI_SKIP_MAX_STEPS = 64;             // skipRest 单次上限（防御性兜底）
 

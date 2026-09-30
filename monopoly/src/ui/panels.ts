@@ -226,13 +226,11 @@ export function panelSpecs(state: GameState, handOpen = false): ElementSpec[] {
   } else if (overlay === 'draw') {
     const card = drawCard(state);
     if (card) {
-      /* 复用 B 版式橱窗构图：夜空 / 天际线 / 广场铺底，卡面居中，顶部角标标牌堆 */
-      push('showcase.panel', PANEL_DRAW_X, PANEL_DRAW_Y);
-      push('showcase.sky', PANEL_DRAW_X, PANEL_DRAW_Y);
-      push('showcase.skyline', PANEL_DRAW_X, PANEL_DRAW_Y);
-      push('showcase.ground', PANEL_DRAW_X, PANEL_DRAW_Y);
-      push('ui.card', PANEL_CARD_CX, PANEL_CARD_CY, { title: card.title, text: card.text }, PANEL_CARD_S);
+      /* 事件卡 ×2 专用高底板（370×480）：角标在上、卡面居中、关闭键在卡面正下方。
+         不再复用 B 版式橱窗的夜空 / 天际线 / 广场（那套构图按 370×300 定位，套进 480 会散） */
+      push('showcase.panelTall', PANEL_DRAW_X, PANEL_DRAW_Y);
       push('ui.badge', PANEL_CX, PANEL_BADGE_DRAW_Y, { text: card.deck === 'fate' ? '命运' : '机会' });
+      push('ui.card', PANEL_CARD_CX, PANEL_CARD_CY, { title: card.title, text: card.text }, PANEL_CARD_S);
       /* 可见关闭键（台位与 `panelHitAreas` 的 `card:close` 完全一致） */
       push('ui.panelClose',
         PANEL_CLOSE_X + PANEL_CLOSE_W / 2, PANEL_CLOSE_Y + PANEL_CLOSE_H / 2,
@@ -312,7 +310,7 @@ export function mountPanels(
 ): PanelHandle {
   const layer = document.createElement('div');
   layer.id = 'mono-panels';
-  layer.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:9';
+  layer.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:9';
   root.appendChild(layer);
 
   const update = (): void => {

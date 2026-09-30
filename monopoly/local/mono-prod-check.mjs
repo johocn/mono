@@ -525,8 +525,9 @@ facts.v5 = await vPage.evaluate(() => {
       && Number(facts.v5.byLevel[lv][0]) === h);
 }
 
-/* V7：棋盘放大到「占屏高 ≥ 1/3」且整块落在天际线之下、底坞之上（口径见手册 M13）
-   —— 纵向带 [oy−hh, oy+16·hh]（首行格顶 → 末行格心）必须 ⊆ [40, 320]；带高 17·hh 占底坞上沿 DOCK_Y 的比例 ≥ 33% */
+/* V7：棋盘放大到「占屏高 ≥ 1/3」且整块落在顶部 HUD 之下、街市带之上（口径见手册 M13/M14）
+   —— 纵向带 [oy−hh, oy+16·hh]（首行格顶 → 末行格心）必须 ⊆ [40, SHOWCASE_Y]；带高 17·hh 占底坞上沿 DOCK_Y 的比例 ≥ 33%
+   注：11×7 改形后 hh 13→18（棋盘高 234→324），下界随之从旧口径 320 放到街市带上沿 SHOWCASE_Y=406 */
 facts.v7 = await vPage.evaluate(() => {
   const geo = window.__monoMain.geo;
   const top = geo.oy - geo.hh;
@@ -534,11 +535,12 @@ facts.v7 = await vPage.evaluate(() => {
   return { hw: geo.hw, top, bottom, height: bottom - top };
 });
 {
-  const DOCK_Y = 606;   // src/skin/layout.ts：底坞上沿（棋盘可用区的下界）
+  const DOCK_Y = 606;        // src/skin/layout.ts：底坞上沿（棋盘可用区的下界）
+  const SHOWCASE_Y = 406;    // src/skin/layout.ts：中部天际线街市带上沿 = 棋盘可用区的下界
   facts.v7.dockY = DOCK_Y;
   facts.v7.sharePct = Number((((facts.v7.height / DOCK_Y) * 100)).toFixed(1));
-  gate.v7 = facts.v7.hw === 24
-    && facts.v7.top >= 40 && facts.v7.bottom <= 320
+  gate.v7 = facts.v7.hw === 21.5
+    && facts.v7.top >= 40 && facts.v7.bottom <= SHOWCASE_Y
     && facts.v7.height / DOCK_Y >= 0.33;
 }
 
@@ -716,6 +718,13 @@ const readBubble = () => bubblePage.evaluate(() => {
   };
 });
 const fireBubble = async (kind) => {
+  /* 上一条动效播完再发下一条：真机上动效期间按钮是禁用的（`fxPending` 门），
+     而这里直接用 `evaluate` 改状态绕过了那道门。 */
+  await bubblePage.waitForFunction(() => !window.__monoMain.fx?.busy?.(), null, { timeout: 8000 }).catch(() => {});
+  /* 冻结时轴再取景：气泡随 `fx` 终帧收起，而 `card` 动效仅 540ms（`fx.totalMs()`），
+     Playwright 点击 + 读取的往返开销可达数百毫秒 ⇒ 不冻结就会读到「已收起」的空态
+     （V14 的 card 用例曾因此偶发 n=0）。冻结只停观感、不动状态。 */
+  await bubblePage.evaluate(() => window.__monoMain.fx.speed(0));
   await bubblePage.evaluate((k) => {
     const m = window.__monoMain;
     const s = m.game.state;
@@ -746,7 +755,9 @@ const fireBubble = async (kind) => {
     await bubblePage.locator('#mono-hud button[data-action="buy"]').click();
     await bubblePage.waitForTimeout(60);
   }
-  return readBubble();
+  const out = await readBubble();
+  await bubblePage.evaluate(() => window.__monoMain.fx.speed(1));   // 解冻，交回给下一条用例
+  return out;
 };
 facts.v14 = { idle: await readBubble() };
 for (const kind of ['rent', 'card', 'jail', 'buy']) facts.v14[kind] = await fireBubble(kind);
@@ -758,6 +769,12 @@ gate.v14 = facts.v14.idle.n === 0
   && ['rent', 'card', 'jail', 'buy'].every((k) => facts.v14[k].n === 1 && facts.v14[k].tone === k)
   && ['rent', 'card', 'jail', 'buy'].every((k) => facts.v14[k].overlapped === false)
   && facts.v14.buy.overlapped === false
+  /* 气泡整块落在舞台内：11×7 的最左/最右格心离边缘不足半个气泡宽（半宽 50），
+     不夹边就会越出画布被裁（`bubbleSpecs` 的 BUBBLE_EDGE_PAD，详见手册 M14 行 5b） */
+  && ['rent', 'card', 'jail', 'buy'].every((k) => {
+    const b = facts.v14[k].box;
+    return Array.isArray(b) && b[0] >= 0 && b[0] + b[2] <= 390;
+  })
   && facts.v14.settle.n === 0;
 
 /* 7) 无报错 + 汇总 */

@@ -3,7 +3,8 @@
  * 坐标/尺寸取值仍只取自 `src/skin/layout.ts`（`STAGE_W/STAGE_H/TUTORIAL_GAP`）以消除与渲染的漂移。
  * 纯 DOM 实现 → 可直接被 Vitest 的 jsdom 环境单测；席位归属与「是否弹面板」的判定全在此。
  */
-import { PERSONAS, PERSONA_DESC, PERSONA_LABEL, DEFAULT_AI_ORDER, isPersona, type Persona, type Seat } from '../data/ai';
+import { PERSONAS, PERSONA_LABEL, DEFAULT_AI_ORDER, isPersona, type Persona, type Seat } from '../data/ai';
+import { PLAYER_NAME, OWNER_HUE } from '../data/board';
 import { STAGE_W, STAGE_H, TUTORIAL_GAP } from '../skin/layout';
 
 export type SeatPlan = Seat[];              // 下标 = players 下标；总席位恒 4
@@ -62,7 +63,7 @@ export function mountSetup(root: HTMLElement, initial: SeatPlan | null, onReplay
   const overlay = document.createElement('div');
   overlay.id = 'mono-setup';
   overlay.style.cssText =
-    'position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;' +
+    'position:absolute;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;' +
     'background:rgba(4,8,6,.96);z-index:30;pointer-events:auto;overflow:auto;' +
     `font:13px/1.5 ${FONT};color:#d8e4dc`;
 
@@ -104,13 +105,65 @@ export function mountSetup(root: HTMLElement, initial: SeatPlan | null, onReplay
   grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:10px';
   wrap.appendChild(grid);
 
-  /* —— AI 席位性格：每个 AI 席位一枚徽标卡（点一下在三种性格间轮换） —— */
+  /* —— AI 席位性格：一席位一行（色点 + 「N 号位 · 名字」）+ 保守 / 激进 / 投机 单选 chip —— */
   const aiLabel = rowLabel('AI 席位性格');
   wrap.appendChild(aiLabel);
   const aiRow = document.createElement('div');
   aiRow.dataset.action = 'setup:personas';
-  aiRow.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px';
+  aiRow.style.cssText = 'display:flex;flex-direction:column;gap:8px';
   wrap.appendChild(aiRow);
+
+  /** 一席一行：行首色点 + 号位名，行内三枚性格 chip（单选高亮） */
+  interface SeatRow { root: HTMLElement; dot: HTMLElement; name: HTMLElement; chips: HTMLButtonElement[] }
+  const seatRows: SeatRow[] = [];
+  for (let i = 0; i < TOTAL_SEATS - 1; i++) {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:8px';
+
+    const head = document.createElement('div');
+    head.style.cssText = 'display:flex;align-items:center;gap:6px;flex:0 0 auto';
+    const dot = document.createElement('span');
+    dot.style.cssText = 'width:12px;height:12px;border-radius:50%;flex:0 0 auto';
+    const name = document.createElement('span');
+    name.style.cssText = 'font:12px/1.3 inherit;color:#d8e4dc;white-space:nowrap';
+    head.appendChild(dot);
+    head.appendChild(name);
+    row.appendChild(head);
+
+    const chipRow = document.createElement('div');
+    chipRow.style.cssText = 'display:flex;gap:6px;flex:1';
+    const chips: HTMLButtonElement[] = [];
+    for (const p of PERSONAS) {
+      const c = document.createElement('button');
+      c.type = 'button';
+      c.dataset.persona = p;
+      c.textContent = PERSONA_LABEL[p];
+      c.style.cssText = 'flex:1;padding:7px 0;border-radius:9px;cursor:pointer;font:12px/1.2 inherit';
+      c.onclick = (): void => { aiPlan[i] = p; render(); };
+      chipRow.appendChild(c);
+      chips.push(c);
+    }
+    row.appendChild(chipRow);
+    aiRow.appendChild(row);
+    seatRows.push({ root: row, dot, name, chips });
+  }
+
+  /* 一键随机：给每个 AI 席位各随机一个性格并刷新界面 */
+  const randomBtn = document.createElement('button');
+  randomBtn.type = 'button';
+  randomBtn.dataset.action = 'setup:random';
+  randomBtn.textContent = '🎲 一键随机';
+  randomBtn.style.cssText =
+    'margin-top:8px;width:100%;padding:10px 12px;border-radius:11px;cursor:pointer;' +
+    'border:1px solid #3a4a42;background:rgba(6,12,10,.65);color:#f5c451;font:13px/1.2 inherit;font-weight:600';
+  randomBtn.onclick = (): void => {
+    const nAi = TOTAL_SEATS - humans;
+    const next: Persona[] = [];
+    for (let i = 0; i < nAi; i++) next.push(PERSONAS[Math.floor(Math.random() * PERSONAS.length)]);
+    aiPlan = next;
+    render();
+  };
+  wrap.appendChild(randomBtn);
 
   const hint = document.createElement('p');
   hint.style.cssText = 'margin:14px 0 0;font-size:11px;line-height:1.6;color:#7f938a;text-align:center';
@@ -132,21 +185,6 @@ export function mountSetup(root: HTMLElement, initial: SeatPlan | null, onReplay
     return b;
   });
 
-  const personaCards: HTMLButtonElement[] = [];
-  for (let i = 0; i < TOTAL_SEATS - 1; i++) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.dataset.aiIndex = String(i);
-    b.style.cssText = 'padding:12px 4px;border-radius:12px;cursor:pointer;font:12px/1.4 inherit;text-align:center';
-    b.onclick = (): void => {
-      const cur = aiPlan[i] ?? DEFAULT_AI_ORDER[i % DEFAULT_AI_ORDER.length];
-      aiPlan[i] = PERSONAS[(PERSONAS.indexOf(cur) + 1) % PERSONAS.length];
-      render();
-    };
-    aiRow.appendChild(b);
-    personaCards.push(b);
-  }
-
   const render = (): void => {
     for (const b of humanCards) {
       const on = Number(b.dataset.humans) === humans;
@@ -161,25 +199,26 @@ export function mountSetup(root: HTMLElement, initial: SeatPlan | null, onReplay
     for (let i = 0; i < nAi; i++) next.push(aiPlan[i] ?? DEFAULT_AI_ORDER[i % DEFAULT_AI_ORDER.length]);
     aiPlan = next;
 
-    aiLabel.style.display = nAi > 0 ? '' : 'none';
-    aiRow.style.display = nAi > 0 ? '' : 'none';
-    personaCards.forEach((b, i) => {
+    const showAi = nAi > 0;
+    aiLabel.style.display = showAi ? '' : 'none';
+    aiRow.style.display = showAi ? '' : 'none';
+    randomBtn.style.display = showAi ? '' : 'none';
+    /* 一席一行：行首「N 号位 · 名字」+ 代表色圆点；行内三枚 chip 单选高亮 */
+    seatRows.forEach((sr, i) => {
       const show = i < nAi;
-      b.style.display = show ? '' : 'none';
+      sr.root.style.display = show ? '' : 'none';
       if (!show) return;
-      const p = aiPlan[i];
-      b.innerHTML = '';
-      const l = document.createElement('div');
-      l.textContent = PERSONA_LABEL[p];
-      l.style.cssText = 'font-weight:700;color:#f5c451';
-      const d = document.createElement('div');
-      d.textContent = PERSONA_DESC[p];
-      d.style.cssText = 'font-size:11px;color:#9fb3a9;margin-top:2px';
-      b.appendChild(l);
-      b.appendChild(d);
-      b.style.border = '1.5px solid #3a4a42';
-      b.style.background = 'rgba(6,12,10,.6)';
-      b.dataset.persona = p;
+      const pid = humans + i + 1;                     // AI 席位对应的玩家号位（1..4）
+      sr.dot.style.background = `hsl(${OWNER_HUE[pid]},62%,55%)`;
+      sr.name.textContent = `${pid} 号位 · ${PLAYER_NAME[pid - 1]}`;
+      const cur = aiPlan[i];
+      for (const c of sr.chips) {
+        const on = c.dataset.persona === cur;
+        c.style.border = `1.5px solid ${on ? '#f5c451' : '#3a4a42'}`;
+        c.style.background = on ? 'rgba(245,196,81,.16)' : 'rgba(6,12,10,.6)';
+        c.style.color = on ? '#f5c451' : '#d8e4dc';
+        c.style.fontWeight = on ? '700' : '400';
+      }
     });
     hint.textContent = nAi > 0
       ? '进站即玩 · 剩余席位由 AI 接管'

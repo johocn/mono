@@ -408,6 +408,60 @@ npm run check ; npx tsc --noEmit                   # lint + lint:skin + vitest /
 
 > **线上回归记录**：Task 12 统一执行「本地构建 → 部署 → 线上复跑」后回填（命令见 M7 节；线上复跑 `mono-shots-visual.mjs` 会**覆盖**上述 14 张为线上实拍）。
 
+### M14 体验修复五连（引导高亮 / 选角分行 / 行走播报 / 命中区 / 棋盘改形）
+
+**来源**：业主 2026-10-01 反馈五条（1 引导被引导部分没高亮、操作不明；2 给 AI 选角色不知道给谁选性格，且缺一键随机；3 AI 行走太快、要「谁前进几步」播报，事件卡放大到约 2 倍；4 掷骰/买地/事件关闭/结算等按钮命中区左移；5 棋盘正方形布局内容被遮挡，改长方形/不规则并放大棋盘）。
+
+| # | 现象与根因 | 改法（关键文件） |
+|---|---|---|
+| 1 | 引导蒙层只压暗全屏、被引导元素无任何视觉标记，且步骤可能指向当步并不存在的元素 | **跟手推进**：一步只高亮**当时确实存在**的元素，完成该操作才进下一步；金环 + 脉冲 + 指示三角 + 说明文案，保留「跳过」（`src/ui/tutorial.ts` · `src/data/tutorial.ts` · `src/ui/setup.ts`） |
+| 2 | 三个 AI 席位挤在一行三个性格键上，看不出「给哪个号位选」；无批量入口 | 改为**按号位分行**（`2 号位 · 老王` / `3 号位 · 丽丽` / `4 号位 · 小赵` 各一行三键）；新增**一键随机**（每席独立掷骰）（`src/ui/setup.ts`） |
+| 3 | AI 步间停顿 450ms 太快；前进过程无文字播报；事件卡只有 66×88 的 1.6× | 步间停顿 **450 → 900ms**（`AI_STEP_MS`）；新增「前进 N 步」五态气泡第 5 色（`tone: 'move'`）+ **顶部状态条**同文案；前进播报不随 hop 动效（仅 320ms）收起，改由 `BUBBLE_MOVE_HOLD_MS`(820ms) 定时器收起；事件卡放大 **3.2×**（≈2 倍），底板换 `showcase.panelTall`(370×480)、关闭键移到卡面下方（`src/render/BubbleView.ts` · `src/render/providers/proc-bubble.ts` · `src/ui/Hud.ts` · `src/skin/layout.ts`） |
+| 4 | 宽视口下画布居中而 DOM 覆盖层 `position:fixed` 靠左 ⇒ 命中区整体左偏 `(视口宽−390)/2`；窄视口画布右侧被裁 | 新增 `#mono-fit` 统一基准 + `fitStage()` 等比缩放平移，5 个挂载层 `fixed → absolute`（`src/main.ts` · `mono.html`）。**390×844 视口下 `k=1`、位移为 0，与改动前逐像素一致** |
+| 5 | 9×9 正方形棋盘外框 `18×hw = 432 > 390`，左右各被切 21px；纵向只占 36.5% | 棋盘改 **11×7 倾斜长方形**：`cols+rows` 仍 18 ⇒ 环长恒 32；`geo = {hw:21.5, hh:18, ox:152, oy:64}` ⇒ 外框 **387×324**（不裁切）、纵向占屏 **38.4%**；两处三角空白各放一个内容位（右上轮播 / 左下战报）；名牌横向夹进舞台内（`src/data/board.ts` · `src/skin/layout.ts` · `src/data/inner.ts` · `src/render/{InnerView,BuildingView,LabelView}.ts`） |
+| 5b | 改形连带：11×7 最左/最右格心 `x≈44.5`，气泡半宽 50 ⇒ 气泡越出画布左/右缘被裁（实测 `box.x = −21`） | `bubbleSpecs` 把气泡中心夹到 `[BUBBLE_W/2+pad, STAGE_W−BUBBLE_W/2−pad]`（`BUBBLE_EDGE_PAD = 4`，与 `LABEL_EDGE_PAD` 同口径）；三角指向仍按格心水平居中（`src/render/BubbleView.ts` · `src/skin/layout.ts`）。实测夹边后 `box = [3,180,101×53]`，完整落在舞台内 |
+
+**几何口径**（改棋盘前必须复算的两条）：
+
+- 环长 = `2(cols+rows) − 4`；屏幕外包 = `18·hw` 宽 × `18·hh` 高 —— **只取决于 `cols+rows`，与长宽比无关**。9×9 → 11×7 外包不变，放大只能靠抬高 `hh`。
+- `(c−r)` 范围 = `1−rows .. cols−1`，11×7 为 `−6..10`（**不对称**）⇒ `ox = STAGE_W/2 − 2·hw` 才居中；须满足 `18·hw ≤ STAGE_W`。
+
+**两处三角内容位**（`11×7` 天然留白，不填会失衡）：右上 = 广告 / 城市主题插画 / 规则小贴士**轮播**（`public/config/board-slots.json` 驱动，改文件即生效、无需重建，图片走静态目录不走上传播目录）；左下 = **事件战报**滚动（每步「谁 · 做了什么」，最多留 4 条）。两矩形均为三角形内接矩形（斜边斜率 `hh/hw`），不会压到棋盘本体（`src/ui/slots.ts` · `src/skin/layout.ts`）。
+
+#### 14.1 截图（全部 390×844 @dpr2，手机视口，入 `docs/verify/`）
+
+| 文件 | 内容 |
+|---|---|
+| `mono-fix-01-board.png` | 11×7 倾斜长方形整盘 + 右上轮播位 + 左下战报位 |
+| `mono-fix-01b-board-left.png` | 左角放大：名牌已夹进舞台内（不再被左边缘裁掉） |
+| `mono-fix-01c-board-right.png` | 右角放大：名牌完整 + 轮播位与棋盘不重叠 |
+| `mono-fix-02-tour.png` | 引导第 1 步：掷骰键与骰面**金环高亮** + 说明文案（跟手推进） |
+| `mono-fix-03-setup.png` | 开局面板：AI 席位**按号位分行**选性格 + 一键随机 |
+| `mono-fix-04-draw.png` | 事件卡放大 ≈2 倍（标题 / 正文折行 / 关闭键在卡面下方） |
+| `mono-fix-05-move.png` | 行走播报：棋子**头顶气泡**「前进 8 步 / 落在 吉吉特产」+ **顶部状态条**同文案 + 左下战报留痕 |
+| `mono-fix-06-bubble-left.png` | 最左格收租气泡**完整落在舞台内**（夹边后 `box.x = 3`，改前被左缘裁 `−21`） |
+
+#### 14.2 回归口径（本轮实测）
+
+```powershell
+npx tsc --noEmit                 # 退出码 0
+npm run lint:skin                # registry-ids.json 255 ids（新增 showcase.panelTall）
+npx vitest run                   # 54 文件 / 496 例全绿
+npm run build                    # check-hardcoded clean（28 个文件）
+npm run deploy                   # 本地构建 → scp → 服务器解压 + 备份（131 个文件）
+npm run check:prod               # 线上 V1–V14 全 true、errors: []（退出码 0）
+npm run e2e:play                 # PASS · round=61 · 973 次点击 · 退出码 0
+```
+
+- **命中区逐像素对齐**（问题 4）：390×844 下画布矩形 `left=0`；DOM 主按钮换算回逻辑坐标后与注册表**完全一致** —— `roll = (146,738,98×46)`、`hand = (287,607,72×22)`、`audio:sfx = (324,5,26×26)`；点 `roll` 实测 `idle → rolled`。
+- **行走播报**（问题 3）：场景内实测 `ui.bubble.state = {title:'前进 8 步', amount:'落在 吉吉特产', tone:'move'}`，顶部状态条 `老王 前进 8 步 · 落在 吉吉特产`，可见时长 ≈925ms。
+- 控制台 `errors: []`。
+
+**闸门自身两处口径修正**（`local/mono-prod-check.mjs`，改棋盘/改气泡后必须同步）：
+
+- **V7**：`hw === 24` → `21.5`，纵向带下界 `320` → `SHOWCASE_Y = 406`（街市带上沿）。新几何实测 `top=46 / bottom=352 / height=306`，占底坞 `50.5% ≥ 33%`。
+- **V14 气泡四态**：`card` 用例曾偶发 `n = 0`。根因不是实现——`card` 动效仅 **540ms**（`fx.totalMs()`），而 Playwright「点击 → 读取」往返可达数百毫秒，读到时气泡已随终帧收起；`rent/buy` 动效更长故一直通过。修法：**取景前 `fx.speed(0)` 冻结时轴、读完 `speed(1)` 解冻**（只停观感不动状态），并在每条用例前等 `!fx.busy()`（真机上动效期间按钮本就是禁用的，用例用 `evaluate` 直改状态绕过了那道门）。
+
 ### 最终验收（对照 spec §11 硬性标准）
 
 | # | spec §11 条目 | 证据 |

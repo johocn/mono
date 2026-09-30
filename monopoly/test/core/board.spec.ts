@@ -32,10 +32,21 @@ describe('board 数据（spec §4）', () => {
     expect(types.filter((t) => t === 'chance').length).toBe(5);
   });
 
-  it('tileIndexOf 可反查（供棋子/建筑定位）', () => {
+  it('ringPath(11,7) 边长为 10 / 6（倾斜长方形），环长仍 32', () => {
+    const p = ringPath(11, 7);
+    expect(p.length).toBe(32);
+    expect(p[0]).toEqual([1, 7]);
+    expect(p[10]).toEqual([11, 7]);
+    expect(p[11]).toEqual([11, 6]);
+    expect(p[16]).toEqual([11, 1]);
+    expect(p[26]).toEqual([1, 1]);
+    expect(p[31]).toEqual([1, 6]);
+  });
+
+  it('tileIndexOf 可反查（供棋子/建筑定位，11×7 盘）', () => {
     expect(tileIndexOf(0, 0)).toBe(-1);
-    expect(tileIndexOf(1, 9)).toBe(0);
-    expect(tileIndexOf(9, 8)).toBe(9);
-    expect(tileIndexOf(1, 8)).toBe(31);
+    expect(tileIndexOf(1, 7)).toBe(0);
+    expect(tileIndexOf(11, 6)).toBe(11);
+    expect(tileIndexOf(1, 6)).toBe(31);
   });
 });

@@ -137,7 +137,7 @@ describe('panels：spec 组装（pass 4 / fixed / 注册表命中）', () => {
     expect(overlayOf(g.state)).toBe('draw');
     const specs = panelSpecs(g.state);
     expect(specs.map((s) => s.id)).toContain('ui.card');
-    expect(specs.map((s) => s.id)).toContain('showcase.panel');
+    expect(specs.map((s) => s.id)).toContain('showcase.panelTall');
     expect(specs.find((s) => s.id === 'ui.badge')!.state?.text).toBe('机会');
 
     g.state.over = true;

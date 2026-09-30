@@ -1,4 +1,7 @@
-import { AUDIO_KEY_SIZE, BUBBLE_H, BUBBLE_W, HUD_BAR_W, TILE_CARD_H, TILE_CARD_W } from './layout';
+import {
+  AUDIO_KEY_SIZE, BUBBLE_H, BUBBLE_W, HUD_BAR_W, PANEL_CLOSE_H, PANEL_CLOSE_W,
+  PANEL_TALL_H, PANEL_TALL_W, TILE_CARD_H, TILE_CARD_W,
+} from './layout';
 import type { RegistryEntry } from './types';
 
 export const BUILDING_HEIGHTS: Record<number, number> = { 1: 26, 2: 46, 3: 72 };
@@ -171,6 +174,9 @@ function showcaseEntry(id: string, box: { w: number; d: number; h: number }): Re
 }
 const SC_PANEL = { w: 370, d: 1, h: 300 };
 reg['showcase.panel'] = showcaseEntry('showcase.panel', SC_PANEL);
+/* 抽卡翻牌专用高底板（事件卡 ×2 = 211×282，300 高的 showcase.panel 装不下）：
+   独立 ID 以免牵动 B 版式橱窗（showcase.panel / showcase.hud 仍是 370×300） */
+reg['showcase.panelTall'] = showcaseEntry('showcase.panelTall', { w: PANEL_TALL_W, d: 1, h: PANEL_TALL_H });
 reg['showcase.sky'] = showcaseEntry('showcase.sky', { w: 370, d: 1, h: 180 });
 reg['showcase.skyline'] = showcaseEntry('showcase.skyline', { w: 370, d: 1, h: 180 });
 reg['showcase.ground'] = showcaseEntry('showcase.ground', { w: 370, d: 1, h: 120 });
@@ -204,7 +210,7 @@ reg['ui.badge'] = showcaseEntry('ui.badge', { w: 120, d: 1, h: 26 });
 /* 浮层上的可见按键（复用 uiButton preset 的观感；台位与命中区一一对应） */
 reg['ui.tradeBuy'] = showcaseEntry('ui.tradeBuy', { w: 150, d: 1, h: 38 });
 reg['ui.tradeSell'] = showcaseEntry('ui.tradeSell', { w: 150, d: 1, h: 38 });
-reg['ui.panelClose'] = showcaseEntry('ui.panelClose', { w: 76, d: 1, h: 28 });
+reg['ui.panelClose'] = showcaseEntry('ui.panelClose', { w: PANEL_CLOSE_W, d: 1, h: PANEL_CLOSE_H });
 /* 停留事件头顶气泡（spec §6.7）：棋盘上的「即时事件图」，与底部地块卡一上一下分工；
    台位 = 当前玩家棋子头顶上方 BUBBLE_GAP（BubbleView 给 fixed），不进任何命中区 */
 reg['ui.bubble'] = showcaseEntry('ui.bubble', { w: BUBBLE_W, d: 1, h: BUBBLE_H });

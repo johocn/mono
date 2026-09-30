@@ -315,7 +315,7 @@ export function mountShare(root: HTMLElement, getOver: () => ShareCopy | null, v
   const layer = document.createElement('div');
   layer.id = 'mono-share';
   layer.style.cssText =
-    'position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;' +
+    'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;' +
     `z-index:${Z_CONTAINER};font:13px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif`;
   root.appendChild(layer);
 
@@ -333,7 +333,7 @@ export function mountShare(root: HTMLElement, getOver: () => ShareCopy | null, v
   const sheet = document.createElement('div');
   sheet.id = 'mono-share-sheet';
   sheet.style.cssText =
-    'position:fixed;left:0;right:0;bottom:0;top:0;display:none;pointer-events:auto;' +
+    'position:absolute;left:0;right:0;bottom:0;top:0;display:none;pointer-events:auto;' +
     `z-index:${Z_SHEET};background:rgba(4,8,6,.55);align-items:flex-end;justify-content:center`;
   layer.appendChild(sheet);
 

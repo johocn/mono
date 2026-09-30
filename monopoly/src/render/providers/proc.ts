@@ -18,6 +18,8 @@ export interface TextRequest {
   rotate?: number;                       // 角度（度）
   /** 水平对齐：center（默认，用于店招/灯笼）· left（用于橱窗信息条，x 即左边缘） */
   align?: 'center' | 'left';
+  /** 自动换行宽度（px）：给出后按该宽度折行（CJK 逐字断行），用于放大的事件卡正文 */
+  wrapW?: number;
 }
 
 /** preset 的图片输出请求（Graphics 画不了位图，统一交给 Scene 新建 Sprite 落地） */

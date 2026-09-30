@@ -35,6 +35,7 @@ export function liftPt(p: Pt, h: number): Pt {
 
 /** 按 preset 的文字请求创建 Pixi Text（唯一建文字处） */
 export function makeText(req: TextRequest): Text {
+  const wrap = req.wrapW !== undefined;
   const t = new Text({
     text: req.text,
     style: {
@@ -42,6 +43,7 @@ export function makeText(req: TextRequest): Text {
       fontSize: req.size,
       fontWeight: 'bold',
       fill: req.fill,
+      ...(wrap ? { wordWrap: true, wordWrapWidth: req.wrapW, breakWords: true, align: 'center' } : {}),
     },
   });
   t.anchor.set(req.align === 'left' ? 0 : 0.5, 0.5);

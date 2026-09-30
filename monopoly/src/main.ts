@@ -20,6 +20,7 @@ import { mountPanels, overlayOf, panelSpecs, type PanelActionId, type PanelHandl
 import { createAiDriver, type AiDriver } from './ui/aiDriver';
 import { createAudioEngine } from './ui/audio';
 import { mountSetup, readPlan, resolveSeats, type SeatPlan } from './ui/setup';
+import { mountSlots, parseSlotConfig, SLOT_DEFAULTS, type SlotConfig, type SlotsHandle } from './ui/slots';
 import { isDone, mountTutorial, shouldShowTutorial, type TutorialHandle } from './ui/tutorial';
 import { parsePersonaList, type Persona, type Seat } from './data/ai';
 import {
@@ -28,9 +29,9 @@ import {
 } from './ui/share';
 import { SHARE_VERSION } from './data/share';
 import { FATE_DECK, type ItemCardKind } from './data/cards';
-import { DEMO_OWNER } from './data/board';
+import { DEMO_OWNER, PLAYER_NAME } from './data/board';
 import { STOCK_TILE_INDEX } from './data/stocks';
-import { BUILDING_SCALE, BUILDING_Y_OFFSET, BUBBLE_HOLD_MS, DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED, LABEL_GROUND } from './skin/layout';
+import { BUILDING_SCALE, BUILDING_Y_OFFSET, BUBBLE_HOLD_MS, BUBBLE_MOVE_HOLD_MS, DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED, LABEL_GROUND, STAGE_H, STAGE_W } from './skin/layout';
 import { SHOP_DEFAULTS, parseShopConfig, type ShopConfig } from './skin/shop-config';
 import { allElementIds } from './skin/registry';
 import {
@@ -125,6 +126,20 @@ async function loadShopConfig(): Promise<ShopConfig> {
 }
 
 /**
+ * 棋盘右上三角内容位配置：相对路径读取，缺失 / 404 / 坏 JSON 一律回退 `SLOT_DEFAULTS`
+ * —— 该位永不空着，且不抛错。
+ */
+async function loadSlotConfig(): Promise<SlotConfig> {
+  try {
+    const res = await fetch('./config/board-slots.json', { cache: 'no-cache' });
+    if (!res.ok) return SLOT_DEFAULTS;
+    return parseSlotConfig(await res.json());
+  } catch {
+    return SLOT_DEFAULTS;
+  }
+}
+
+/**
  * 主题配置（spec §4）：相对路径读取，缺失 / 404 / 坏 JSON 一律回退空主题
  * —— 空主题下 `compileTheme` 产出 `{}`，渲染结果与改造前逐像素一致。
  */
@@ -138,9 +153,28 @@ async function loadThemeConfig(): Promise<Theme> {
   }
 }
 
+/** 把 390×844 逻辑舞台等比缩放到视口内并居中。
+ *  画布与**全部 DOM 覆盖层**共用这一个变换，因此命中区与视觉不会再错位。
+ *  修复三件事：① 旧版画布 `margin:0 auto` 居中、覆盖层却 `position:fixed` 靠屏幕左边，
+ *  视口宽 ≠ 390 时命中区整体左偏 (视口宽-390)/2；② 视口窄于 390 时画布右侧（棋盘右角）被裁；
+ *  ③ 宽视口下舞台不再贴左上角，而是居中留边。390×844 视口下 k=1、位移为 0，与改动前逐像素一致。 */
+function fitStage(): void {
+  const fit = document.getElementById('mono-fit');
+  if (!fit) return;
+  const k = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
+  const dx = Math.max(0, (window.innerWidth - STAGE_W * k) / 2);
+  const dy = Math.max(0, (window.innerHeight - STAGE_H * k) / 2);
+  fit.style.transform = `translate(${dx}px, ${dy}px) scale(${k})`;
+}
+
 export async function boot(): Promise<void> {
   const canvas = document.getElementById('stage') as HTMLCanvasElement | null;
   if (!canvas) throw new Error('[mono] #stage not found');
+  fitStage();
+  window.addEventListener('resize', fitStage);
+  window.addEventListener('orientationchange', fitStage);
+  /** 覆盖层统一挂点（spec：HUD / 浮层 / 引导 / 开局 / 分享 与画布同源，共用 fitStage 的缩放） */
+  const fitRoot = document.getElementById('mono-fit') ?? document.body;
   const opts = parseOptions(location.search);
 
   const defaultSkin = await loadSkin('default');
@@ -164,6 +198,8 @@ export async function boot(): Promise<void> {
 
   /* —— 商家配置（商业闭环·阶段一「静态认领」）：overrides 落回退链第 1 级 + 文案注入 —— */
   const shops = await loadShopConfig();
+  /* —— 三角内容位配置（右上轮播：插画 / 规则小贴士 / 广告）：缺失即回退内建贴士 —— */
+  const slotCfg = await loadSlotConfig();
   /* 商家图片与皮肤包同源解析（相对皮肤包目录），必须在建场景前按同一套 skinIds 预装载；
      缺失只在 missingAssets 留痕，绝不抛错（缺素材逐级回退） */
   const skinPackIds = [...new Set([skin?.id, defaultSkin?.id].filter((v): v is string => Boolean(v)))];
@@ -281,6 +317,9 @@ export async function boot(): Promise<void> {
 
   /** play：地砖归属色 / 当前格 / 棋子位置跟游戏状态联动，再叠 HUD */
   const ownedOf = (i: number): number | null => game?.state.estates[i]?.owner ?? ownerOf(i);
+  /** 顶部状态条 + 左下战报的同一份文案：「谁 · 做了什么」（无气泡时为 null，两处各自回退默认显示） */
+  const calloutOf = (g: Game | null): string | null =>
+    g && bubble ? `${PLAYER_NAME[currentPlayer(g.state).id - 1]} ${bubble.title} · ${bubble.amount}` : null;
   const playView = (g: Game): ElementSpec[] => {
     const alive = g.state.players.filter((p) => !p.bankrupt);
     const curId = currentPlayer(g.state).id;
@@ -289,6 +328,8 @@ export async function boot(): Promise<void> {
       mood: p.id === curId ? mood : 'calm',
       active: p.id === curId,
     }));
+    /* 顶部状态条播报：气泡在场时把「谁 · 做了什么」也搬到屏幕顶部（小屏上头顶气泡可能被棋盘元素压住） */
+    const callout = calloutOf(g) ?? undefined;
     return [
       ...boardTileSpecs(currentPlayer(g.state).pos, ownedOf),
       ...innerSpecs(),
@@ -301,7 +342,7 @@ export async function boot(): Promise<void> {
       /* spec §7.2：play 版式不再常驻中部橱窗（`?show=b|c` 演示版式完整保留），
          中部条带交给环境层近景街市带；落地时由地块卡（`ui.tileCard`）滑入 */
       ...hudSpecs(g.state, fxPending || fx.busy(), seats, driver?.isFast() ?? false, audio.prefs(),
-        { tileCard: tileCardOn(g), handOpen: handOpenEff() }),
+        { tileCard: tileCardOn(g), handOpen: handOpenEff(), callout }),
       /* M5 浮层：手牌抽屉（默认收起）+ 抽卡翻牌 / 股票盘 / 结算面板（未触发时为空） */
       ...panelSpecs(g.state, handOpenEff()),
     ];
@@ -310,6 +351,7 @@ export async function boot(): Promise<void> {
   let hud: HudHandle | null = null;
   let panels: PanelHandle | null = null;
   let share: ShareHandle | null = null;
+  let slots: SlotsHandle | null = null;
 
   /** 唯一出画口：清 spec → 组视图 → 渲染 → 标签 → HUD / 浮层命中层 */
   const paint = (): void => {
@@ -334,6 +376,7 @@ export async function boot(): Promise<void> {
     hud?.update();
     panels?.update();
     share?.update();
+    slots?.update(calloutOf(game));
   };
 
   /**
@@ -349,9 +392,11 @@ export async function boot(): Promise<void> {
   ): void => {
     const result = fn();
     const ctx = withFx ? ctxOf(result as never) : null;
-    /* 气泡文案与动效同源：有动效 → 随 `fx` 结束收起；无动效（如进监狱）→ 定时器兜底收起 */
+    /* 气泡文案与动效同源：有动效 → 随 `fx` 结束收起；无动效（如进监狱）→ 定时器兜底收起。
+       前进播报例外：hop 只有 ~320ms，随 fx 收起读不完，改由 `BUBBLE_MOVE_HOLD_MS` 定时器收起。 */
     const content = withFx ? (bubbleOf?.(result) ?? null) : null;
-    setBubble(content, ctx ? 0 : BUBBLE_HOLD_MS);
+    const reportHold = ctx && content?.tone === 'move';
+    setBubble(content, ctx ? (reportHold ? BUBBLE_MOVE_HOLD_MS : 0) : BUBBLE_HOLD_MS);
     mood = ctx ? (MOOD_BY_FX[ctx.kind] ?? 'calm') : MOOD_BY_EVENT(game?.state.lastEvent);
     if (!ctx) {
       fxPending = false;
@@ -366,7 +411,11 @@ export async function boot(): Promise<void> {
        先把气泡容器留一手（行号最大 ⇒ 此刻恒为 `fx` 层最后一项），`play()` 之后重挂回最上（spec §6.7）。 */
     const fxLayer = stage.layers.fx;
     const bubbleTop = bubble ? fxLayer.children[fxLayer.children.length - 1] : null;
-    fx.play(ctx, () => { fxPending = false; mood = 'calm'; setBubble(null, 0); paint(); });
+    fx.play(ctx, () => {
+      fxPending = false; mood = 'calm';
+      if (!reportHold) setBubble(null, 0);
+      paint();
+    });
     if (bubbleTop) fxLayer.addChild(bubbleTop);
   };
 
@@ -453,7 +502,7 @@ export async function boot(): Promise<void> {
   let tutorial: TutorialHandle | null = null;
   const replayTour = (): void => {
     tutorial?.destroy();
-    tutorial = mountTutorial(document.body, { onDone: () => { tutorial = null; } });
+    tutorial = mountTutorial(fitRoot, { onDone: () => { tutorial = null; } });
   };
 
   /** 席位确定后开局（spec §6：选完再 createGame）：建 game → 挂 HUD/浮层/驱动器 → 按需弹引导 → 重画 */
@@ -461,7 +510,7 @@ export async function boot(): Promise<void> {
     seats = plan;
     const g = createGame({ seed: opts.seed, playerCount: 4 });
     game = g;
-    hud = mountHud(document.body, g, (a: HudActionId) => {
+    hud = mountHud(fitRoot, g, (a: HudActionId) => {
       /* 静音键（spec §7.4）：翻转 → 落库 → 立即重画图标；不跳动画、不推进状态 */
       if (a === 'audio:sfx' || a === 'audio:bgm') {
         audio.toggle(a === 'audio:sfx' ? 'sfx' : 'bgm');
@@ -476,10 +525,12 @@ export async function boot(): Promise<void> {
       dispatch(stepOfHud(a));
     }, () => ({ seats, fast: driver?.isFast() ?? false, ui: { tileCard: tileCardOn(g), handOpen: handOpenEff() } }));
     /* 浮层动作：关浮层 / 股票买卖 / 打手牌（目标由命中区 `data-target` 带出） */
-    panels = mountPanels(document.body, g, (a: PanelActionId, target?: number | string) => {
+    panels = mountPanels(fitRoot, g, (a: PanelActionId, target?: number | string) => {
       if (fx.busy()) fx.skip();
       dispatch(stepOfPanel(a, target));
     }, () => ({ handOpen: handOpenEff() }));
+    /* 三角内容位（spec §6 版式 A 补全）：右上轮播 + 左下事件战报；与浮层同层、随舞台缩放 */
+    slots = mountSlots(fitRoot, slotCfg);
     driver = createAiDriver({
       game, seats: () => seats,
       run: (step, withFx = true) => dispatch(step, withFx),
@@ -498,13 +549,13 @@ export async function boot(): Promise<void> {
 
   if (opts.play) {
     if (planned) startGame(planned);
-    else void mountSetup(document.body, readPlan(), () => replayTour()).then(startGame);
+    else void mountSetup(fitRoot, readPlan(), () => replayTour()).then(startGame);
   }
 
   /* —— M8 分享 / 裂变入口：meta 注入 + 常驻 CTA + 微信 JS-SDK（非微信 / 签名不可用自动降级） —— */
   const overCopy = (): { title: string; desc: string } | null => resultCopy(game?.state ?? null);
   applyMeta(document, buildShareConfig(location.href, SHARE_VERSION, overCopy()));
-  share = mountShare(document.body, overCopy, SHARE_VERSION);
+  share = mountShare(fitRoot, overCopy, SHARE_VERSION);
   void initWechatShare({ pageHref: location.href, version: SHARE_VERSION, getOver: overCopy })
     .then((b) => {
       share?.setWechat(b);

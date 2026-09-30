@@ -21,13 +21,15 @@ export type HudActionId =
   HudPrimaryAction | 'buy' | 'upgrade' | 'hand' | 'ai:fast' | 'ai:skip' | 'audio:sfx' | 'audio:bgm';
 
 /**
- * HUD 的两项运行时可见性开关（由 `main.ts` 按局面派生，HUD 自身不读浮层状态，避免 ui → ui 横向依赖）：
+ * HUD 的运行时可见性开关（由 `main.ts` 按局面派生，HUD 自身不读浮层状态，避免 ui → ui 横向依赖）：
  * - `tileCard`：落地地块卡滑入（`settled` + 无浮层 + 抽屉收起 + 非 AI 回合）
  * - `handOpen`：手牌抽屉是否展开（教程期间强制展开，保证第 3 步高亮得到 5 个手牌槽）
+ * - `callout`：顶部状态条播报（有气泡时替换轮次文案，让「谁前进几步」在大屏顶部也读得到）
  */
 export interface HudUiOpts {
   tileCard?: boolean;
   handOpen?: boolean;
+  callout?: string;
 }
 
 export interface HitArea {
@@ -145,8 +147,8 @@ export function hudSpecs(
   };
 
   bar('ui.dock', 0, STAGE_W / 2, DOCK_Y + HUD_DOCK_H / 2, { round: state.round });
-  /* 状态行：AI 回合把文字左移，给右侧「加速 / 跳过」让位 */
-  bar('ui.label', 1, STAGE_W / 2, HUD_LABEL_Y, { text: statusText(state), dx: aiSeat ? HUD_LABEL_SHIFT_X : 0 });
+  /* 状态行：AI 回合把文字左移，给右侧「加速 / 跳过」让位；有气泡播报时优先显示播报 */
+  bar('ui.label', 1, STAGE_W / 2, HUD_LABEL_Y, { text: ui.callout ?? statusText(state), dx: aiSeat ? HUD_LABEL_SHIFT_X : 0 });
 
   state.players.forEach((p, i) => {
     const cy = HUD_BAR_Y + HUD_BAR_H / 2;
@@ -287,7 +289,7 @@ export function mountHud(
 ): HudHandle {
   const layer = document.createElement('div');
   layer.id = 'mono-hud';
-  layer.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:8';
+  layer.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:8';
   root.appendChild(layer);
 
   const update = (): void => {

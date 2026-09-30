@@ -5,14 +5,14 @@ import {
 import type { ElementSpec } from '../skin/instantiate';
 import type { ProviderSpec } from '../skin/types';
 
-/** 内环街道小品：行道树 ×2（v5 line 294）+ 通往广场的 4 格石板路路灯 */
+/** 内环街道小品（11×7 盘）：行道树 ×2 落在绿地，4 盏路灯沿广场外一圈石板路 */
 export const INNER_STREET_PROPS: Array<{ kind: 'tree' | 'lamp'; c: number; r: number }> = [
-  { kind: 'tree', c: 2, r: 8 },
-  { kind: 'tree', c: 8, r: 2 },
-  { kind: 'lamp', c: 3, r: 5 },
-  { kind: 'lamp', c: 5, r: 3 },
-  { kind: 'lamp', c: 7, r: 5 },
-  { kind: 'lamp', c: 5, r: 7 },
+  { kind: 'tree', c: 2, r: 4 },
+  { kind: 'tree', c: BOARD_COLS - 1, r: 4 },
+  { kind: 'lamp', c: 4, r: 4 },
+  { kind: 'lamp', c: 8, r: 4 },
+  { kind: 'lamp', c: 6, r: 2 },
+  { kind: 'lamp', c: 6, r: 6 },
 ];
 
 export interface BuildingOpts {

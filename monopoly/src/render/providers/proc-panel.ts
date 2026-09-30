@@ -14,11 +14,12 @@ export const PANEL_D = fb({
   slotR: 8, slotFill: '#1f2f2a', slotEmptyFill: '#141d1a', slotDimAlpha: 0.45,
   slotEdge: '#3a4a42', slotEdgeOn: '#f5c451', slotEdgeW: 1.2,
   slotFs: 12, slotTextFill: '#ffe9b0', slotTextEmpty: '#5b6b63', slotTextDy: 0,
-  /* 卡面（命运/机会/道具） */
+  /* 卡面（命运/机会/道具）：字号/偏移/圆角一律 × s（事件卡放大到 3.2 倍时字随卡一起变大，
+     否则大字卡里仍是 14/10px 小字）；pad 为正文折行留边（wrapW = w − 2·pad） */
   cardR: 10, cardFill: '#14201d', cardEdge: '#3a4a42', cardEdgeW: 1.2,
   cardBandH: 22, cardBand: '#40305c',
-  cardTitleFs: 14, cardTitleDy: -40, cardTitleFill: '#ffe9b0',
-  cardTextFs: 10, cardTextDy: 14, cardTextFill: '#d8e4dc',
+  cardTitleFs: 9, cardTitleDy: -34, cardTitleFill: '#ffe9b0',
+  cardTextFs: 8, cardTextDy: 11, cardTextFill: '#d8e4dc', cardTextPad: 8,
   /* 卡背（未翻面） */
   backR: 10, backFill: '#2b3566', backEdge: '#6b7ff0', backEdgeW: 1.2,
   backInR: 6, backInInset: 8, backInFill: '#1c2440',
@@ -76,24 +77,28 @@ export const uiHandSlot: ProcPreset = (g, ctx) => {
   });
 };
 
-/* —— 卡面：圆角底 + 顶部色带 + 标题/文案（命运/机会/道具通用） —— */
+/* —— 卡面：圆角底 + 顶部色带 + 标题/文案（命运/机会/道具通用）—— */
 export const uiCard: ProcPreset = (g, ctx) => {
   const { cx, cy, box, params, state, s, text } = ctx;
   const w = box.w * s;
   const h = box.h * s;
-  g.roundRect(cx - w / 2, cy - h / 2, w, h, G(params, 'cardR'))
+  g.roundRect(cx - w / 2, cy - h / 2, w, h, G(params, 'cardR') * s)
     .fill({ color: S(params, 'cardFill') })
-    .stroke({ color: S(params, 'cardEdge'), width: G(params, 'cardEdgeW') });
+    .stroke({ color: S(params, 'cardEdge'), width: G(params, 'cardEdgeW') * s });
   g.rect(cx - w / 2, cy - h / 2, w, G(params, 'cardBandH') * s)
     .fill({ color: S(params, 'cardBand') });
   if (!text) return;
+  /* 正文按卡面内宽折行（CJK 逐字断行）：最长文案「随机获得 1 张道具卡（手牌满则折现 ￥100）」22 字 */
+  const wrapW = w - 2 * G(params, 'cardTextPad') * s;
   text({
     text: typeof st(state, 'title') === 'string' ? String(st(state, 'title')) : '',
-    x: cx, y: cy + G(params, 'cardTitleDy'), size: G(params, 'cardTitleFs'), fill: S(params, 'cardTitleFill'),
+    x: cx, y: cy + G(params, 'cardTitleDy') * s, size: G(params, 'cardTitleFs') * s,
+    fill: S(params, 'cardTitleFill'), wrapW,
   });
   text({
     text: typeof st(state, 'text') === 'string' ? String(st(state, 'text')) : '',
-    x: cx, y: cy + G(params, 'cardTextDy'), size: G(params, 'cardTextFs'), fill: S(params, 'cardTextFill'),
+    x: cx, y: cy + G(params, 'cardTextDy') * s, size: G(params, 'cardTextFs') * s,
+    fill: S(params, 'cardTextFill'), wrapW,
   });
 };
 

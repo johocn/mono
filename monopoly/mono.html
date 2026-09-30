@@ -21,12 +21,16 @@
     <meta name="description" content="吉林双阳的邻里商业版大富翁：买地、升级、收租、炒股，一局打完看谁是街坊首富。" />
     <style>
       html, body { margin: 0; height: 100%; background: #0c1513; overflow: hidden; }
-      #stage { display: block; width: 390px; height: 844px; margin: 0 auto; touch-action: none; }
-      @media (min-width: 420px) { #stage { margin-top: 12px; border-radius: 18px; } }
+      /* 唯一基准：390×844 逻辑舞台。画布与全部 DOM 覆盖层都是它的子节点，
+         由 src/main.ts 的 fitStage() 按 min(vw/390, vh/844) 统一缩放平移。
+         旧版此处用 margin:0 auto 让画布居中、覆盖层却 position:fixed 靠屏幕左边，
+         视口宽 ≠ 390 时两者相差 (视口宽-390)/2，即「命中区左偏」。 */
+      #mono-fit { position: absolute; left: 0; top: 0; width: 390px; height: 844px; transform-origin: 0 0; touch-action: none; }
+      #stage { display: block; width: 390px; height: 844px; touch-action: none; }
     </style>
   </head>
   <body>
-    <canvas id="stage"></canvas>
+    <div id="mono-fit"><canvas id="stage"></canvas></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

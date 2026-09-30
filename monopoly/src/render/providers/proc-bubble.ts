@@ -26,11 +26,12 @@ const D = fb({
   titleDy: 17,
   amountSize: 10,
   amountDy: 31,
-  /* 四态主色（spec §6.7 表；比主色盘更深一档，保证在暖白底上的可读性） */
+  /* 五态主色（spec §6.7 表 + 前进播报；比主色盘更深一档，保证在暖白底上的可读性） */
   tonebuy: '#2f8f5e',
   tonerent: '#a8761c',
   tonecard: '#7b46d6',
   tonejail: '#c0392b',
+  tonemove: '#2f6fbf',
 });
 
 /** 头顶事件气泡：暖白圆角底 + 指向三角 + 两行文字（标题 / 金额） */

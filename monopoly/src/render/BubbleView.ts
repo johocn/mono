@@ -1,11 +1,11 @@
 import type { ElementSpec } from '../skin/instantiate';
 import { PAWN_BOX } from '../skin/registry';
-import { BUBBLE_DEPTH, BUBBLE_GAP } from '../skin/layout';
+import { BUBBLE_DEPTH, BUBBLE_EDGE_PAD, BUBBLE_GAP, BUBBLE_W, STAGE_W } from '../skin/layout';
 import { resolvePlacement, type PlacementOpts } from './Scene';
 import { pawnPlaces, type PawnState } from './PieceView';
 
-/** 四态主色键（spec §6.7）：买地 / 收租 / 抽卡 / 进监狱 —— 具体色值在 `proc-bubble.ts` 的 L4 兜底里 */
-export type BubbleTone = 'buy' | 'rent' | 'card' | 'jail';
+/** 五态主色键（spec §6.7 + 前进播报）：买地 / 收租 / 抽卡 / 进监狱 / 前进 —— 具体色值在 `proc-bubble.ts` 的 L4 兜底里 */
+export type BubbleTone = 'buy' | 'rent' | 'card' | 'jail' | 'move';
 
 /** 头顶气泡内容（标题 + 金额/说明 + 主色键） */
 export interface BubbleContent {
@@ -15,14 +15,24 @@ export interface BubbleContent {
 }
 
 /**
- * 动作 → 气泡内容（纯函数）：只认「买地 / 收租 / 抽卡 / 进监狱」四态，其余返回 null（不出气泡）。
- * `result` = `applyStep` 的返回值：买地取 `cost`、收租取 `rent`、进监狱取 `turns`/`waived`；
+ * 动作 → 气泡内容（纯函数）：认「前进 / 买地 / 收租 / 抽卡 / 进监狱」五态，其余返回 null（不出气泡）。
+ * `result` = `applyStep` 的返回值：前进取 `steps`/`barrier`、买地取 `cost`、收租取 `rent`、进监狱取 `turns`/`waived`；
  * 买地失败（`ok !== true`）不出气泡；文案与 fx 同源（标题 = 落格短名，卡名取 `state.lastDraw`）。
  */
 export function bubbleOfStep(
   step: { kind: string }, result: unknown, tileName: string, cardTitle: string | null,
 ): BubbleContent | null {
   const r = (result ?? {}) as Record<string, unknown>;
+  /* 前进播报（「谁前进几步」）：落地即报，随后由 settle/end 覆盖；
+     被路障截停时步数为实际移动格数，副行点明截停原因 */
+  if (step.kind === 'move') {
+    if (typeof r.steps !== 'number' || r.steps <= 0) return null;
+    return {
+      title: `前进 ${r.steps} 步`,
+      amount: r.barrier === true ? '被路障截停' : `落在 ${tileName}`,
+      tone: 'move',
+    };
+  }
   if (step.kind === 'buy') {
     return r.ok === true && typeof r.cost === 'number'
       ? { title: tileName, amount: `买地 ￥${r.cost}`, tone: 'buy' }
@@ -64,9 +74,14 @@ export function bubbleSpecs(
     geo,
     placement,
   );
+  /* 11×7 盘最左/最右格心离舞台边缘不足半个气泡宽，中心不夹边会把气泡推出画布被裁 */
+  const cx = Math.min(
+    Math.max(at.cx, BUBBLE_W / 2 + BUBBLE_EDGE_PAD),
+    STAGE_W - BUBBLE_W / 2 - BUBBLE_EDGE_PAD,
+  );
   return [{
     id: 'ui.bubble', slot: null, c: 0, r: BUBBLE_DEPTH, pass: 4,
-    fixed: { cx: at.cx, cy: at.cy - PAWN_BOX.h * at.s - BUBBLE_GAP, s: 1 },
+    fixed: { cx, cy: at.cy - PAWN_BOX.h * at.s - BUBBLE_GAP, s: 1 },
     state: { title: content.title, amount: content.amount, tone: content.tone },
   }];
 }

@@ -113,8 +113,8 @@ describe('BuildingView · 内环街道小品', () => {
     expect(byId(specs, 'prop.tree').length).toBe(2);
     expect(byId(specs, 'prop.lamp').length).toBe(4);
     expect(specs.every((s) => s.slot === null)).toBe(true);
-    expect(INNER_STREET_PROPS.filter((p) => p.kind === 'tree').map((p) => [p.c, p.r])).toEqual([[2, 8], [8, 2]]);
+    expect(INNER_STREET_PROPS.filter((p) => p.kind === 'tree').map((p) => [p.c, p.r])).toEqual([[2, 4], [10, 4]]);
     expect(INNER_STREET_PROPS.filter((p) => p.kind === 'lamp').map((p) => [p.c, p.r]))
-      .toEqual([[3, 5], [5, 3], [7, 5], [5, 7]]);
+      .toEqual([[4, 4], [8, 4], [6, 2], [6, 6]]);
   });
 });
