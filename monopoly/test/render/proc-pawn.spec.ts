@@ -59,6 +59,18 @@ describe('proc preset: pawn（Q 版小朋友，spec §6.6）', () => {
     expect(joined).not.toContain('#3fbf7f');
   });
 
+  it('五官必备件齐备：瞳孔白高光 ≥2（睁眼两态）+ 头发 + 腮红（三态恒有）', () => {
+    for (const mood of ['calm', 'happy', 'sad']) {
+      const { g, args } = recorder();
+      pawn(g, ctx({ style: 'short' }, { owner: 1, mood }));
+      const joined = args.join('|');
+      expect(joined).toContain('#3b2b22');   // 头发
+      expect(joined).toContain('#f0938f');   // 腮红
+      /* happy 是弯眼（不画瞳孔），故白高光只在 calm / sad 两态断言，且必须双眼都有 */
+      if (mood !== 'happy') expect(joined.split('#ffffff').length - 1).toBeGreaterThanOrEqual(2);
+    }
+  });
+
   it('缺 ownerColors 时围巾回落内建兜底色；当前玩家亮光晕、非当前玩家不亮', () => {
     const plain = recorder();
     pawn(plain.g, ctx({ style: 'short' }, { owner: 1, mood: 'calm' }));

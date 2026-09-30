@@ -11,7 +11,7 @@
 | 线上回归 | `npm run check:prod`（打真实 URL `https://game.joho.cn/tour/mono.html`） |
 | 校验 | `npm run check`（lint + lint:skin + test） |
 
-URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围盒/depth/provider 回退级别）· `?seed=<n>` · `?speed=<n>`（动画时轴倍率）· **默认 → 首屏弹开局面板**（选完即开局；`?demo=1` 走演示棋盘）· `?play=1`（等价默认；`?play=0` 同 `?demo=1`）· `?nofx=1`（等价 `speed=999`，动画瞬间到终帧）· `?perf=1`（性能覆盖层 + 帧间隔采样）· `?audio=0`（一键全静音：开关初始全关且不创建 `AudioContext`）· `?humans=1..4`（真人数；**缺省 → 首屏弹开局面板**）· `?ai=conservative,aggressive,speculative`（AI 性格序列）· `?tour=1`（强制新手引导）/ `?tour=0`（关闭；缺省首访弹一次）。
+URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围盒/depth/provider 回退级别，**并挂载风格控制台**：点棋盘选元素 → 套 palette / 改 params → 导出 `theme.json`）· **`?theme=<paletteId>`（整体强制套色：`warm-market` / `snow-deer` / `papercut` / `onsen-mist` / `night-neon`；`?theme=off` 回落 `skin.json`）** · `?seed=<n>` · `?speed=<n>`（动画时轴倍率）· **默认 → 首屏弹开局面板**（选完即开局；`?demo=1` 走演示棋盘）· `?play=1`（等价默认；`?play=0` 同 `?demo=1`）· `?nofx=1`（等价 `speed=999`，动画瞬间到终帧）· `?perf=1`（性能覆盖层 + 帧间隔采样）· `?audio=0`（一键全静音：开关初始全关且不创建 `AudioContext`）· `?humans=1..4`（真人数；**缺省 → 首屏弹开局面板**）· `?ai=conservative,aggressive,speculative`（AI 性格序列）· `?tour=1`（强制新手引导）/ `?tour=0`（关闭；缺省首访弹一次）。
 
 ## 2. 测试用例
 
@@ -285,6 +285,129 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 
 **新增闸门口径**（`local/mono-e2e-playthrough.mjs`）：首个动作点击改走 Playwright **真实鼠标点击**（其余保持合成以守住墙钟预算），新增 `gate.audio_unlocked`（真实手势确实建起了 `AudioContext`）；`gate.noErrors` 原本已有。
 
+### M13 画面重设计（配色装配表 + 楼体原型 + 道具 / 环境层 + 名牌 / 棋子 / 气泡 / HUD）
+
+**目标**：把「画面长什么样」从**渲染代码**里搬进**配置**——一套 `public/config/theme.json` 管配色与风格，一套注册表管素材原型；改配置即换风格，`src/render/**` 零改动。落地方案见 `docs/superpowers/specs/2026-09-30-monopoly-visual-redesign-design.md`，逐步实施记录见 `docs/superpowers/plans/2026-09-30-monopoly-visual-redesign.md`。
+
+**改动范围**（Task 0–10，均不触 `src/core/**` 与 `src/data/**`）：
+
+| 层 | 关键文件 | 改了什么 |
+|---|---|---|
+| 配色装配 | `public/config/theme.json` · `src/skin/theme.ts` · `src/ui/themeConsole.ts` | 5 套 palette × 8 色键 + 段通配 binding；`?theme=<id>` 整体套色；`?debug=1` 风格控制台逐栋选色并导出 |
+| 布局常量 | `src/skin/layout.ts` | 棋盘放大（`TILE_*`）、名牌/地块卡/气泡/底坞常量集中一处 |
+| 楼体原型 | `src/render/providers/proc-building.ts` · `tools/registry-ids.json` · `public/skins/default/skin.json` | 6 原型（stall / shop / market3 / onsenHouse / gate / barn），全量转读色键 |
+| 道具 | `src/render/providers/proc-props.ts` | 16 个 `prop.*`（挂件 / 树 / 灯 / 招牌塔等） |
+| 环境层 | `src/render/AtmosphereView.ts` · `proc-atmosphere.ts` | 7 个 `bg.*`（夜空 / 星 / 月 / 远山 / 街市 / 灯笼串 / 街灯） |
+| 名牌 | `src/render/LabelView.ts` | 店名上房顶（`LABEL_ROOF`）+ 当前格三重标记（1.25× / 三角 / 金环） |
+| 棋子 | `src/render/providers/proc-pawn.ts` | Q 版小朋友：两男两女四造型 × 三表情 × 归属围巾 |
+| 气泡 | `src/render/providers/proc-bubble.ts` · `src/ui/BubbleView.ts` | 停留事件头顶气泡四态（买地 / 收租 / 抽卡 / 进监狱） |
+| HUD | `src/ui/Hud.ts` | 资产条改 1 条 4 段（无缝）+ 落地地块卡滑入 + 手牌抽屉默认收起 |
+
+#### 13.1 五套配色（`theme.json → palettes`）
+
+每套 8 个色键：`wallL / wallR`（楼体受光面 / 背光面）· `roof`（屋顶）· `win`（窗光）· `sign`（店招底）· `tileFill / tileEdge`（地砖填充 / 描边）· `glow`（灯光光晕）。
+
+| palette id | 定位 | wallL | wallR | roof | win | sign | tileFill | tileEdge | glow |
+|---|---|---|---|---|---|---|---|---|---|
+| `warm-market` | 暖阳市集（默认） | `#cdb78f` | `#a8926a` | `#8f4a33` | `#ffcf7a` | `#f5c451` | `#4a3b2a` | `#8a7550` | `#ffd9a0` |
+| `snow-deer` | 雪原鹿乡 | `#dfe7ee` | `#b7c4d0` | `#6f8296` | `#ffcf7a` | `#ffd98a` | `#8fa3b5` | `#c9d6e0` | `#ffe6b8` |
+| `papercut` | 剪纸年味 | `#f5e6c8` | `#e0c49a` | `#c0392b` | `#ffd23f` | `#ffd23f` | `#1f6b3a` | `#f5e6c8` | `#ffd23f` |
+| `onsen-mist` | 温泉雾白 | `#e8e6e0` | `#c9c6bd` | `#5a6360` | `#ffe9c0` | `#8fc4b8` | `#3a3d3a` | `#8a8f8b` | `#ffe9c0` |
+| `night-neon` | 夜市霓虹 | `#3a3140` | `#2c2532` | `#ff8a3d` | `#ffd23f` | `#ff8a3d` | `#20262e` | `#ff8a3d` | `#ffd23f` |
+
+对照截图：`mono-visual-01a-warm-market` / `01b-snow-deer` / `01c-papercut` / `01d-onsen-mist` / `01e-night-neon`（同一 seed `20260928`、4 真人、`?theme=<id>`）。
+
+#### 13.2 `theme.json` 字段与写法
+
+| 字段 | 含义 |
+|---|---|
+| `palettes[id]` | 一套 8 键配色，键名固定如上；缺键回落皮肤内建默认 |
+| `bindings[].match` | 元素 id 的**段通配**（`*` 匹配整段、不跨 `.`；段数必须相等） |
+| `bindings[].preset` | proc preset 名（`stall` / `shop` / `market3` / `onsenHouse` / `gate` / `barn`） |
+| `bindings[].palette` | 整条 binding 统一套色 |
+| `bindings[].paletteBySlot` | 32 长数组，按地块序号逐格给配色（优先于 `palette`）——现按「每 6 格一街区」轮转 5 套 |
+| `bindings[].params` | 元素级参数，**逐键压过** palette（= 单素材独立风格） |
+| 覆盖顺序 | **后写的覆盖先写的**（同键覆盖、异键累加）⇒「精确 id」必须写在「通配」之后 |
+
+**单素材独立风格示例**（不改代码，只加一条 binding）：
+
+```json
+{ "match": "building.s4.l2", "preset": "onsenHouse", "palette": "onsen-mist", "params": { "steam": true } }
+```
+
+即：把 4 号地块的 L2 换成「汤屋」原型、套温泉配色、并单独打开蒸汽（其余 `building.*.l2` 仍是 `shop` + 各自 `paletteBySlot` 配色）。同理 `prop.signTower` 单独套 `papercut`、`board.tile.chance` 单独套 `night-neon`。
+
+**整体强制套色**：`?theme=<paletteId>` 把全场元素（含 `bg.*`、`prop.*`、`board.tile.*`）一律改用该套色，用于出风格样张与客户挑选；`?theme=off`（或不带）回落 `skin.json` 内建配色。
+
+#### 13.3 棋子形象与停留气泡
+
+| 项 | 口径 |
+|---|---|
+| 造型 | `piece.p1` 短发（男）· `p2` 双马尾（女）· `p3` 小帽（男）· `p4` 丸子头（女）—— **两男两女** |
+| 表情 | `state.mood` = `calm` / `happy` / `sad`，三态几何不同（happy 为弯眼不画瞳孔） |
+| 五官必备件 | 瞳孔白高光（睁眼两态各 ≥2）+ 头发 + 腮红，三态恒有 |
+| 归属色 | 只染一条围巾（`tokens.owner1..owner4`），衣服统一米白——**看不出归属色的旧问题已消除** |
+| 停留气泡 | `ui.bubble` 四态 tone = `buy`（买地）/ `rent`（收租）/ `card`（抽卡）/ `jail`（进监狱），标题 + 金额两行 |
+| 气泡层 | `pass: 4` 进 `layers.fx`，**不进 `hitAreas()`**（不挡点击）；`idle` 无气泡 |
+
+对照截图：`mono-visual-09-players.png`（四造型 / 三表情 / 四态气泡合成版式）。
+
+#### 13.4 截图清单（全部 390×844 @dpr2，手机视口，入 `docs/verify/`）
+
+| 文件 | 内容 |
+|---|---|
+| `mono-visual-01a..01e-<palette>.png` | 五套配色各一张全屏（`?theme=<id>`） |
+| `mono-visual-02-labels.png` | 棋盘区放大切图（楼顶名牌可读性 + 当前格金环 / 三角 / 1.25×） |
+| `mono-visual-03-hud.png` | 底坞特写（**1 条 4 段**资产条 + 骰面点数 + 主按钮） |
+| `mono-visual-04-tilecard.png` | 落地态地块卡滑入（首行「停在 金鹿源 · 你在这里」） |
+| `mono-visual-05-street.png` | 中部街市带 + 事件卡面浮层 |
+| `mono-visual-06-drawer.png` | 牌袋抽屉打开（5 槽入画，牌袋键文案翻为「收起手牌」） |
+| `mono-visual-07-catalog.png` | 素材库总览：**6 原型（3×2）+ 16 道具（4×4）** |
+| `mono-visual-07b-atmosphere.png` | **环境层 7 个 preset** 按原台位叠加的实景条带（另有台位文字标注） |
+| `mono-visual-08-console.png` | 风格控制台（点棋盘选元素 → 套 `night-neon` → 导出 `theme.json`） |
+| `mono-visual-09-players.png` | Q 版人物四造型 + 三表情 + 四态气泡 |
+
+**07 为什么拆成两张（口径偏离，精确记录）**：`bg.*` 一族是**满屏背景层**——provider 取 `box.w/h` 定尺寸（`bg.sky` 390×844、`bg.stars` 390×240、`bg.moon` 60×60、`bg.ridge` 390×90、`bg.street` 390×130、`bg.streetLamp` 40×70、`bg.lanternString` 390×30），`cx/cy` 是**左上角坐标**，**完全不吃 `s`（缩放）** ⇒ 塞进小格会互相压掉、看不出层次。故拆为 `07`（原型 + 道具，可缩放）与 `07b`（环境层按 `src/render/AtmosphereView.ts` 的台位表整体下移叠加，展示真实 z 序）。
+
+#### 13.5 闸门 V1–V14 口径（`node local/mono-prod-check.mjs`，本地与线上同一脚本）
+
+| 判据 | 口径 | 实测（本地 52300） |
+|---|---|---|
+| V1 | `theme.json` 合法：5 palette × 8 键、`paletteBySlot` 长 32、每条 `match` 至少展开 1 个 id | 5 / `keysOk` / `slotsOk`；展开计数 `32,32,32,32,1,…,16` |
+| V2 | `?theme=` × 5 各出一图、**两两画面差异 > 1%**；`?theme=off` 回落 `skin.json` | 十对 15.7%–18.9%；`off` vs 出厂差异 20.28% |
+| V3 | `building.s4.l2` 实例 `params.wallL === S4.wallL`；改 binding 即时变化 | 改 `#3a3140` → 还原 `#e8e6e0`（=`onsen-mist.wallL`） |
+| V4 | `prop.signTower` 参数覆盖生效且不影响其他 `prop.*` | sign `#ffd23f`→**被覆盖**，同时 `prop.tree` 仍 `#ffd9a0`（未被牵连） |
+| V5 | 楼体同层唯一 + 逐层等于 `skin.json` 常量（与 owner 无关） | `l1=32 / l2=30 / l3=200`，`byLevel` 各层均唯一 |
+| V6 | 32 名牌齐备且 `strokeW > 0`；4 字宽 ≤48 且 fs 10；3 字 fs 11；5 字 fs 8；>5 截断；当前格 1.25× + 三角 | 32 text + 33 graphic；`ring=1`、`scaled=1`；fs 集合 `{6.2, 10, 11, 12.5}` |
+| V6b | 当前格「金环 + 名牌 1.25× + 棋子光晕」三处同时成立；地块卡首行含「停在」 | 前两项由 V6 覆盖；第三项 `active === 1`；标题「停在 金鹿源 · 你在这里」 |
+| V7 | `geo.hw === 24`；棋盘纵向 ∈ [40, 320] ⇒ 占比 ≥ 33% | `hw=24`、`[91, 312]` 高 221px ÷ `DOCK_Y 606` = **36.5%** |
+| V8 | 中部条带 320..508 非纯背景像素 > 20% | `nonDomPct = 80.7%` |
+| V9 | 资产条 4 段连续无缝（由 X0/W/GAP 派生）且与 DOM 命中层零交叠 | 4 段 `96×41 @ x 6/100/195/289`，间距 `94/95/94`，`overlap = []` |
+| V10 | `settled` 时地块卡出现且「升级」可点；`idle` 时不可见 | `idle 0`；`settled` 1（标题 / 副行齐备、升级键 `disabled=false`） |
+| V11 | 牌袋键可开关；**关闭时 `ui.handSlot` 不参与命中** | `closed → opened 5 → reclosed`；`handSlot` 计数随开合 0↔5 |
+| V12 | 6 原型 + 16 道具 + 7 环境 preset 全可达；`scene ≤ 200`；`missingAssets === []` | 缺件 `0/0`；6 原型齐；`liveBg = 7`；`scene 197 / total 211` |
+| V13 | pawn 含 ≥2 眼（含白高光）+ 腮红 + 头发；四 style 覆盖两男两女；`owner` 1..4 且衣服统一米白；三 mood 几何不同 | 四 style `bun/cap/short/twintail`、owner `1..4`、`active=1`；白高光 / 腮红 / 头发由 `test/render/proc-pawn.spec.ts` 断言 |
+| V14 | 气泡四态各产出 1 枚 `ui.bubble`；气泡不在 `hitAreas()`；`idle` 无气泡；`e2e:play` 全绿 | 四态各 `n=1`、`overlapped=false`；`idle n=0` |
+
+**口径偏离说明（相对 spec §11.2 原文，精确记录三处）**：
+
+1. **V2**：原文按「量化主色两两不同」判——实测五套的量化主色被深色夜空吞掉，只落到 `8,8,8` / `24,24,24` 两档（`dom` 字段仍保留可查）。改为**棋盘区两两画面差异占比 > 1%**（`diffStats` 像素级比对），实测 15.7%–18.9% 全部通过——该口径直接对应「肉眼能看出是两套风格」。
+2. **V5**：原文写「`overrides` 不含 `hue` 键」——在 live 层**不可断言**：`hue` 仍在实例参数里，且来自 `skin.json` 的**楼层常量**（`l1=32 / l2=30 / l3=200`），与 owner 无关。改为「**同层唯一 + 逐层等于 `skin.json` 常量**」，实测 `byLevel = {l1:["32"], l2:["30"], l3:["200"]}`。即：色彩不再随 owner 漂移（这正是原判据想守的性质）。
+3. **V9**：原文写「`hitAreas()` 4 段一一对齐」——但 `hitAreas()` 里**没有 `ui.playerBar` 条目**（资产条走 DOM 命中层，不在画布命中层）。改为「**渲染层 4 段无缝**（96×41、x 间距 94.5）+ **与 DOM 命中层零交叠**」两项合成。
+
+#### 13.6 本地复跑与验收
+
+```powershell
+npm run dev                                        # http://127.0.0.1:52300
+$env:MONO_ORIGIN="http://127.0.0.1:52300"; node local/mono-prod-check.mjs   # 闸门 V1–V14
+node local/mono-shots-visual.mjs                   # 14 张手机视口截图 → docs/verify/
+npm run check ; npx tsc --noEmit                   # lint + lint:skin + vitest / 类型
+```
+
+闸门结果：**全部 `true`、`errors: []`**（含既有 `http200 / gameReady / counts / sim / skinAssets / skinImages / defaultEntry / aiSeat / audio* / fixDice / fixMove / fixEvent` 与新增 `v1…v14 / v2b / v6b`）。
+
+> **线上回归记录**：Task 12 统一执行「本地构建 → 部署 → 线上复跑」后回填（命令见 M7 节；线上复跑 `mono-shots-visual.mjs` 会**覆盖**上述 14 张为线上实拍）。
+
 ### 最终验收（对照 spec §11 硬性标准）
 
 | # | spec §11 条目 | 证据 |
@@ -300,6 +423,7 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 | 9 | **商业闭环·阶段一「静态认领」配置加载（本任务新增，超出 spec §11）** | `node local/mono-shots-shops.mjs` 8 项 gate 全 true / 退出码 0；4 张 390×844 @dpr2 截图（`docs/verify/mono-shops-01..04`）；`npm run check` 45 文件 / 365 例（详见 §5） |
 | 10 | **M11 音效与音乐（本任务新增，超出 spec §11）** | `npm run check` 全绿（51 文件 / 433 例）/ `registry-ids.json: 237 ids` / `npx tsc --noEmit` 无错；线上 `mono-prod-check.mjs` 9 项音频 gate（`audioLazy` 懒建 ctx / `audioUnlock` 单实例 / `audioPlay` 真实发声 / `audioPrefsDefault` / `audioIconsOn` / `audioMute` 静音后无声 + 落库 / `audioResume` 点回恢复 / `audioKeys` 结算后常驻 / `audioForceMute` `?audio=0` 不建 ctx）、`mono-e2e-playthrough.mjs` 新增 `audio_keys` + `ai_audio_keys`；2 张 390×844 @dpr2 截图（`mono-prod-05-audio-on` / `06-audio-off`）；默认皮肤零音频网络请求 |
 | 11 | **M12 真机音频解锁回归（本任务新增，超出 spec §11）** | `npm run check` 全绿（51 文件 / 435 例）/ `npx tsc --noEmit` 无错；本地 preview（52301）与线上双闸门全绿且 `errors=[]`，`mono-prod-check.mjs` 全部 gate 为 `true`（音频项改真机口径：`audioLazy`/`audioUnlock`/`audioForceMute` 走 `isUnlocked()`、`audioPlay` 走 `dice.total`；并新增 `fixDice`/`fixMove`/`fixEvent`）、`mono-e2e-playthrough.mjs` 新增 `audio_unlocked`；3 张 390×844 @dpr2 截图（`mono-prod-07-dice-pips` / `-08-pawn-move` / `-09-event`）；根因与闸门盲区详见 M12 节 |
+| 12 | **M13 画面重设计（本任务新增，超出 spec §11）** | `npm run check` 全绿 / `npx tsc --noEmit` 无错；`node local/mono-prod-check.mjs` 全部 gate 为 `true` 且 `errors=[]`（新增 `v1…v14 / v2b / v6b` 共 16 项）；**14 张 390×844 @dpr2 手机视口截图**（`mono-visual-01a..01e` 五套配色 + `02..06` 局部特写 + `07-catalog` / `07b-atmosphere` 素材库 + `08-console` 风格控制台 + `09-players` 人物气泡）；`theme.json` 改配置即换风格、`src/render/**` 零改动、`git diff --stat src/core` 为空（详见 M13 节） |
 
 **§11.5 性能实测**（两种成本分开测；`node local/mono-perf.mjs` 桌面代理 + `npm run perf:android` CDP 节流代理；受本机负载影响会抖动，同机连测 3 次的区间如下）：
 - 首屏可交互：桌面 default 235–255 ms / photo 1739–1784 ms；4× 节流代理 1.27–1.36 s（门槛 <3000 ✅）
