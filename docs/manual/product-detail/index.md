@@ -203,12 +203,12 @@
 
 ![结算页（展开逐晚明细）：明细块独占整行，10-07 节假日 ¥1000.00 / 10-08 ¥880.00 / 住宿合计 ¥1880.00](../shots/2026-09-30-hotel-orderline/04-checkout-expanded.png)
 
-![页头品牌去重：品牌位仅一个标识，不再重复渲染租户名](../shots/2026-09-30-hotel-orderline/05-header-brand.png)
+![页头（移动端）：品牌 logo 完整可见、无横向溢出，「二月兰会员」租户按钮仅在抽屉内出现](../shots/2026-09-30-hotel-orderline/05-header-brand.png)
 
 - 详情页：日期条可改期；「逐日计价」逐晚列出日期 + 日类型 + 价格，底部「预估总价 / 日均价」；加入购物车/立即购买受库存与晚数范围校验
 - 购物车/结算/订单：酒店行统一显示「共 N 晚 · YYYY-MM-DD 至 YYYY-MM-DD」，**不显示单价、无数量步进器**（晚数由日期决定，不可步进）
 - 结算页：金额只在行内显示合计（¥1880.00），点「逐晚明细」展开逐晚价格与「住宿合计」；明细块独占整行
-- 页头：品牌位（Logo）与租户名切换器去重，不再叠加渲染租户名文本
+- 页头：品牌位只渲染 logo 图（不再叠加租户名文本）；移动端（<640px）页头不渲染租户切换按钮，租户入口收敛到抽屉（`#body`），避免右侧组撑破 390px 视口、logo 被压成细缝（见 6.10）
 
 ### 6.3 后台配置：房源与逐晚价
 
@@ -311,7 +311,7 @@ PASS  06-checkout-normal-product.png 尺寸：780×1688（期望 780×1688）
 
 ### 6.6 已知边界
 
-- **i18n 兜底**：`messages.hotel.*`（`nights / dateRange / nightlyDetail / changeDates / stayTotal / selectDatesFirst / nightsOutOfRange`）目前**仅 `zh-CN` 与 `en-US` 两个语言包完整定义**，其余语言包未定义该命名空间，按回退链落到中文兜底（`merge.ts` 以中文为基底深合并）；新增语言时需同步补词条。
+- **i18n 词条（12 语言包已补全）**：`messages.hotel.*`（`nights / dateRange / nightlyDetail / changeDates / stayTotal / selectDatesFirst / nightsOutOfRange`）已在全部 12 个语言包（`zh-CN / en-US / fa-IR / bg-BG / ru-RU / ko-KR / it-IT / ja-JP / pt-BR / fr-FR / es-ES / de-DE`）定义，占位符 `{n}/{in}/{out}/{min}/{max}` 原样保留；`merge.ts` 仍以中文为基底兜底，新增语言时需同步补词条（见 6.10）。
 - **商品行第二行宽度的多语言余量**：普通商品行第二行（单价 / 步进器 / 小计 / 删除）在 zh-CN 下几乎占满可用宽（实测右边缘余量约 2px）。更长语言（如 en-US "Delete"）靠该行 `flex-wrap` 换行兜底，不会溢出容器；若某语言的单价或小计位数显著更长，需重新核算该行宽度预算。
 
 ### 6.7 本次线上 500 缺陷记录
@@ -342,6 +342,33 @@ PASS  06-checkout-normal-product.png 尺寸：780×1688（期望 780×1688）
 - **布局缺陷（真实代码问题）**：`layers/base/app/components/checkout/BoxLines.vue` 的商品行 `<li>` 是 `flex`（默认 `nowrap`），展开的「逐晚明细」块虽写了 `w-full basis-full` 却**无法换行**，被压缩挤在同一行内，导致中间描述列宽度趋近于 0、日期文案逐字竖排；同时酒店行多了一个独立「共 N 晚」定宽列（`w-14`），进一步挤占描述列。→ 修法：商品行 `<li>` 追加 `flex-wrap`（当时只在酒店行加，普通商品行于 6.5 改为折行布局后同样依赖它）；去掉独立晚数列，把「共 2 晚」并入描述列与「逐晚明细」同排；日期行加 `truncate`、操作行加 `whitespace-nowrap` 兜底。
 - 修复后：折叠态日期单行显示、展开态明细块独占整行横跨（见 6.2 第 3、4 张图）。
 - 同一轮回归截图暴露普通商品行「商品名被挤到约 1 个字」，已按 6.5 出内联 mockup 定稿后修复（方案 A 折行式），`<li>` 的 `flex-wrap` 改为两分支共用。
+
+### 6.10 页头品牌去重与移动端 390px 溢出修复（2026-10-01）
+
+两处页头缺陷同轮修复（`d:\zhao\nshop\layers\base\app\components\`）：
+
+**① 品牌位去重（`header/LogoElement.vue`）**
+- 现象：t2 租户「二月兰会员」在页头渲染出**两个同名文本**，左侧 logo 位那个被压扁变形。
+- 根因：`LogoElement.vue` 在无 logo 图时回退渲染租户名文本，与右侧租户切换器按钮的租户名重复。
+- 修法（方案 A）：删除租户名文本分支，品牌位**恒渲染 logo 图**；无图时仅留占位，不再输出文本。
+
+**② 移动端页头隐藏租户按钮（`AppHeader.vue`）**
+- 现象（390px，结算页 t2）：文档 `scrollWidth=398 > 视口 390`（横向可滚、购物车角标被切），品牌 logo 被右侧组挤压成 **32px 细缝**。
+- 根因：页头右侧组为 `租户按钮 + 城市按钮 + 搜索 + 账户 + 购物车`，其中租户名「二月兰会员」5 字使右侧组合计 **338px**（视口 390 − logo 组 32 − 间距）；租户名越长挤压越严重。
+- 修法（方案 A）：`#right` 内的 `HeaderTenantSelector` 包一层 `hidden sm:flex`，**移动端（<640px）不渲染**；租户入口保留在移动端抽屉 `#body` 中的另一份（功能不丢失）。城市选择器保留——它决定配送/库存，是多城市店的主操作。
+- 修后实测（生产 t2，390×844 dpr=2）：结算页/首页 `scrollWidth ≤ 390`（无横向溢出），logo 可用宽 ≥80px（不再是 32px 细缝）。
+
+**③ i18n 12 语言包补全**
+- 6.1 引入的 `messages.hotel.*` 此前仅 `zh-CN / en-US` 定义，其余 10 包缺失（违反「所有语言包必须同步补词条」规范）。
+- 已补齐 `fa-IR / bg-BG / ru-RU / ko-KR / it-IT / ja-JP / pt-BR / fr-FR / es-ES / de-DE` 共 10 包 × 7 键，占位符原样保留，插入位置用语义邻居键（`tWeekend`/`tHoliday`/`tCustom`/`bedType`）定位。12 包均 `keys=7`。
+
+**验收断言**（`scripts/_shot-hotel-checkout.mjs` 页头段，生产 t2）：
+
+```
+PASS  页头-结算页无横向溢出：scrollWidth=390 ≤ 视口 390（修复前 398）
+PASS  页头-首页无横向溢出：scrollWidth=390 ≤ 视口 390
+PASS  页头-logo 可用宽 ≥80px：实际 98px（修复前 32px，被压成细缝）
+```
 
 
 ---

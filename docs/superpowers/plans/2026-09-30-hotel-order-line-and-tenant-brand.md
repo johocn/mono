@@ -1802,3 +1802,26 @@ git commit -m "test(hotel): 酒店订单行 e2e 脚本、手机视口截图与�
 - 手册 `docs/manual/product-detail/index.md` 6.5 重写为折行布局说明（含选型表与断言输出），6.6 已知边界改为「第二行宽度的多语言余量」，6.9 同步更正「普通商品行不加 `flex-wrap`」的旧表述
 
 未纳入本轮（仍属已知边界）：酒店房型无 `featureAssetSource` 时缩略图位显示为浅灰占位块（`bg-neutral-100`），属既有行为；如需为酒店变体补商品图请在后台配置。
+
+### 收口补记 · 页头移动端 390px 溢出修复 + i18n 12 语言包补全（2026-10-01）
+
+计划外追加。起因：390px 全站巡检发现结算页（t2，租户名「二月兰会员」5 字）文档 `scrollWidth=398 > 视口 390`（横向可滚、购物车角标被切），品牌 logo 被右侧组挤压成 **32px 细缝**。
+
+定位过程与结论：
+- 临时脚本 `_audit-mobile-390.mjs`（整页截图 + 横向溢出元素清单）先发现 `scrollWidth=398`，溢出元素全部来自页头；`/cart` 实为 404 页（真实购物车是 `CartPanel` 抽屉），其对比结论作废。
+- 临时脚本 `_audit-header.mjs`（对比两页页头各元素盒模型）定位到右侧组宽度：404 页回退站点名「优商铺」3 字 → 右侧组 310px（不溢出）；结算页租户名「二月兰会员」5 字 → 右侧组 **338px**，加 logo 组 32px + 间距后越过 390px。
+- 两个临时脚本与临时截图目录 `docs/manual/shots/2026-10-01-mobile-audit/` 用完即删，不入库。
+
+改动（方案 A，用户选定）：
+
+| 文件 | 项 | 改后 |
+| --- | --- | --- |
+| `layers/base/app/components/AppHeader.vue` | `#right` 内 `HeaderTenantSelector` | 包 `hidden sm:flex`，移动端（<640px）不渲染；租户入口保留在抽屉 `#body` 的另一份（功能不丢失）；城市选择器保留 |
+| `layers/base/i18n/locales/{fa-IR,bg-BG,ru-RU,ko-KR,it-IT,ja-JP,pt-BR,fr-FR,es-ES,de-DE}.ts` | `messages.hotel.*` | 各补 7 键，占位符 `{n}/{in}/{out}/{min}/{max}` 原样保留，插入位置以语义邻居键（`tWeekend`/`tHoliday`/`tCustom`/`bedType`）定位 |
+
+> 品牌位去重（`LogoElement.vue` 恒渲染 logo 图）在 Task 12 已完成；本轮仅处理移动端溢出与 i18n 缺口。i18n 补全纠正了收口记录中「未纳入本次范围」的表述——12 语言包现已全部定义 `messages.hotel.*`（各 7 键，已核验）。
+
+验证：
+- 前端 `pnpm build` 成功；`node scripts/deploy.mjs` 部署 → 生产 `pm2 restart nshop`（online）
+- 生产实测（390×844 dpr=2，`scripts/_shot-hotel-checkout.mjs` 新增页头段）：结算页/首页 `scrollWidth ≤ 390`、logo 可用宽 ≥80px，全部 PASS；酒店行与普通商品行既有断言无回归
+- 手册 `docs/manual/product-detail/index.md`：6.2 页头验收点与 05 图 alt 更新、6.6 i18n 已知边界改写、新增 6.10

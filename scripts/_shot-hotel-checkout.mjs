@@ -71,11 +71,45 @@ await expectText(page, '¥1000.00', '结算页-展开-逐晚价(节假日)');
 await expectText(page, '¥880.00', '结算页-展开-逐晚价(平日)');
 await page.screenshot({ path: `${OUT}/04-checkout-expanded.png`, fullPage: false });
 
-// 首页页头品牌
+/** 页头度量：横向溢出与品牌 logo 尺寸 */
+async function headerMetrics() {
+  return page.evaluate(() => {
+    const h = document.querySelector('header');
+    const doc = document.documentElement;
+    // 品牌 logo：header left 插槽 a[aria-label="Home"] 内的 img/svg（排除购物车等图标）
+    const logo = h?.querySelector('a[aria-label="Home"] img, a[aria-label="Home"] svg');
+    const lb = logo?.getBoundingClientRect();
+    return {
+      docW: doc.clientWidth,
+      scrollW: doc.scrollWidth,
+      logoW: lb ? Math.round(lb.width) : 0,
+      logoH: lb ? Math.round(lb.height) : 0,
+    };
+  });
+}
+
+// ① 结算页量一次：t2 租户名「二月兰会员」是最宽场景，修复前 scrollWidth=398（横向可滚）
+const hmCheckout = await headerMetrics();
+console.log('  页头度量(结算页):', JSON.stringify(hmCheckout));
+const noOverflowCheckout = hmCheckout.scrollW <= hmCheckout.docW;
+console.log(`${noOverflowCheckout ? 'PASS' : 'FAIL'}  页头-结算页无横向溢出：scrollWidth=${hmCheckout.scrollW} ≤ 视口 ${hmCheckout.docW}（修复前 398）`);
+if (!noOverflowCheckout) failures.push('页头-结算页无横向溢出');
+
+// ② 首页页头品牌：移动端租户按钮在 AppHeader 中隐藏（抽屉 #body 另有一份），
+//    右侧组不再撑破视口，品牌 logo 不再是 32px 细缝。
 await page.goto(`${BASE}`, { waitUntil: 'domcontentloaded' });
 await page.locator('header').first().waitFor({ timeout: 30000 });
 await page.waitForTimeout(800);
 await page.screenshot({ path: `${OUT}/05-header-brand.png`, fullPage: false });
+
+const hmHome = await headerMetrics();
+console.log('  页头度量(首页):', JSON.stringify(hmHome));
+const noOverflowHome = hmHome.scrollW <= hmHome.docW;
+console.log(`${noOverflowHome ? 'PASS' : 'FAIL'}  页头-首页无横向溢出：scrollWidth=${hmHome.scrollW} ≤ 视口 ${hmHome.docW}`);
+if (!noOverflowHome) failures.push('页头-首页无横向溢出');
+const logoOk = hmHome.logoW >= 80;
+console.log(`${logoOk ? 'PASS' : 'FAIL'}  页头-logo 可用宽 ≥80px：实际 ${hmHome.logoW}px（修复前 32px，被压成细缝）`);
+if (!logoOk) failures.push('页头-logo 可用宽');
 
 // ============ 普通商品行回归（全新 context，干净匿名购物车）
 // 验证折行布局：商品名独占首行（可用宽 ≥200px）、单价与步进器折到第二行、56×56 缩略图 ============
@@ -154,9 +188,18 @@ if (!added) {
   process.exit(1);
 }
 
-// 步进器 +1：1 → 2（同时验证步进器可用与行小计随之变化）
-await page2.locator('[aria-label="增加数量"]').first().click();
-await page2.getByText('¥336.00', { exact: true }).first().waitFor({ timeout: 20000 }).catch(() => {});
+// 步进器 +1：1 → 2（同时验证步进器可用与行小计随之变化）。
+// 刚重启后 hydration 未完成时首次点击可能落空，故按「当前数量」判断后重试，避免重复点击加多。
+for (let attempt = 1; attempt <= 3; attempt++) {
+  const qty = (await normalLine.locator('b').first().innerText().catch(() => '')).trim();
+  if (qty === '2') break;
+  await page2.locator('[aria-label="增加数量"]').first().click();
+  const ok = await page2.getByText('¥336.00', { exact: true }).first()
+    .waitFor({ state: 'visible', timeout: 10000 }).then(() => true).catch(() => false);
+  if (ok) break;
+  console.log(`  步进 +1 未生效（第 ${attempt} 次，当前数量 ${qty}），重试…`);
+  await page2.waitForTimeout(800);
+}
 await page2.waitForTimeout(500);
 
 await page2.screenshot({ path: `${OUT}/06-checkout-normal-product.png`, fullPage: false });
