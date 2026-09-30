@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateSkin, type SkinFile } from '../../tools/lint-skin.mjs';
+import { validateSkin, validateTheme, THEME_KEYS, type SkinFile } from '../../tools/lint-skin.mjs';
 import { allElementIds } from '../../src/skin/registry';
 
 const ok = (): SkinFile => ({
@@ -59,5 +59,65 @@ describe('validateSkin', () => {
     const s = ok();
     s.geo = { hw: 21 } as never;
     expect(validateSkin(s, registered, exists).some((e) => e.includes('geo'))).toBe(true);
+  });
+});
+
+/* —— 主题文件（spec §4；运行时坏数据是静默跳过，故闸门必须拦住"静默不生效"） —— */
+
+const pal = (over: Record<string, unknown> = {}): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  for (const k of THEME_KEYS as string[]) out[k] = '#112233';
+  return { ...out, ...over };
+};
+
+const okTheme = () => ({
+  palettes: { warm: pal() },
+  bindings: [
+    { match: 'building.*.l2', preset: 'shop', palette: 'warm' },
+    { match: 'prop.*', palette: 'warm', params: { glow: false } },
+  ],
+});
+
+describe('validateTheme', () => {
+  it('合法主题零错误', () => {
+    expect(validateTheme(okTheme(), registered)).toEqual([]);
+  });
+
+  it('palette 缺色键 → 报错（点名缺哪个键）', () => {
+    const missing = pal();
+    delete (missing as Record<string, unknown>).win;
+    const errs = validateTheme({ palettes: { warm: missing }, bindings: [{ match: 'prop.*', palette: 'warm' }] }, registered);
+    expect(errs.some((e) => e.includes('win'))).toBe(true);
+  });
+
+  it('binding 引用未定义 palette → 报错', () => {
+    const t = okTheme();
+    t.bindings[1] = { match: 'prop.*', palette: 'nope' } as never;
+    expect(validateTheme(t, registered).some((e) => e.includes('未定义 palette=nope'))).toBe(true);
+  });
+
+  it('match 不命中任何注册 ID → 报错（防"写了但不生效"）', () => {
+    const t = okTheme();
+    t.bindings[0] = { match: 'building.*.l9', palette: 'warm' } as never;
+    expect(validateTheme(t, registered).some((e) => e.includes('building.*.l9'))).toBe(true);
+  });
+
+  it('paletteBySlot 长度 ≠ 32 → 报错', () => {
+    const t = okTheme();
+    t.bindings[0] = { match: 'building.*.l1', paletteBySlot: ['warm', 'warm'] } as never;
+    expect(validateTheme(t, registered).some((e) => e.includes('长 32'))).toBe(true);
+  });
+
+  it('paletteBySlot 内含未定义 palette → 报错', () => {
+    const t = okTheme();
+    const slot = Array.from({ length: 32 }, () => 'warm');
+    slot[7] = 'nope';
+    t.bindings[0] = { match: 'building.*.l1', paletteBySlot: slot } as never;
+    expect(validateTheme(t, registered).some((e) => e.includes('palette=nope'))).toBe(true);
+  });
+
+  it('bindings 为空 / 缺失 → 报错', () => {
+    expect(validateTheme({ palettes: { warm: pal() }, bindings: [] }, registered).some((e) => e.includes('bindings'))).toBe(true);
+    expect(validateTheme({ palettes: { warm: pal() } }, registered).some((e) => e.includes('bindings'))).toBe(true);
   });
 });

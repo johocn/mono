@@ -1,6 +1,7 @@
 import { BUILDING_HEIGHTS, getEntry } from './registry';
 import { resolve, type Resolved } from './resolve';
 import { isElementId } from './ids';
+import type { ThemePatch } from './theme';
 import type { Box, ElementState, Mount, ProviderKind, ProviderSpec, SkinPack } from './types';
 
 export interface ElementSpec {
@@ -24,6 +25,11 @@ export interface InstantiateDeps {
   skin: SkinPack | null;
   defaultSkin: SkinPack | null;
   overrides?: Record<string, ProviderSpec> | null;
+  /**
+   * 主题装配补丁（`public/config/theme.json` → `compileTheme`）：只覆盖 L2/L3/L4 的 preset 与 params。
+   * L1（商家实拍 / 渲染层显式覆盖）命中时**不合并**——商家素材永远赢（spec §4）。
+   */
+  theme?: Record<string, ThemePatch> | null;
   slotLevels?: Record<number, 1 | 2 | 3>;
   onDraw?: (inst: Instance, params: Record<string, unknown>) => void;
 }
@@ -84,15 +90,24 @@ export function instantiate(spec: ElementSpec, deps: InstantiateDeps): Instance 
   const merged = { ...(spec.overrides ?? null), ...(deps.overrides ?? null) };
   const r: Resolved = resolve(spec.id, deps.skin, deps.defaultSkin, Object.keys(merged).length > 0 ? merged : null);
   const skinId = (r.level === 3 || r.level === 4 ? deps.defaultSkin?.id : deps.skin?.id) ?? 'builtin';
+  /* 主题补丁：只在其上叠加（L1 除外）。proc 才可合并——image/atlas/frames 无 preset/params 概念 */
+  const patch = r.level === 1 ? undefined : deps.theme?.[spec.id];
+  const provider: ProviderSpec = patch && r.provider.kind === 'proc'
+    ? {
+      kind: 'proc',
+      preset: patch.preset ?? r.provider.preset,
+      params: { ...(r.provider.params ?? {}), ...patch.params },
+    }
+    : r.provider;
 
-  const source = `[mono] ${spec.id} @slot=${slot === null ? 'null' : slot} provider=${r.provider.kind} ← L${r.level}`;
+  const source = `[mono] ${spec.id} @slot=${slot === null ? 'null' : slot} provider=${provider.kind} ← L${r.level}`;
 
   const inst: Instance = {
     id: spec.id,
     slot,
     skin: skinId,
-    providerKind: r.provider.kind,
-    provider: r.provider,
+    providerKind: provider.kind,
+    provider,
     level: r.level,
     mount,
     box: entry.box,

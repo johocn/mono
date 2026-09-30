@@ -28,6 +28,11 @@ import { DEMO_OWNER } from './data/board';
 import { STOCK_TILE_INDEX } from './data/stocks';
 import { DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED } from './skin/layout';
 import { SHOP_DEFAULTS, parseShopConfig, type ShopConfig } from './skin/shop-config';
+import { allElementIds } from './skin/registry';
+import {
+  EMPTY_THEME, compileTheme, forcePalette, mergePatches, parseTheme,
+  type Theme,
+} from './skin/theme';
 import { preloadRelative, preloadSkinAssets } from './render/assets';
 import { createFx, motionFor, timeScaleFrom, type FxContext, type FxHandle, type FxKind } from './render/fx';
 import type { ElementSpec } from './skin/instantiate';
@@ -53,6 +58,8 @@ export interface UrlOptions {
   tour?: boolean;
   /** `?audio=0`：一键全静音（开关初始全关且**不创建** `AudioContext`）；缺省 = 有声（spec §8.2） */
   audio: boolean;
+  /** `?theme=off` 关掉 `config/theme.json` 出厂配色；`?theme=<paletteId>` 强制整体套色（spec §4 调试通路） */
+  theme?: string;
 }
 
 /** v5 样张 line 63：当前格 index 4（太平温泉）在 (5,9)，四枚棋子同格 */
@@ -87,6 +94,8 @@ export function parseOptions(search: string): UrlOptions {
     tour: q.get('tour') === '1' ? true : q.get('tour') === '0' ? false : undefined,
     /* 音频（spec §8.2）：`?audio=0` 一键全静音；裸链接 / `?audio=1` 一律有声 */
     audio: q.get('audio') !== '0',
+    /* 风格调试（spec §4）：`?theme=off` 关掉 theme.json；`?theme=<paletteId>` 强制整体套色 */
+    theme: q.get('theme') ?? undefined,
   };
 }
 
@@ -109,6 +118,20 @@ async function loadShopConfig(): Promise<ShopConfig> {
     return parseShopConfig(await res.json());
   } catch {
     return SHOP_DEFAULTS;
+  }
+}
+
+/**
+ * 主题配置（spec §4）：相对路径读取，缺失 / 404 / 坏 JSON 一律回退空主题
+ * —— 空主题下 `compileTheme` 产出 `{}`，渲染结果与改造前逐像素一致。
+ */
+async function loadThemeConfig(): Promise<Theme> {
+  try {
+    const res = await fetch('./config/theme.json', { cache: 'no-cache' });
+    if (!res.ok) return EMPTY_THEME;
+    return parseTheme(await res.json());
+  } catch {
+    return EMPTY_THEME;
   }
 }
 
@@ -144,12 +167,22 @@ export async function boot(): Promise<void> {
   const missingShopImages = await preloadRelative(shops.images, skinPackIds, './skins');
   missingAssets.push(...missingShopImages.map((rel) => `./skins/*/${rel}`));
 
+  /* —— 主题装配（spec §4）：出厂配色来自 config/theme.json；`?theme=off` 整体关闭 ——
+     `?theme=<paletteId>` 只强制套色（params），preset 仍由 bindings 决定，故必须深合并。
+     补丁只叠在 L2/L3/L4 之上：商家实拍（L1）永远赢，见 instantiate()。 */
+  const theme = await loadThemeConfig();
+  const ids = allElementIds();
+  const forced = opts.theme && opts.theme !== 'off' ? forcePalette(theme, opts.theme, ids) : {};
+  const themePatch = opts.theme === 'off' ? null : mergePatches(compileTheme(theme, ids), forced);
+
   const stage = await createStage(canvas, { bg: BG_FALLBACK, dpr: window.devicePixelRatio || 2 });
   const scene = new Scene({
     layers: stage.layers,
     geo,
     bg: { color: tokens.bgBottom ?? '#0c1513', alpha: 1 },
-    instantiateDeps: { skin, defaultSkin, overrides: shops.overrides, slotLevels: slotLevelsOf() },
+    instantiateDeps: {
+      skin, defaultSkin, overrides: shops.overrides, theme: themePatch, slotLevels: slotLevelsOf(),
+    },
     placement: { pawnGap: 9.6, pawnFrontDy: 1.45, pawnScale: 0.62, buildingScale: 0.72, buildingYOffset: 1 },
     assetBase: './skins',
     skinIds: skinPackIds,

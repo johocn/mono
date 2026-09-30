@@ -75,23 +75,83 @@ export function registryHas(registeredIds, id) {
   return false;
 }
 
+/** 主题配色必需色键（与 `src/render/providers/proc-*.ts` 读取的键一一对应） */
+export const THEME_KEYS = ['wallL', 'wallR', 'roof', 'win', 'sign', 'tileFill', 'tileEdge', 'glow'];
+
+/**
+ * 主题文件（`public/config/theme.json`）校验：每个 palette 八键齐、`paletteBySlot` 长 32、
+ * 每条 binding 的 match 至少命中 1 个注册 ID、引用的 palette 必须已定义。
+ * 运行时对坏数据是静默跳过（`parseTheme`），故这里必须拦住"静默不生效"的写法。
+ */
+export function validateTheme(theme, registeredIds) {
+  const errs = [];
+  const palettes = theme?.palettes;
+  if (!palettes || typeof palettes !== 'object' || Array.isArray(palettes)) {
+    errs.push('theme.palettes 缺失');
+  } else if (Object.keys(palettes).length === 0) {
+    errs.push('theme.palettes 为空');
+  } else {
+    for (const [name, pal] of Object.entries(palettes)) {
+      if (!pal || typeof pal !== 'object' || Array.isArray(pal)) { errs.push(`palette.${name}: 不是对象`); continue; }
+      for (const k of THEME_KEYS) if (typeof pal[k] !== 'string' || !pal[k]) errs.push(`palette.${name}: 缺色键 ${k}`);
+    }
+  }
+
+  const bindings = theme?.bindings;
+  if (!Array.isArray(bindings) || bindings.length === 0) {
+    errs.push('theme.bindings 缺失或为空');
+    return errs;
+  }
+  bindings.forEach((b, i) => {
+    if (!b || typeof b !== 'object') { errs.push(`bindings[${i}]: 不是对象`); return; }
+    if (typeof b.match !== 'string' || !b.match) { errs.push(`bindings[${i}]: match 缺失`); return; }
+    if (!registryHas(registeredIds, b.match)) errs.push(`bindings[${i}]: match=${b.match} 不命中任何注册 ID`);
+    if (b.palette !== undefined) {
+      if (typeof b.palette !== 'string') errs.push(`bindings[${i}]: palette 非字符串`);
+      else if (!palettes?.[b.palette]) errs.push(`bindings[${i}]: 引用未定义 palette=${b.palette}`);
+    }
+    if (b.paletteBySlot !== undefined) {
+      if (!Array.isArray(b.paletteBySlot) || b.paletteBySlot.length !== 32) {
+        errs.push(`bindings[${i}]: paletteBySlot 必须长 32`);
+      } else {
+        for (const k of b.paletteBySlot) {
+          if (typeof k !== 'string' || !palettes?.[k]) errs.push(`bindings[${i}]: paletteBySlot 引用未定义 palette=${String(k)}`);
+        }
+      }
+    }
+    if (b.params !== undefined && (!b.params || typeof b.params !== 'object' || Array.isArray(b.params))) {
+      errs.push(`bindings[${i}]: params 非对象`);
+    }
+  });
+  return errs;
+}
+
 /** CLI：逐个校验 public/skins/<id>/skin.json（皮肤落盘前 public/skins 不存在时空跑通过） */
 function main() {
-  const root = resolve(process.cwd(), 'public/skins');
-  if (!existsSync(root)) {
-    console.log('[lint-skin] no public/skins（皮肤在 Task 9 落盘）— skip');
-    process.exit(0);
-  }
-  const dirs = readdirSync(root);
-  if (dirs.length === 0) {
-    console.log('[lint-skin] public/skins 为空 — skip');
-    process.exit(0);
-  }
   const idsFile = new URL('./registry-ids.json', import.meta.url);
   const registeredIds = existsSync(idsFile)
     ? new Set(JSON.parse(readFileSync(idsFile, 'utf8')))
     : new Set();
   let failed = 0;
+
+  /* 主题文件（spec §4）：与皮肤包分开校验，不受 public/skins 是否存在影响 */
+  const themeFile = resolve(process.cwd(), 'public/config/theme.json');
+  if (existsSync(themeFile)) {
+    const errs = validateTheme(JSON.parse(readFileSync(themeFile, 'utf8')), registeredIds);
+    if (errs.length) { failed++; console.error('[theme]'); for (const e of errs) console.error('  - ' + e); }
+    else console.log('[theme] OK');
+  }
+
+  const root = resolve(process.cwd(), 'public/skins');
+  if (!existsSync(root)) {
+    console.log('[lint-skin] no public/skins（皮肤在 Task 9 落盘）— skip');
+    process.exit(failed ? 1 : 0);
+  }
+  const dirs = readdirSync(root);
+  if (dirs.length === 0) {
+    console.log('[lint-skin] public/skins 为空 — skip');
+    process.exit(failed ? 1 : 0);
+  }
   let checked = 0;
   for (const dir of dirs) {
     const file = join(root, dir, 'skin.json');

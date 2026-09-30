@@ -1,0 +1,73 @@
+{
+  "_readme": "画面配色装配表：改本文件即生效，无需改渲染代码。字段说明见 docs/manual-mono.md §M13。",
+  "_schema": {
+    "palettes": "配色方案表：id → 8 个色键（wallL/wallR/roof/win/sign/tileFill/tileEdge/glow）",
+    "bindings[].match": "元素 id 的段通配（* 匹配整段，不跨 '.'）；同段数才匹配",
+    "bindings[].preset": "proc preset 名（缺省 → 沿用 skin.json / 内建解析结果）",
+    "bindings[].palette": "整条 binding 统一配色",
+    "bindings[].paletteBySlot": "32 长度数组，按地块序号逐格给配色；优先于 palette",
+    "bindings[].params": "元素级参数，逐键压过 palette（单素材独立风格）",
+    "order": "后写的 binding 覆盖先写的（同键覆盖、异键累加）——故「精确 id」必须写在「通配」之后",
+    "preset": "preset 字段在对应 proc preset **注册之后**才能写（未注册 → 落 builtin 纯色块）。Task 3 注册 stall/market3/onsenHouse/gate/barn 时再补回 l1 / l3 / 五条精确 id 的 preset"
+  },
+  "palettes": {
+    "warm-market": { "wallL": "#cdb78f", "wallR": "#a8926a", "roof": "#8f4a33", "win": "#ffcf7a", "sign": "#f5c451", "tileFill": "#4a3b2a", "tileEdge": "#8a7550", "glow": "#ffd9a0" },
+    "snow-deer":   { "wallL": "#dfe7ee", "wallR": "#b7c4d0", "roof": "#6f8296", "win": "#ffcf7a", "sign": "#ffd98a", "tileFill": "#8fa3b5", "tileEdge": "#c9d6e0", "glow": "#ffe6b8" },
+    "papercut":    { "wallL": "#f5e6c8", "wallR": "#e0c49a", "roof": "#c0392b", "win": "#ffd23f", "sign": "#ffd23f", "tileFill": "#1f6b3a", "tileEdge": "#f5e6c8", "glow": "#ffd23f" },
+    "onsen-mist":  { "wallL": "#e8e6e0", "wallR": "#c9c6bd", "roof": "#5a6360", "win": "#ffe9c0", "sign": "#8fc4b8", "tileFill": "#3a3d3a", "tileEdge": "#8a8f8b", "glow": "#ffe9c0" },
+    "night-neon":  { "wallL": "#3a3140", "wallR": "#2c2532", "roof": "#ff8a3d", "win": "#ffd23f", "sign": "#ff8a3d", "tileFill": "#20262e", "tileEdge": "#ff8a3d", "glow": "#ffd23f" }
+  },
+  "bindings": [
+    {
+      "match": "building.*.l1",
+      "paletteBySlot": [
+        "warm-market","warm-market","warm-market","warm-market","warm-market","warm-market",
+        "snow-deer","snow-deer","snow-deer","snow-deer","snow-deer","snow-deer",
+        "papercut","papercut","papercut","papercut","papercut","papercut",
+        "onsen-mist","onsen-mist","onsen-mist","onsen-mist","onsen-mist","onsen-mist",
+        "night-neon","night-neon","night-neon","night-neon","night-neon","night-neon",
+        "warm-market","warm-market"
+      ]
+    },
+    {
+      "match": "building.*.l2",
+      "paletteBySlot": [
+        "warm-market","warm-market","warm-market","warm-market","warm-market","warm-market",
+        "snow-deer","snow-deer","snow-deer","snow-deer","snow-deer","snow-deer",
+        "papercut","papercut","papercut","papercut","papercut","papercut",
+        "onsen-mist","onsen-mist","onsen-mist","onsen-mist","onsen-mist","onsen-mist",
+        "night-neon","night-neon","night-neon","night-neon","night-neon","night-neon",
+        "warm-market","warm-market"
+      ]
+    },
+    {
+      "match": "building.*.l3",
+      "paletteBySlot": [
+        "warm-market","warm-market","warm-market","warm-market","warm-market","warm-market",
+        "snow-deer","snow-deer","snow-deer","snow-deer","snow-deer","snow-deer",
+        "papercut","papercut","papercut","papercut","papercut","papercut",
+        "onsen-mist","onsen-mist","onsen-mist","onsen-mist","onsen-mist","onsen-mist",
+        "night-neon","night-neon","night-neon","night-neon","night-neon","night-neon",
+        "warm-market","warm-market"
+      ]
+    },
+    { "match": "building.*.sign", "palette": "warm-market" },
+
+    { "match": "building.s4.l2", "palette": "onsen-mist", "params": { "steam": true } },
+    { "match": "building.s6.l2", "palette": "onsen-mist", "params": { "steam": true } },
+    { "match": "building.s13.l2", "palette": "warm-market" },
+    { "match": "building.s0.l3", "palette": "papercut" },
+    { "match": "building.s30.l3", "palette": "warm-market" },
+
+    { "match": "prop.*", "palette": "warm-market" },
+    { "match": "prop.signTower", "palette": "papercut", "params": { "glow": false } },
+
+    { "match": "board.tile.core", "palette": "warm-market" },
+    { "match": "board.tile.shop", "palette": "warm-market" },
+    { "match": "board.tile.chance", "palette": "night-neon" },
+    { "match": "board.tile.fate", "palette": "snow-deer" },
+    { "match": "board.tile.bonus", "palette": "papercut" },
+    { "match": "board.tile.jail", "palette": "onsen-mist" },
+    { "match": "board.tile.stock", "palette": "warm-market" }
+  ]
+}
