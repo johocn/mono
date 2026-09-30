@@ -5,7 +5,9 @@ import {
 } from '../../src/ui/Hud';
 import {
   AUDIO_BGM_BOX, AUDIO_KEY_SIZE, AUDIO_SFX_BOX, BOTTOM_BTN_Y, DOCK_Y, HUD_BAR_GAP, HUD_BAR_H,
-  HUD_BAR_W, HUD_BAR_X0, HUD_BTN_AI_W, HUD_BTN_AI_X, HUD_DICE_Y, STAGE_W,
+  HUD_BAR_W, HUD_BAR_X0, HUD_BTN_AI_W, HUD_BTN_AI_X, HUD_BTN_H, HUD_DICE_Y,
+  HUD_QK_H, HUD_QK_SKIP_X, HUD_QK_W, HUD_QK_Y, STAGE_W,
+  TILE_CARD_BTN_Y, TILE_CARD_H, TILE_CARD_W, TILE_CARD_X, TILE_CARD_Y,
 } from '../../src/skin/layout';
 import type { Dice } from '../../src/core/dice';
 import type { Seat } from '../../src/data/ai';
@@ -172,28 +174,29 @@ describe('hud spec 组装（pass 4 / fixed / depth 顺序）', () => {
 });
 
 describe('hud 命中层（透明 DOM 按钮的矩形来源）', () => {
-  it('idle：两枚静音键常驻 + 主按钮，且都可点', () => {
+  it('idle：两枚静音键常驻 + 牌袋键 + 主按钮，且都可点', () => {
     const g = createGame({ dice: fixed(1, 1) });
     const areas = hitAreas(g.state);
-    expect(areas.map((a) => a.action)).toEqual(['audio:sfx', 'audio:bgm', 'roll']);
+    expect(areas.map((a) => a.action)).toEqual(['audio:sfx', 'audio:bgm', 'hand', 'roll']);
     expect(areas[0]).toEqual({
       action: 'audio:sfx', x: AUDIO_SFX_BOX.left, y: AUDIO_SFX_BOX.top,
       w: AUDIO_KEY_SIZE, h: AUDIO_KEY_SIZE, enabled: true,
     });
     expect(areas[1].action).toBe('audio:bgm');
-    expect(areas[2].action).toBe('roll');
+    expect(areas[2].action).toBe('hand');
+    expect(areas[3].action).toBe('roll');
   });
 
   it('settled + 自有 L1：主按钮为「结束回合」+ 升级按钮（含可用性）', () => {
     const g = settledAt(3);
     g.state.estates[3] = { index: 3, owner: 1, level: 1, processing: false };
     const areas = hitAreas(g.state);
-    expect(areas.map((a) => a.action)).toEqual(['audio:sfx', 'audio:bgm', 'end', 'upgrade']);
-    expect(areas[2].x).toBe(146);
-    expect(areas[3]).toEqual({ action: 'upgrade', x: 249, y: BOTTOM_BTN_Y, w: 110, h: 46, enabled: true });
+    expect(areas.map((a) => a.action)).toEqual(['audio:sfx', 'audio:bgm', 'hand', 'end', 'upgrade']);
+    expect(areas[3].x).toBe(146);
+    expect(areas[4]).toEqual({ action: 'upgrade', x: 249, y: BOTTOM_BTN_Y, w: 110, h: 46, enabled: true });
 
     g.state.players[0].cash = 10;
-    expect(hitAreas(g.state)[3].enabled).toBe(false);
+    expect(hitAreas(g.state)[4].enabled).toBe(false);
   });
 
   it('命中区都落在舞台宽度内', () => {
@@ -255,13 +258,72 @@ describe('hud spec 组装（AI 回合）', () => {
     expect(areas[4].enabled).toBe(true);
   });
 
-  it('真人回合不受影响：仍出 primary + 买/升级', () => {
+  it('真人回合不受影响：仍出 primary + 买/升级，另加一枚牌袋键（AI 回合不出）', () => {
     const g = createGame({ seed: 1 });
     g.state.current = 0;                       // 席位 0 = 真人
     const specs = hudSpecs(g.state, false, seats, false);
     expect(byId(specs, 'ui.button.wide').length).toBe(0);
     expect(byId(specs, 'ui.button.primary').length).toBe(1);
-    expect(byId(specs, 'ui.qk').length).toBe(0);
+    expect(byId(specs, 'ui.qk').length).toBe(1);
+    expect(String(byId(specs, 'ui.qk')[0].state!.label)).toBe('手牌');
+  });
+});
+
+describe('hud 牌袋抽屉键 + 落地地块卡（spec §7.3）', () => {
+  const byId = (specs: ReturnType<typeof hudSpecs>, id: string) =>
+    specs.filter((s) => s.id === id);
+  const KEY_CX = HUD_QK_SKIP_X + HUD_QK_W / 2;
+  const KEY_CY = HUD_QK_Y + HUD_QK_H / 2;
+
+  it('抽屉开合只切标签，命中区恒同址（复用「跳过本次」键位，不新增 id）', () => {
+    const g = settledAt(3);
+    const closed = hudSpecs(g.state, false, [], false, undefined, { handOpen: false });
+    const open = hudSpecs(g.state, false, [], false, undefined, { handOpen: true });
+    expect(byId(closed, 'ui.qk').length).toBe(1);
+    expect(String(byId(closed, 'ui.qk')[0].state!.label)).toBe('手牌');
+    expect(String(byId(open, 'ui.qk')[0].state!.label)).toBe('收起手牌');
+    for (const qk of [byId(closed, 'ui.qk')[0], byId(open, 'ui.qk')[0]]) {
+      expect(qk.fixed!.cx).toBe(KEY_CX);
+      expect(qk.fixed!.cy).toBe(KEY_CY);
+    }
+    const area = hitAreas(g.state).find((a) => a.action === 'hand');
+    expect(area).toEqual({ action: 'hand', x: HUD_QK_SKIP_X, y: HUD_QK_Y, w: HUD_QK_W, h: HUD_QK_H, enabled: true });
+  });
+
+  it('默认不出地块卡；`tileCard: true` 时出卡 + 两枚次要键（台位同源 `TILE_CARD_BTN_Y`）', () => {
+    const g = settledAt(3);
+    expect(byId(hudSpecs(g.state), 'ui.tileCard').length).toBe(0);
+
+    const specs = hudSpecs(g.state, false, [], false, undefined, { tileCard: true });
+    const cards = byId(specs, 'ui.tileCard');
+    expect(cards.length).toBe(1);
+    expect(cards[0].fixed!.cx).toBe(TILE_CARD_X + TILE_CARD_W / 2);
+    expect(cards[0].fixed!.cy).toBe(TILE_CARD_Y + TILE_CARD_H / 2);
+    expect(String(cards[0].state!.title)).toBe('停在 长峰特产 · 你在这里');
+    expect(String(cards[0].state!.sub)).toBe('尚未售出 · 可买下');
+    /* 卡上的两枚次要键：位置在卡内，底坞不再重复 */
+    const secs = byId(specs, 'ui.button.secondary');
+    expect(secs.map((s) => s.state!.action)).toEqual(['buy']);
+    expect(secs[0].fixed!.cy).toBe(TILE_CARD_BTN_Y + HUD_BTN_H / 2);
+    /* r 严格递增（depth 升序即绘制序）：牌袋键 13 → 静音 14/15 → 卡 16 → 次要键 17 */
+    const rs = specs.map((s) => s.r);
+    expect([...rs].sort((a, b) => a - b)).toEqual(rs);
+    expect(cards[0].r).toBeGreaterThan(byId(specs, 'ui.music.on')[0].r);
+
+    /* 命中区与视觉同源 */
+    const areas = hitAreas(g.state, [], { tileCard: true });
+    expect(areas.map((a) => a.action)).toEqual(['audio:sfx', 'audio:bgm', 'hand', 'end', 'buy']);
+    expect(areas[4].y).toBe(TILE_CARD_BTN_Y);
+  });
+
+  it('地块卡文案跟随归属（等级 + 持有者）', () => {
+    const g = settledAt(3);
+    g.state.estates[3] = { index: 3, owner: 2, level: 2, processing: false };
+    const card = byId(hudSpecs(g.state, false, [], false, undefined, { tileCard: true }), 'ui.tileCard')[0];
+    expect(String(card.state!.sub)).toBe('等级 L2 · 持有 老王');
+    /* 非自有地块不给升级报价 → 卡上只剩主按钮 */
+    const areas = hitAreas(g.state, [], { tileCard: true });
+    expect(areas.map((a) => a.action)).toEqual(['audio:sfx', 'audio:bgm', 'hand', 'end']);
   });
 });
 

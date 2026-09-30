@@ -17,25 +17,93 @@ page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 await page.goto(`${ORIGIN}/mono.html?debug=1&play=1&seed=20260928&humans=4&tour=0`, { waitUntil: 'networkidle' });
 await page.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 15000 });
 
-/* 1) 开局：手牌 5 槽常驻（无浮层，5 个 card:* 命中键） */
+/* 1) 开局：手牌收进牌袋抽屉（spec §7.3）——默认收起（0 槽 / 0 键），点牌袋键才展开 5 槽 */
+facts.handClosed = await page.evaluate(() => {
+  const m = window.__monoMain;
+  return {
+    handLen: m.game.state.hands[0].length,
+    handSlots: m.scene.instancesOf().filter((i) => i.id === 'ui.handSlot').length,
+    buttons: document.querySelectorAll('#mono-panels button[data-action^="card:"]').length,
+    handKey: document.querySelectorAll('#mono-hud button[data-action="hand"]').length,
+    keyLabel: m.scene.instancesOf().find((i) => i.id === 'ui.qk')?.state?.label ?? null,
+  };
+});
+gate.hand_len = facts.handClosed.handLen === 5;
+gate.hand_closed = facts.handClosed.handSlots === 0 && facts.handClosed.buttons === 0
+  && facts.handClosed.handKey === 1 && facts.handClosed.keyLabel === '手牌';
+
+await page.evaluate(() => document.querySelector('#mono-hud button[data-action="hand"]')?.click());
+await page.waitForTimeout(60);
+
+/* 牌袋抽屉展开：5 槽入画 + 5 个道具键可点（牌袋键文案翻为「收起手牌」） */
 facts.hand = await page.evaluate(() => {
   const m = window.__monoMain;
   const ids = m.scene.instancesOf().map((i) => i.id);
   return {
-    handLen: m.game.state.hands[0].length,
     handSlots: ids.filter((id) => id === 'ui.handSlot').length,
     buttons: document.querySelectorAll('#mono-panels button[data-action^="card:"]').length,
     overlay: document.querySelectorAll(
       '#mono-panels button[data-action="card:close"], #mono-panels button[data-action^="stock:"]',
     ).length,
+    keyLabel: m.scene.instancesOf().find((i) => i.id === 'ui.qk')?.state?.label ?? null,
     phase: m.game.state.phase,
   };
 });
-gate.hand_len = facts.hand.handLen === 5;
 gate.hand_slots = facts.hand.handSlots === 5;
-gate.hand_hit = facts.hand.buttons === 5 && facts.hand.overlay === 0;
+gate.hand_hit = facts.hand.buttons === 5 && facts.hand.overlay === 0 && facts.hand.keyLabel === '收起手牌';
 
 await page.screenshot({ path: `${OUT}/mono-m5-01-hand.png` });
+
+/* 收起抽屉 → 回到默认视图（后续步骤与地块卡 / 棋盘口径一致） */
+await page.evaluate(() => document.querySelector('#mono-hud button[data-action="hand"]')?.click());
+await page.waitForTimeout(60);
+
+/* 1.5) 落地地块卡（spec §7.3）：停在无主 shop → 卡滑入 + 卡上两枚次要键（命中区同源 TILE_CARD_BTN_Y） */
+facts.tileCard = await page.evaluate(() => {
+  const m = window.__monoMain;
+  const g = m.game;
+  const r = g.rollDice();
+  g.state.players[0].pos = ((3 - r.total) % 32 + 32) % 32;   // index 3 = 长峰特产（无主 shop）
+  g.moveCurrent();
+  g.settleCurrent();
+  m.paint();
+  const inst = m.scene.instancesOf();
+  const card = inst.find((i) => i.id === 'ui.tileCard');
+  const buy = document.querySelector('#mono-hud button[data-action="buy"]');
+  return {
+    phase: g.state.phase,
+    cards: inst.filter((i) => i.id === 'ui.tileCard').length,
+    title: card?.state?.title ?? null,
+    sub: card?.state?.sub ?? null,
+    cardBox: card?.box ?? null,
+    secCount: inst.filter((i) => i.id === 'ui.button.secondary').length,
+    hitTop: buy ? Number.parseFloat(buy.style.top) : null,
+    hitLeft: buy ? Number.parseFloat(buy.style.left) : null,
+    hitW: buy ? Number.parseFloat(buy.style.width) : null,
+    hitH: buy ? Number.parseFloat(buy.style.height) : null,
+    handSlots: inst.filter((i) => i.id === 'ui.handSlot').length,
+  };
+});
+gate.tile_card = facts.tileCard.phase === 'settled' && facts.tileCard.cards === 1
+  && String(facts.tileCard.title).includes('停在') && String(facts.tileCard.title).includes('你在这里')
+  && facts.tileCard.sub === '尚未售出 · 可买下';
+/* 卡体 374×76（与 TILE_CARD_W/H 同源）；卡上买地键命中区 = TILE_CARD_BTN_Y(548) 起、
+   宽高 = HUD_BTN_SECONDARY_W/H(110×46)、左 = HUD_BTN_BUY_X(31) —— 视觉与命中同源（spec §12 高风险项） */
+gate.tile_card_btn = facts.tileCard.cardBox?.w === 374 && facts.tileCard.cardBox?.h === 76
+  && facts.tileCard.secCount === 1
+  && facts.tileCard.hitTop === 548 && facts.tileCard.hitLeft === 31
+  && facts.tileCard.hitW === 110 && facts.tileCard.hitH === 46;
+gate.tile_card_exclusive = facts.tileCard.handSlots === 0;   // 与牌袋抽屉互斥（台位重叠）
+
+await page.screenshot({ path: `${OUT}/mono-m5-01b-tilecard.png` });
+
+/* 收尾：结束该回合并把行动者还原为 0 号（后续步骤均按 0 号玩家写 pos） */
+await page.evaluate(() => {
+  const m = window.__monoMain;
+  m.game.endTurn();
+  m.game.state.current = 0;
+  m.paint();
+});
 
 /* 2) 炸弹：L1 对手地块 → 炸回无主（删键），手牌消耗 */
 facts.bomb = await page.evaluate(() => {
@@ -242,7 +310,8 @@ facts.settle = await page.evaluate(() => {
 });
 gate.settle_over = facts.settle.over === true;
 gate.settle_rows = facts.settle.rows === 4 && facts.settle.badge === '本局结算';
-gate.settle_hud = facts.settle.primary === null && facts.settle.handSlots === 5;
+/* 结算常态：牌袋抽屉收起（手牌槽归零），故这里断言 0 槽 */
+gate.settle_hud = facts.settle.primary === null && facts.settle.handSlots === 0;
 
 await page.screenshot({ path: `${OUT}/mono-m5-06-settle.png` });
 await page.close();

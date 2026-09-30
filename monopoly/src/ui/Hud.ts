@@ -1,4 +1,4 @@
-import { PLAYER_NAME } from '../data/board';
+import { brandAt, PLAYER_NAME } from '../data/board';
 import { buyPrice, canUpgrade, nextLevel } from '../data/economy';
 import { buyable } from '../core/estate';
 import { currentPlayer, netWorth, type Game, type GameState } from '../core/game';
@@ -12,12 +12,23 @@ import {
   AUDIO_BGM_BOX, AUDIO_KEY_SIZE, AUDIO_SFX_BOX,
   HUD_DOCK_H, HUD_LABEL_SHIFT_X, HUD_LABEL_Y, HUD_PERSONA_DX, HUD_PERSONA_DY,
   HUD_QK_FAST_X, HUD_QK_H, HUD_QK_SKIP_X, HUD_QK_W, HUD_QK_Y, STAGE_W,
+  TILE_CARD_BTN_Y, TILE_CARD_H, TILE_CARD_W, TILE_CARD_X, TILE_CARD_Y,
 } from '../skin/layout';
 
 /** 主按钮在四个阶段里的动作（spec §5.1 回合流程的显式化）；监狱禁行时为 `skip` */
 export type HudPrimaryAction = 'roll' | 'move' | 'settle' | 'end' | 'skip';
 export type HudActionId =
-  HudPrimaryAction | 'buy' | 'upgrade' | 'ai:fast' | 'ai:skip' | 'audio:sfx' | 'audio:bgm';
+  HudPrimaryAction | 'buy' | 'upgrade' | 'hand' | 'ai:fast' | 'ai:skip' | 'audio:sfx' | 'audio:bgm';
+
+/**
+ * HUD 的两项运行时可见性开关（由 `main.ts` 按局面派生，HUD 自身不读浮层状态，避免 ui → ui 横向依赖）：
+ * - `tileCard`：落地地块卡滑入（`settled` + 无浮层 + 抽屉收起 + 非 AI 回合）
+ * - `handOpen`：手牌抽屉是否展开（教程期间强制展开，保证第 3 步高亮得到 5 个手牌槽）
+ */
+export interface HudUiOpts {
+  tileCard?: boolean;
+  handOpen?: boolean;
+}
 
 export interface HitArea {
   action: HudActionId;
@@ -109,6 +120,7 @@ function barCx(i: number): number {
 export function hudSpecs(
   state: GameState, fxBusy = false, seats: readonly Seat[] = [], fast = false,
   audio: { sfx: boolean; bgm: boolean } = { sfx: true, bgm: true },
+  ui: HudUiOpts = {},
 ): ElementSpec[] {
   const out: ElementSpec[] = [];
   const bar = (id: string, r: number, cx: number, cy: number, st: Record<string, unknown>, s = 1): void => {
@@ -117,13 +129,19 @@ export function hudSpecs(
 
   const aiSeat = state.over ? null : (seats[state.current] ?? null);
 
-  /* 两枚静音键常驻于顶部右侧（spec §7.3）：必须在 AI 分支早退之前推入，且 r 继续递增（13 / 14） */
+  /* 两枚静音键常驻于顶部右侧（spec §7.3）：必须在 AI 分支早退之前推入，且 r 继续递增（14 / 15，13 让给牌袋键） */
   const pushAudioKeys = (): void => {
     const half = AUDIO_KEY_SIZE / 2;
-    bar(audio.sfx ? 'ui.sound.on' : 'ui.sound.off', 13,
+    bar(audio.sfx ? 'ui.sound.on' : 'ui.sound.off', 14,
       AUDIO_SFX_BOX.left + half, AUDIO_SFX_BOX.top + half, { on: audio.sfx });
-    bar(audio.bgm ? 'ui.music.on' : 'ui.music.off', 14,
+    bar(audio.bgm ? 'ui.music.on' : 'ui.music.off', 15,
       AUDIO_BGM_BOX.left + half, AUDIO_BGM_BOX.top + half, { on: audio.bgm });
+  };
+  /* 牌袋键（spec §7.3）：复用状态行右侧「跳过本次」键位（不新增 id）；仅真人回合推入 */
+  const pushHandKey = (): void => {
+    bar('ui.qk', 13, HUD_QK_SKIP_X + HUD_QK_W / 2, HUD_QK_Y + HUD_QK_H / 2, {
+      label: ui.handOpen === true ? '收起手牌' : '手牌', enabled: true,
+    });
   };
 
   bar('ui.dock', 0, STAGE_W / 2, DOCK_Y + HUD_DOCK_H / 2, { round: state.round });
@@ -166,28 +184,55 @@ export function hudSpecs(
     return out;
   }
 
+  const pos = currentPlayer(state).pos;
+  const card = ui.tileCard === true;
   bar('ui.button.primary', 10, HUD_BTN_PRIMARY_X + HUD_BTN_PRIMARY_W / 2, BOTTOM_BTN_Y + HUD_BTN_H / 2, {
     action: primaryAction(state), label: primaryLabel(state, fxBusy), enabled: primaryAction(state) !== null,
   });
 
   const buy = buyOffer(state);
-  if (buy) {
-    bar('ui.button.secondary', 11, HUD_BTN_BUY_X + HUD_BTN_SECONDARY_W / 2, BOTTOM_BTN_Y + HUD_BTN_H / 2, {
-      action: 'buy', label: `买地 ￥${buy.price}`, enabled: buy.enabled,
-    });
-  }
   const up = upgradeOffer(state);
-  if (up) {
-    bar('ui.button.secondary', 12, HUD_BTN_UPGRADE_X + HUD_BTN_SECONDARY_W / 2, BOTTOM_BTN_Y + HUD_BTN_H / 2, {
-      action: 'upgrade', label: `升级 ￥${up.cost}`, enabled: up.enabled,
-    });
+  /* 地块卡在场时，买地 / 升级只在卡上承载（同一动作只存在一组可见 + 可点元素，spec §7.3） */
+  if (!card) {
+    if (buy) {
+      bar('ui.button.secondary', 11, HUD_BTN_BUY_X + HUD_BTN_SECONDARY_W / 2, BOTTOM_BTN_Y + HUD_BTN_H / 2, {
+        action: 'buy', label: `买地 ￥${buy.price}`, enabled: buy.enabled,
+      });
+    }
+    if (up) {
+      bar('ui.button.secondary', 12, HUD_BTN_UPGRADE_X + HUD_BTN_SECONDARY_W / 2, BOTTOM_BTN_Y + HUD_BTN_H / 2, {
+        action: 'upgrade', label: `升级 ￥${up.cost}`, enabled: up.enabled,
+      });
+    }
   }
+  pushHandKey();
   pushAudioKeys();
+
+  if (card) {
+    const e = state.estates[pos];
+    bar('ui.tileCard', 16, TILE_CARD_X + TILE_CARD_W / 2, TILE_CARD_Y + TILE_CARD_H / 2, {
+      title: `停在 ${brandAt(pos)} · 你在这里`,
+      sub: e
+        ? `等级 L${e.level} · 持有 ${PLAYER_NAME[e.owner - 1]}`
+        : (buyable(pos) ? '尚未售出 · 可买下' : '不可购置'),
+    });
+    const by = TILE_CARD_BTN_Y + HUD_BTN_H / 2;
+    if (buy) {
+      bar('ui.button.secondary', 17, HUD_BTN_BUY_X + HUD_BTN_SECONDARY_W / 2, by, {
+        action: 'buy', label: `买地 ￥${buy.price}`, enabled: buy.enabled,
+      });
+    }
+    if (up) {
+      bar('ui.button.secondary', 18, HUD_BTN_UPGRADE_X + HUD_BTN_SECONDARY_W / 2, by, {
+        action: 'upgrade', label: `升级 ￥${up.cost}`, enabled: up.enabled,
+      });
+    }
+  }
   return out;
 }
 
 /** 透明 DOM 命中层的矩形来源（与 hudSpecs 的按钮台位一一对应） */
-export function hitAreas(state: GameState, seats: readonly Seat[] = []): HitArea[] {
+export function hitAreas(state: GameState, seats: readonly Seat[] = [], ui: HudUiOpts = {}): HitArea[] {
   const out: HitArea[] = [];
   /* 两枚静音键无条件常驻（spec §7.2）：必须在 `state.over` 与 AI 两条早退路径**之前**推入 */
   out.push(
@@ -195,7 +240,7 @@ export function hitAreas(state: GameState, seats: readonly Seat[] = []): HitArea
     { action: 'audio:bgm', x: AUDIO_BGM_BOX.left, y: AUDIO_BGM_BOX.top, w: AUDIO_KEY_SIZE, h: AUDIO_KEY_SIZE, enabled: true },
   );
   if (state.over) return out;
-  /* AI 回合：主按钮整行且禁用；两枚快捷键可点（加速 / 跳过本次） */
+  /* AI 回合：主按钮整行且禁用；两枚快捷键可点（加速 / 跳过本次），牌袋键不出 */
   if (seats[state.current]) {
     return out.concat([
       { action: primaryAction(state) ?? 'end', x: HUD_BTN_AI_X, y: BOTTOM_BTN_Y, w: HUD_BTN_AI_W, h: HUD_BTN_H, enabled: false },
@@ -203,15 +248,27 @@ export function hitAreas(state: GameState, seats: readonly Seat[] = []): HitArea
       { action: 'ai:skip', x: HUD_QK_SKIP_X, y: HUD_QK_Y, w: HUD_QK_W, h: HUD_QK_H, enabled: true },
     ]);
   }
+  /* 牌袋键（开合抽屉不改 state，故与「跳过本次」同区位复用）；仅真人回合存在 */
+  out.push({ action: 'hand', x: HUD_QK_SKIP_X, y: HUD_QK_Y, w: HUD_QK_W, h: HUD_QK_H, enabled: true });
   const pa = primaryAction(state);
   if (pa) {
     out.push({ action: pa, x: HUD_BTN_PRIMARY_X, y: BOTTOM_BTN_Y, w: HUD_BTN_PRIMARY_W, h: HUD_BTN_H, enabled: true });
   }
   const buy = buyOffer(state);
+  const up = upgradeOffer(state);
+  /* 地块卡在场时两枚次要键落到卡上（与视觉同一组常量 `TILE_CARD_BTN_Y`，spec §12 高风险项） */
+  if (ui.tileCard === true) {
+    if (buy) {
+      out.push({ action: 'buy', x: HUD_BTN_BUY_X, y: TILE_CARD_BTN_Y, w: HUD_BTN_SECONDARY_W, h: HUD_BTN_H, enabled: buy.enabled });
+    }
+    if (up) {
+      out.push({ action: 'upgrade', x: HUD_BTN_UPGRADE_X, y: TILE_CARD_BTN_Y, w: HUD_BTN_SECONDARY_W, h: HUD_BTN_H, enabled: up.enabled });
+    }
+    return out;
+  }
   if (buy) {
     out.push({ action: 'buy', x: HUD_BTN_BUY_X, y: BOTTOM_BTN_Y, w: HUD_BTN_SECONDARY_W, h: HUD_BTN_H, enabled: buy.enabled });
   }
-  const up = upgradeOffer(state);
   if (up) {
     out.push({ action: 'upgrade', x: HUD_BTN_UPGRADE_X, y: BOTTOM_BTN_Y, w: HUD_BTN_SECONDARY_W, h: HUD_BTN_H, enabled: up.enabled });
   }
@@ -225,7 +282,8 @@ export function hitAreas(state: GameState, seats: readonly Seat[] = []): HitArea
  */
 export function mountHud(
   root: HTMLElement, game: Game, onAction: (a: HudActionId) => void,
-  view: () => { seats: readonly Seat[]; fast: boolean } = () => ({ seats: [], fast: false }),
+  view: () => { seats: readonly Seat[]; fast: boolean; ui: HudUiOpts } =
+    () => ({ seats: [], fast: false, ui: {} }),
 ): HudHandle {
   const layer = document.createElement('div');
   layer.id = 'mono-hud';
@@ -234,8 +292,9 @@ export function mountHud(
 
   const update = (): void => {
     layer.textContent = '';
+    const v = view();
     const pa = primaryAction(game.state);
-    for (const a of hitAreas(game.state, view().seats)) {
+    for (const a of hitAreas(game.state, v.seats, v.ui)) {
       const b = document.createElement('button');
       b.dataset.action = a.action;
       if (a.action === pa) b.dataset.primary = '1';

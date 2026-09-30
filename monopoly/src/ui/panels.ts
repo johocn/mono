@@ -175,19 +175,21 @@ export function handSlotCx(i: number): number {
   return PANEL_SLOT_X0 + PANEL_SLOT_W / 2 + i * (PANEL_SLOT_W + PANEL_SLOT_GAP);
 }
 
-export function panelSpecs(state: GameState): ElementSpec[] {
+export function panelSpecs(state: GameState, handOpen = false): ElementSpec[] {
   const out: ElementSpec[] = [];
   let r = 0;
   const push = (id: string, cx: number, cy: number, st: Record<string, unknown> = {}, s = 1): void => {
     out.push({ id, slot: null, c: 0, r: r++, pass: 4, fixed: { cx, cy, s }, state: st });
   };
 
-  /* 手牌 5 槽：常驻（持有为亮 / 可用金框 / 被动卡灰槽） */
-  handSlots(state).forEach((slot, i) => {
-    push('ui.handSlot', handSlotCx(i), PANEL_HAND_Y + PANEL_SLOT_H / 2, {
-      name: slot.name, held: slot.held, enabled: slot.enabled,
+  /* 手牌 5 槽：收进牌袋抽屉，仅展开时入画（spec §7.3；教程期间由 `main.ts` 强制展开） */
+  if (handOpen) {
+    handSlots(state).forEach((slot, i) => {
+      push('ui.handSlot', handSlotCx(i), PANEL_HAND_Y + PANEL_SLOT_H / 2, {
+        name: slot.name, held: slot.held, enabled: slot.enabled,
+      });
     });
-  });
+  }
 
   const overlay = overlayOf(state);
   if (overlay === 'settle') {
@@ -254,10 +256,12 @@ export interface PanelHit {
  * 命中区矩形（与 `panelSpecs` 的台位一一对应）。
  * 浮层展开时**只出浮层自己的按钮**（手牌行已被面板盖住，故不再可点），避免命中层与画面错位。
  */
-export function panelHitAreas(state: GameState): PanelHit[] {
+export function panelHitAreas(state: GameState, handOpen = false): PanelHit[] {
   const overlay = overlayOf(state);
   const out: PanelHit[] = [];
   if (!overlay) {
+    /* 抽屉收起时手牌不可点（画面也没画）；牌袋键由 `Hud.ts` 提供 */
+    if (!handOpen) return out;
     handSlots(state).forEach((slot, i) => {
       out.push({
         action: `card:${slot.kind}` as PanelActionId,
@@ -302,7 +306,10 @@ export type PanelAct = (a: PanelActionId, target?: number | string) => void;
  * 挂透明命中层：容器不吃事件，只有命中区 `<button>` 吃。
  * 按钮的**可见像素**由 `panelSpecs` + proc preset 画在画布上（spec §3.6：可见元素必须可换素材）。
  */
-export function mountPanels(root: HTMLElement, game: Game, act: PanelAct): PanelHandle {
+export function mountPanels(
+  root: HTMLElement, game: Game, act: PanelAct,
+  view: () => { handOpen: boolean } = () => ({ handOpen: false }),
+): PanelHandle {
   const layer = document.createElement('div');
   layer.id = 'mono-panels';
   layer.style.cssText = 'position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:9';
@@ -310,7 +317,7 @@ export function mountPanels(root: HTMLElement, game: Game, act: PanelAct): Panel
 
   const update = (): void => {
     layer.textContent = '';
-    for (const a of panelHitAreas(game.state)) {
+    for (const a of panelHitAreas(game.state, view().handOpen)) {
       const b = document.createElement('button');
       b.dataset.action = a.action;
       if (a.target !== undefined) b.dataset.target = String(a.target);

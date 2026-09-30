@@ -82,6 +82,8 @@ const readState = () => page.evaluate(() => {
     stockSellEnabled: enabled(panels, 'button[data-action="stock:sell"]'),
     audioKeys: document.querySelectorAll('#mono-hud button[data-action^="audio:"]').length,
     cardDoubleRentEnabled: enabled(panels, 'button[data-action="card:doubleRent"]'),
+    /* 牌袋抽屉（spec §7.3）：手牌默认收起，打牌前要先点这枚键展开 */
+    handKeyEnabled: enabled(hud, 'button[data-action="hand"]'),
   };
 });
 
@@ -138,6 +140,8 @@ const click = async (sel, sigBefore, real = false) => {
 };
 
 const used = { card: false, trade: false };
+/* 牌袋抽屉当前是否展开：打牌前展开、打完收起（开合不推进状态，故不走 `click()` 的签名校验） */
+let drawerOpen = false;
 let finalState = null;
 let fatal = null;
 
@@ -172,6 +176,13 @@ try {
 
     let sel;
     let action;
+    /* 牌袋抽屉：还没打过牌、停在格、无浮层时先展开抽屉（否则手牌键与牌面键都不在命中层） */
+    if (!used.card && !drawerOpen && s.phase === 'settled' && s.overlay === null && s.handKeyEnabled) {
+      await page.evaluate(() => { document.querySelector('#mono-hud button[data-action="hand"]')?.click(); });
+      await page.waitForTimeout(20);
+      drawerOpen = true;
+      s = await readState();
+    }
     if (s.phase === 'idle' || s.phase === 'rolled' || s.phase === 'moved') {
       if (!s.primaryAction) throw new Error(`${s.phase} 阶段却无主按钮（命中层缺失）`);
       sel = '#mono-hud button[data-primary]';
@@ -226,6 +237,14 @@ try {
     if (action === 'buy' && !facts.shots['02-firstbuy']) { await settleFx(); await shot('02-firstbuy'); }
     if (action === 'upgrade' && !facts.shots['03-firstupgrade']) { await settleFx(); await shot('03-firstupgrade'); }
     if (action === 'settle' && landedPos === 12 && !facts.shots['04-jail']) { await settleFx(); await shot('04-jail'); }
+
+    /* 打完牌把抽屉收起，回到「地块卡 + 卡上买地/升级」的默认视图（与手册截图口径一致） */
+    if (drawerOpen && used.card) {
+      await page.evaluate(() => { document.querySelector('#mono-hud button[data-action="hand"]')?.click(); });
+      await page.waitForTimeout(20);
+      drawerOpen = false;
+      s = await readState();
+    }
   }
 
   finalState = s;

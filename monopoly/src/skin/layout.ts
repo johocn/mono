@@ -75,12 +75,14 @@ export const TILE_CARD_X = 8;
 export const TILE_CARD_Y = 508;
 export const TILE_CARD_W = 374;
 export const TILE_CARD_H = 76;
+/** 地块卡上两枚次要键（买地 / 升级）的顶边——视觉与命中区同源一份（spec §12 高风险项） */
+export const TILE_CARD_BTN_Y = TILE_CARD_Y + 40;
 
 /* —— 停留气泡（spec §6.7）：锚在棋子头顶上方 8px —— */
 export const BUBBLE_W = 100;
 export const BUBBLE_H = 44;
 export const BUBBLE_GAP = 8;
-/* 气泡在 pass 4 内的行号：必须大于 HUD（0..14）与浮层（0..12）的最大行号，
+/* 气泡在 pass 4 内的行号：必须大于 HUD（0..18，末段为落地地块卡的两枚次要键）与浮层（0..12）的最大行号，
    否则棋盘下缘的棋子头顶会被底坞 / 浮层盖住（下缘几格正好落在浮层覆盖区） */
 export const BUBBLE_DEPTH = 20;
 /** 无动效的停留事件（如进监狱）没有 `fx` 结束回调可用，气泡靠这个时长自动收起 */

@@ -251,5 +251,6 @@
   "ui.tradeBuy",
   "ui.tradeSell",
   "ui.panelClose",
-  "ui.bubble"
+  "ui.bubble",
+  "ui.tileCard"
 ]

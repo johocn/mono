@@ -15,7 +15,7 @@ import { ipos } from './render/iso';
 import { autoPlay, createGame, currentPlayer, type Game, type SettleResult } from './core/game';
 import { applyStep, type AiStep } from './core/ai';
 import { hudSpecs, mountHud, type HudActionId, type HudHandle } from './ui/Hud';
-import { mountPanels, panelSpecs, type PanelActionId, type PanelHandle } from './ui/panels';
+import { mountPanels, overlayOf, panelSpecs, type PanelActionId, type PanelHandle } from './ui/panels';
 import { createAiDriver, type AiDriver } from './ui/aiDriver';
 import { createAudioEngine } from './ui/audio';
 import { mountSetup, readPlan, resolveSeats, type SeatPlan } from './ui/setup';
@@ -266,6 +266,16 @@ export async function boot(): Promise<void> {
     return out;
   };
 
+  /* —— 手牌抽屉 / 落地地块卡的运行时可见性（spec §7.2/§7.3）—— */
+  let handOpen = false;
+  /** 抽屉展开态：教程期间强制展开（第 3 步要亮 5 个槽）；AI 回合自动收起（该区位被「加速 / 跳过」占用） */
+  const handOpenEff = (): boolean =>
+    (handOpen || tutorial !== null) && !(seats[game?.state.current ?? 0] ?? null);
+  /** 地块卡：仅「真人回合 + 停在格结算态 + 无浮层 + 抽屉收起」滑入（非常驻；互斥于抽屉，两者台位重叠） */
+  const tileCardOn = (g: Game): boolean =>
+    g.state.phase === 'settled' && overlayOf(g.state) === null
+    && !handOpenEff() && !(seats[g.state.current] ?? null);
+
   /** play：地砖归属色 / 当前格 / 棋子位置跟游戏状态联动，再叠 HUD */
   const ownedOf = (i: number): number | null => game?.state.estates[i]?.owner ?? ownerOf(i);
   const playView = (g: Game): ElementSpec[] => {
@@ -285,13 +295,12 @@ export async function boot(): Promise<void> {
       ...pawnSpecs(pawnStates),
       /* 停留事件气泡（spec §6.7）：当前玩家棋子头顶，跟 pawnSpecs 同一分组口径 */
       ...bubbleSpecs(pawnStates, bubble, geo, PLACEMENT),
-      /* spec §6 版式 A：中部 = 当前玩家落点地块的橱窗（复用 B 版式构图；随 paint() 同步） */
-      ...showcaseSpecs({
-        slot: currentPlayer(g.state).pos, owner: ownedOf(currentPlayer(g.state).pos), play: true, brandOf: shops.brandAt,
-      }),
-      ...hudSpecs(g.state, fxPending || fx.busy(), seats, driver?.isFast() ?? false, audio.prefs()),
-      /* M5 浮层：手牌 5 槽常驻 + 抽卡翻牌 / 股票盘 / 结算面板（未触发时为空） */
-      ...panelSpecs(g.state),
+      /* spec §7.2：play 版式不再常驻中部橱窗（`?show=b|c` 演示版式完整保留），
+         中部条带交给环境层近景街市带；落地时由地块卡（`ui.tileCard`）滑入 */
+      ...hudSpecs(g.state, fxPending || fx.busy(), seats, driver?.isFast() ?? false, audio.prefs(),
+        { tileCard: tileCardOn(g), handOpen: handOpenEff() }),
+      /* M5 浮层：手牌抽屉（默认收起）+ 抽卡翻牌 / 股票盘 / 结算面板（未触发时为空） */
+      ...panelSpecs(g.state, handOpenEff()),
     ];
   };
 
@@ -424,9 +433,9 @@ export async function boot(): Promise<void> {
     );
   };
 
-  /** HUD 点击 → AiStep（`ai:fast` / `ai:skip` / `audio:*` 已在回调里拦截，不会传到这里） */
+  /** HUD 点击 → AiStep（`hand` / `ai:fast` / `ai:skip` / `audio:*` 已在回调里拦截，不会传到这里） */
   const stepOfHud = (
-    a: Exclude<HudActionId, 'ai:fast' | 'ai:skip' | 'audio:sfx' | 'audio:bgm'>,
+    a: Exclude<HudActionId, 'hand' | 'ai:fast' | 'ai:skip' | 'audio:sfx' | 'audio:bgm'>,
   ): AiStep =>
     a === 'buy' ? { kind: 'buy' } : a === 'upgrade' ? { kind: 'upgrade' } : { kind: a };
 
@@ -447,24 +456,27 @@ export async function boot(): Promise<void> {
   /** 席位确定后开局（spec §6：选完再 createGame）：建 game → 挂 HUD/浮层/驱动器 → 按需弹引导 → 重画 */
   const startGame = (plan: SeatPlan): void => {
     seats = plan;
-    game = createGame({ seed: opts.seed, playerCount: 4 });
-    hud = mountHud(document.body, game, (a: HudActionId) => {
+    const g = createGame({ seed: opts.seed, playerCount: 4 });
+    game = g;
+    hud = mountHud(document.body, g, (a: HudActionId) => {
       /* 静音键（spec §7.4）：翻转 → 落库 → 立即重画图标；不跳动画、不推进状态 */
       if (a === 'audio:sfx' || a === 'audio:bgm') {
         audio.toggle(a === 'audio:sfx' ? 'sfx' : 'bgm');
         paint();
         return;
       }
+      /* 牌袋抽屉开合（spec §7.3）：只改可见性、不推进状态，故不走 `dispatch`（也就不吃动效与气泡） */
+      if (a === 'hand') { handOpen = !handOpen; paint(); return; }
       if (fx.busy()) fx.skip();   // 点屏加速：状态早已落库，跳过只影响观感时长
       if (a === 'ai:fast') { if (driver) driver.setFast(!driver.isFast()); paint(); return; }
       if (a === 'ai:skip') { driver?.skipRest(); return; }
       dispatch(stepOfHud(a));
-    }, () => ({ seats, fast: driver?.isFast() ?? false }));
+    }, () => ({ seats, fast: driver?.isFast() ?? false, ui: { tileCard: tileCardOn(g), handOpen: handOpenEff() } }));
     /* 浮层动作：关浮层 / 股票买卖 / 打手牌（目标由命中区 `data-target` 带出） */
-    panels = mountPanels(document.body, game, (a: PanelActionId, target?: number | string) => {
+    panels = mountPanels(document.body, g, (a: PanelActionId, target?: number | string) => {
       if (fx.busy()) fx.skip();
       dispatch(stepOfPanel(a, target));
-    });
+    }, () => ({ handOpen: handOpenEff() }));
     driver = createAiDriver({
       game, seats: () => seats,
       run: (step, withFx = true) => dispatch(step, withFx),

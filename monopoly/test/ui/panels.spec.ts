@@ -116,9 +116,9 @@ describe('panels：结算面板', () => {
 });
 
 describe('panels：spec 组装（pass 4 / fixed / 注册表命中）', () => {
-  it('全部 pass 4 + fixed，ID 全部命中注册表，r 递增，手牌恒 5 槽', () => {
+  it('全部 pass 4 + fixed，ID 全部命中注册表，r 递增；手牌展开时恒 5 槽、收起时 0 槽', () => {
     const g = createGame({ dice: fixed(1, 1) });
-    const specs = panelSpecs(g.state);
+    const specs = panelSpecs(g.state, true);
     expect(specs.every((s) => s.pass === 4)).toBe(true);
     expect(specs.every((s) => Boolean(s.fixed))).toBe(true);
     expect(specs.every((s) => s.c === 0)).toBe(true);
@@ -127,6 +127,8 @@ describe('panels：spec 组装（pass 4 / fixed / 注册表命中）', () => {
     const rs = specs.map((s) => s.r);
     expect([...rs].sort((a, b) => a - b)).toEqual(rs);
     expect(overlayOf(g.state)).toBeNull();
+    /* 牌袋抽屉默认收起（spec §7.3）：不画手牌槽 */
+    expect(panelSpecs(g.state)).toHaveLength(0);
   });
 
   it('浮层优先级：抽卡 → 卡面构图；over → 4 行结算', () => {
@@ -168,10 +170,17 @@ describe('panels：spec 组装（pass 4 / fixed / 注册表命中）', () => {
 });
 
 describe('panels：DOM 命中层矩形', () => {
-  it('无浮层：5 个手牌键（pardon 不可点、bomb 带目标格号），全部落在舞台内', () => {
+  it('抽屉收起：无浮层时一个键都不出（牌袋键归 HUD）', () => {
     const g = createGame({ dice: fixed(1, 1) });
     g.state.estates[3] = { index: 3, owner: 2, level: 1, processing: false };
-    const hits = panelHitAreas(g.state);
+    expect(panelHitAreas(g.state)).toEqual([]);
+    expect(panelHitAreas(g.state, false)).toEqual([]);
+  });
+
+  it('抽屉展开：5 个手牌键（pardon 不可点、bomb 带目标格号），全部落在舞台内', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    g.state.estates[3] = { index: 3, owner: 2, level: 1, processing: false };
+    const hits = panelHitAreas(g.state, true);
     expect(hits.map((h) => h.action)).toEqual([
       'card:bomb', 'card:barrier', 'card:pardon', 'card:teleport', 'card:doubleRent',
     ]);

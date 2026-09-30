@@ -1,4 +1,4 @@
-import { AUDIO_KEY_SIZE, BUBBLE_H, BUBBLE_W } from './layout';
+import { AUDIO_KEY_SIZE, BUBBLE_H, BUBBLE_W, HUD_BAR_W, TILE_CARD_H, TILE_CARD_W } from './layout';
 import type { RegistryEntry } from './types';
 
 export const BUILDING_HEIGHTS: Record<number, number> = { 1: 26, 2: 46, 3: 72 };
@@ -152,7 +152,8 @@ reg['ui.icon.stock'] = { id: 'ui.icon.stock', box: { w: 100, d: 1, h: 26 }, anch
 /* —— HUD（底部操作坞）：台位由 ElementSpec.fixed 给（pass 4 + 定格） —— */
 reg['ui.dock'] = { id: 'ui.dock', box: { w: 390, d: 1, h: 184 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image'] };
 reg['ui.label'] = { id: 'ui.label', box: { w: 390, d: 1, h: 24 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image'] };
-reg['ui.playerBar'] = { id: 'ui.playerBar', box: { w: 86, d: 1, h: 40 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image'] };
+/* 单条 4 段资产条（spec §7.3）：每段宽 = HUD_BAR_W、段间 GAP=0 ⇒ 4 段无缝拼成 6..384 一条 */
+reg['ui.playerBar'] = { id: 'ui.playerBar', box: { w: HUD_BAR_W, d: 1, h: 40 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image'] };
 reg['ui.button.secondary'] = { id: 'ui.button.secondary', box: { w: 110, d: 1, h: 46 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image', 'atlas'] };
 /* AI 回合专用（spec §5.2）：整行主按钮 + 状态行右侧两枚快捷键 + 性格徽标 */
 reg['ui.button.wide'] = { id: 'ui.button.wide', box: { w: 328, d: 1, h: 46 }, anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image', 'atlas'] };
@@ -207,6 +208,9 @@ reg['ui.panelClose'] = showcaseEntry('ui.panelClose', { w: 76, d: 1, h: 28 });
 /* 停留事件头顶气泡（spec §6.7）：棋盘上的「即时事件图」，与底部地块卡一上一下分工；
    台位 = 当前玩家棋子头顶上方 BUBBLE_GAP（BubbleView 给 fixed），不进任何命中区 */
 reg['ui.bubble'] = showcaseEntry('ui.bubble', { w: BUBBLE_W, d: 1, h: BUBBLE_H });
+/* 落地地块卡（spec §7.3）：仅 `settled` + 无浮层 + 抽屉收起时滑入（非常驻）；
+   台位由 Hud.ts 给 TILE_CARD_*，卡上两枚次要键与命中区同源 */
+reg['ui.tileCard'] = showcaseEntry('ui.tileCard', { w: TILE_CARD_W, d: 1, h: TILE_CARD_H });
 
 export const REGISTRY: Record<string, RegistryEntry> = reg;
 

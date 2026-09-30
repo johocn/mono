@@ -47,6 +47,11 @@ export const PANEL_D = fb({
   /* 角标 */
   badgeR: 8, badgeFill: 'rgba(6,12,10,.85)', badgeEdge: '#f5c451', badgeEdgeW: 1.2,
   badgeFs: 12, badgeTxFill: '#ffe9b0',
+  /* 落地地块卡（spec §7.3）：深底金边 + 首行（金点 + 「停在 <店名> · 你在这里」）+ 次行（等级 / 持有） */
+  tileR: 12, tileFill: '#0f1a18', tileEdge: '#f5c451', tileEdgeW: 1.2,
+  tilePadX: 18, tileDotR: 3, tileDotGap: 10,
+  tileTitleDy: -26, tileTitleFs: 14, tileTitleFill: '#f5c451',
+  tileSubDy: -12, tileSubFs: 11, tileSubFill: '#9fb3a8',
 });
 
 const G = (p: Record<string, unknown>, k: keyof typeof PANEL_D): number => num(p, k, PANEL_D[k] as number);
@@ -183,6 +188,33 @@ export const uiSettleRow: ProcPreset = (g, ctx) => {
   text({ text: typeof state.rank === 'number' ? `#${state.rank}` : '', x: cx + G(params, 'sRankDx'), y: cy, size: G(params, 'sRankFs'), fill: S(params, 'sRankFill') });
   text({ text: typeof state.name === 'string' ? state.name : '', x: cx + G(params, 'sNameDx'), y: cy, size: G(params, 'sNameFs'), fill: S(params, 'sNameFill') });
   text({ text: typeof state.worth === 'number' ? `￥${state.worth}` : '', x: cx + G(params, 'sWorthDx'), y: cy, size: G(params, 'sWorthFs'), fill: S(params, 'sWorthFill') });
+};
+
+/* —— 落地地块卡：深底圆角金边 + 首行（金点 + 文案）+ 次行（等级 / 持有）——
+   文案由 UI 层组装后经 `state.title` / `state.sub` 传入（preset 不含业务语义） —— */
+export const tileCard: ProcPreset = (g, ctx) => {
+  const { cx, cy, box, params, state, s, text } = ctx;
+  const w = box.w * s;
+  const h = box.h * s;
+  const x0 = cx - w / 2;
+  g.roundRect(x0, cy - h / 2, w, h, G(params, 'tileR'))
+    .fill({ color: S(params, 'tileFill') })
+    .stroke({ color: S(params, 'tileEdge'), width: G(params, 'tileEdgeW') });
+  if (!text) return;
+  const dotR = G(params, 'tileDotR');
+  const tx = x0 + G(params, 'tilePadX');
+  const titleY = cy + G(params, 'tileTitleDy');
+  g.circle(tx + dotR, titleY, dotR).fill({ color: S(params, 'tileTitleFill') });
+  text({
+    text: typeof state.title === 'string' ? state.title : '',
+    x: tx + dotR * 2 + G(params, 'tileDotGap'), y: titleY,
+    size: G(params, 'tileTitleFs'), fill: S(params, 'tileTitleFill'), align: 'left',
+  });
+  text({
+    text: typeof state.sub === 'string' ? state.sub : '',
+    x: tx, y: cy + G(params, 'tileSubDy'),
+    size: G(params, 'tileSubFs'), fill: S(params, 'tileSubFill'), align: 'left',
+  });
 };
 
 /* —— 角标：小药丸 + 居中文字（牌堆名 / 面板标题） —— */
