@@ -1,12 +1,9 @@
 import {
-  BOARD_COLS, BOARD_ROWS, DEMO_OWNER, OWNER_HUE,
+  BOARD_COLS, BOARD_ROWS, DEMO_OWNER,
   SLOT_BANNER, SLOT_LANTERN_CHAR, TILE_BRAND, TILE_LEVEL, ringPath,
 } from '../data/board';
 import type { ElementSpec } from '../skin/instantiate';
 import type { ProviderSpec } from '../skin/types';
-
-/** 无归属地块兜底色相（= 2 号玩家的暖橙；ALLOW 内的小整数，不算裸常数） */
-const HUE_FALLBACK_OWNER = 2;
 
 /** 内环街道小品：行道树 ×2（v5 line 294）+ 通往广场的 4 格石板路路灯 */
 export const INNER_STREET_PROPS: Array<{ kind: 'tree' | 'lamp'; c: number; r: number }> = [
@@ -44,12 +41,6 @@ export function slotLevelsOf(): Record<number, 1 | 2 | 3> {
   return out;
 }
 
-/** 该地块的楼体色相：v5 由归属玩家决定（无归属 → 2 号暖橙） */
-export function hueOf(index: number, ownerOf: (i: number) => number | null): number {
-  const owner = ownerOf(index);
-  return OWNER_HUE[owner ?? HUE_FALLBACK_OWNER] ?? OWNER_HUE[HUE_FALLBACK_OWNER];
-}
-
 /**
  * 挂件 spec：只声明 id / slot / c / r / state，
  * 抬升由注册表的 `attach.atV` 与管线施加（spec §3.7.3 铁律 1），这里不写任何坐标。
@@ -80,14 +71,15 @@ export function buildingSpecs(opts: BuildingOpts = {}): ElementSpec[] {
     const lv = levels[index];
     if (lv === undefined) return;
 
-    const hue = hueOf(index, ownerOf);
     const brand = brandOf(index);
     const wallId = `building.s${index}.l${lv}`;
 
+    /* 楼体只交状态：preset 与配色一律由数据层（public/config/theme.json + skin.json）装配，
+       渲染层不得在此写死 preset / 色值（spec §1.1 病根修正） */
     out.push({
       id: wallId, slot: index, c, r, level: lv,
-      state: { level: lv, dim: false },
-      overrides: only(wallId, proc('shop', { levels: lv, hue, brand })),
+      state: { level: lv, dim: false, owner: ownerOf(index), brand },
+      overrides: {},
     });
 
     /* 店招：L2/L3 才有（L1 是摊位，v5 用遮阳篷代替） */

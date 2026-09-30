@@ -1,17 +1,18 @@
 import { describe, it, expect } from 'vitest';
 import {
-  INNER_STREET_PROPS, buildingSpecs, hueOf, slotLevelsOf, streetPropSpecs,
+  INNER_STREET_PROPS, buildingSpecs, slotLevelsOf, streetPropSpecs,
 } from '../../src/render/BuildingView';
 import {
-  DEMO_OWNER, OWNER_HUE, SLOT_BANNER, SLOT_LANTERN_CHAR, TILE_BRAND, TILE_LEVEL,
+  DEMO_OWNER, SLOT_BANNER, SLOT_LANTERN_CHAR, TILE_BRAND, TILE_LEVEL,
 } from '../../src/data/board';
 import type { ElementSpec } from '../../src/skin/instantiate';
 
 const byId = (specs: ElementSpec[], id: string) => specs.filter((s) => s.id === id);
 const byPrefix = (specs: ElementSpec[], p: string) => specs.filter((s) => s.id.startsWith(p));
 const endsWith = (specs: ElementSpec[], tail: string) => specs.filter((s) => s.id.endsWith(tail));
+const isWall = (id: string) => /\.l[123]$/.test(id);
 
-describe('BuildingView · 层级表与色相', () => {
+describe('BuildingView · 层级表', () => {
   it('slotLevelsOf 只收 lv>0 的 18 格，值为 1/2/3', () => {
     const lv = slotLevelsOf();
     expect(Object.keys(lv).length).toBe(18);
@@ -20,13 +21,6 @@ describe('BuildingView · 层级表与色相', () => {
     expect(lv[18]).toBe(3);
     expect(lv[30]).toBe(3);
     expect(lv[2]).toBeUndefined();
-  });
-
-  it('hueOf：有归属取归属色相，无归属落 2 号暖橙', () => {
-    expect(hueOf(0, (i) => DEMO_OWNER[i] ?? null)).toBe(OWNER_HUE[1]);
-    expect(hueOf(4, (i) => DEMO_OWNER[i] ?? null)).toBe(OWNER_HUE[2]);
-    expect(hueOf(19, (i) => DEMO_OWNER[i] ?? null)).toBe(OWNER_HUE[2]);
-    expect(hueOf(4, () => null)).toBe(OWNER_HUE[2]);
   });
 });
 
@@ -45,17 +39,21 @@ describe('BuildingView · 楼与店招', () => {
     expect(signs.filter((s) => s.level === 3).length).toBe(3);
   });
 
-  it('每栋楼的元素级覆盖命中自身 id，preset = shop，levels 与 hue 正确', () => {
+  it('每栋楼只交状态、不写死 preset/色值：overrides 为空，state 带 level/owner/brand', () => {
     const one = specs.find((s) => s.id === 'building.s4.l2')!;
     expect(one).toBeTruthy();
     expect(one.level).toBe(2);
-    expect(one.state).toMatchObject({ level: 2, dim: false });
-    const p = one.overrides?.['building.s4.l2'] as { kind: string; preset: string; params: Record<string, unknown> };
-    expect(p.kind).toBe('proc');
-    expect(p.preset).toBe('shop');
-    expect(p.params.levels).toBe(2);
-    expect(p.params.hue).toBe(OWNER_HUE[2]);
-    expect(p.params.brand).toBe(TILE_BRAND[4]);
+    expect(one.state).toMatchObject({ level: 2, dim: false, owner: DEMO_OWNER[4] ?? null, brand: TILE_BRAND[4] });
+    expect(one.overrides).toEqual({});
+  });
+
+  it('防回归（spec V5）：building.* 楼体的 overrides 不含 hue 键', () => {
+    for (const s of byPrefix(specs, 'building.')) {
+      if (isWall(s.id)) expect(s.overrides).toEqual({});
+      for (const spec of Object.values(s.overrides ?? {})) {
+        expect(JSON.stringify(spec)).not.toContain('hue');
+      }
+    }
   });
 
   it('店招 override 带 brand，且层级跟随宿主楼', () => {
