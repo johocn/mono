@@ -5,7 +5,7 @@ import { Scene } from './render/Scene';
 import { boardCells, boardTileSpecs } from './render/BoardView';
 import { innerSpecs, fountainSpec } from './render/InnerView';
 import { atmosphereSpecs } from './render/AtmosphereView';
-import { PAWN_COUNT, pawnSpecs } from './render/PieceView';
+import { PAWN_COUNT, pawnSpecs, type PawnMood } from './render/PieceView';
 import { buildingSpecs, slotLevelsOf, streetPropSpecs } from './render/BuildingView';
 import { showcaseSpecs } from './render/ShowcaseView';
 import { drawLabels } from './render/LabelView';
@@ -203,11 +203,17 @@ export async function boot(): Promise<void> {
   fx.speed(opts.nofx ? FX_NOFX_SPEED : timeScaleFrom(opts.speed));
   let fxPending = false;
 
+  /* —— 棋子三表情（spec §6.6）：动作类型 → mood；`fx` 结束回落 calm（只读状态，不改动画） —— */
+  const MOOD_BY_FX: Partial<Record<FxKind, PawnMood>> = { buy: 'happy', upgrade: 'happy', rent: 'sad', end: 'sad' };
+  /** 无动效的动作（如进监狱）也能出表情：由落库事件兜底 */
+  const MOOD_BY_EVENT = (e: { kind: string } | null | undefined): PawnMood => (e?.kind === 'jail' ? 'sad' : 'calm');
+  let mood: PawnMood = 'calm';
+
   const ownerOf = (i: number): number | null => DEMO_OWNER[i] ?? null;
 
-  /* v5 样张 line 63：当前格 index 4（太平温泉）在 (5,9)，四枚棋子同格 */
+  /* v5 样张 line 63：当前格 index 4（太平温泉）在 (5,9)，四枚棋子同格（P1 亮光晕，便于对照） */
   const demoPawns = Array.from({ length: PAWN_COUNT }, (_, index) => ({
-    index, c: CURRENT_CELL[0], r: CURRENT_CELL[1],
+    index, c: CURRENT_CELL[0], r: CURRENT_CELL[1], active: index === 0,
   }));
 
   /* 席位归属：`?humans=` → localStorage → 弹开局面板（spec §6：选完再 createGame，故 game 惰性创建） */
@@ -243,13 +249,18 @@ export async function boot(): Promise<void> {
   const ownedOf = (i: number): number | null => game?.state.estates[i]?.owner ?? ownerOf(i);
   const playView = (g: Game): ElementSpec[] => {
     const alive = g.state.players.filter((p) => !p.bankrupt);
+    const curId = currentPlayer(g.state).id;
     return [
       ...boardTileSpecs(currentPlayer(g.state).pos, ownedOf),
       ...innerSpecs(),
       fountainSpec(),
       ...buildingSpecs({ ownerOf: ownedOf, brandOf: shops.brandAt }),
       ...streetPropSpecs(),
-      ...pawnSpecs(alive.map((p) => ({ index: p.id - 1, c: cells[p.pos].c, r: cells[p.pos].r }))),
+      ...pawnSpecs(alive.map((p) => ({
+        index: p.id - 1, c: cells[p.pos].c, r: cells[p.pos].r,
+        mood: p.id === curId ? mood : 'calm',
+        active: p.id === curId,
+      }))),
       /* spec §6 版式 A：中部 = 当前玩家落点地块的橱窗（复用 B 版式构图；随 paint() 同步） */
       ...showcaseSpecs({
         slot: currentPlayer(g.state).pos, owner: ownedOf(currentPlayer(g.state).pos), play: true, brandOf: shops.brandAt,
@@ -296,6 +307,7 @@ export async function boot(): Promise<void> {
   const runAction = (fn: () => unknown, ctxOf: (r: never) => FxContext | null, withFx = true): void => {
     const result = fn();
     const ctx = withFx ? ctxOf(result as never) : null;
+    mood = ctx ? (MOOD_BY_FX[ctx.kind] ?? 'calm') : MOOD_BY_EVENT(game?.state.lastEvent);
     if (!ctx) {
       fxPending = false;
       paint();
@@ -305,7 +317,7 @@ export async function boot(): Promise<void> {
     if (sfxOn) audio.play(ctx.kind);
     fxPending = true;
     paint();
-    fx.play(ctx, () => { fxPending = false; paint(); });
+    fx.play(ctx, () => { fxPending = false; mood = 'calm'; paint(); });
   };
 
   /** 落格结算结果 → 动画上下文（纯映射；位置取自 iso） */

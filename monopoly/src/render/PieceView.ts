@@ -9,12 +9,24 @@ export function pawnSlots(centerX: number, _hw: number, p: { gap: number }): num
   return out;
 }
 
+/** 棋子表情（spec §6.6）：由动作落库写入（`main.ts` runAction），fx 结束回落 calm */
+export type PawnMood = 'calm' | 'happy' | 'sad';
+
 /** 棋子的棋盘位置（屏幕坐标由 Scene 的 resolvePlacement 统一算，这里不存 x/y） */
-export interface PawnState { index: number; c: number; r: number }
+export interface PawnState {
+  index: number;
+  c: number;
+  r: number;
+  /** 三表情：缺省 calm */
+  mood?: PawnMood;
+  /** 是否当前行动的玩家（脚下暖色光环；AI 棋子无） */
+  active?: boolean;
+}
 
 /**
  * 生成棋子 spec（第三遍）：同格四人靠 spec.pawnIndex 让 Scene 横向错开，
  * 自己不算坐标（spec §3.7.1「渲染层禁止直接画」）。
+ * 造型（`params.style`）按 pid 写在 skin.json（p1 短发 / p2 双马尾 / p3 小帽 / p4 丸子头）。
  */
 export function pawnSpecs(pawns: PawnState[]): ElementSpec[] {
   const byCell = new Map<string, PawnState[]>();
@@ -26,7 +38,10 @@ export function pawnSpecs(pawns: PawnState[]): ElementSpec[] {
   for (const [, group] of byCell) {
     const { c, r } = group[0];
     group.forEach((pw, i) => {
-      out.push({ id: `piece.p${pw.index + 1}`, slot: null, c, r, pawnIndex: i });
+      out.push({
+        id: `piece.p${pw.index + 1}`, slot: null, c, r, pawnIndex: i,
+        state: { owner: pw.index + 1, mood: pw.mood ?? 'calm', active: pw.active === true },
+      });
     });
   }
   return out;

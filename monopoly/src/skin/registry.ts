@@ -112,11 +112,11 @@ reg['prop.clothesline'] = prop('clothesline', { w: 30, d: 2, h: 12 }, 0.9);
 reg['prop.steamVent'] = prop('steamVent', { w: 12, d: 7, h: 10 }, 0, 'ground');
 reg['prop.stoneLantern'] = prop('stoneLantern', { w: 8, d: 5, h: 20 }, 0, 'ground');
 
-// —— 玩家棋子 4 色 ——
+// —— 玩家棋子 4 色（Q 版小朋友：二头身，box 放大到 12×6×20 < 格宽 48） ——
 for (let p = 1; p <= 4; p++) {
   reg[`piece.p${p}`] = {
     id: `piece.p${p}`,
-    box: { w: 8.4, d: 4.2, h: 13 },
+    box: { w: 12, d: 6, h: 20 },
     anchor: [0.5, 0.5], baseline: 0, mount: 'ground',
     providerKinds: ['proc', 'image', 'atlas', 'frames'],
   };

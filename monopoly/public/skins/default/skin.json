@@ -76,10 +76,10 @@
       }
     },
 
-    "piece.p1": { "kind": "proc", "preset": "pawn", "params": { "color": "#3fbf7f", "h": 13, "w": 4.2, "d": 2.1, "shadowY": 2, "shadowRx": 6, "shadowRy": 3, "shadowAlpha": 0.38, "leftAlpha": 0.72, "topAlpha": 0.18, "topDy": 0.1, "topRx": 0.9, "topRy": 0.9, "topGlowAlpha": 0.2 } },
-    "piece.p2": { "kind": "proc", "preset": "pawn", "params": { "color": "#f0a039", "h": 13, "w": 4.2, "d": 2.1, "shadowY": 2, "shadowRx": 6, "shadowRy": 3, "shadowAlpha": 0.38, "leftAlpha": 0.72, "topAlpha": 0.18, "topDy": 0.1, "topRx": 0.9, "topRy": 0.9, "topGlowAlpha": 0.2 } },
-    "piece.p3": { "kind": "proc", "preset": "pawn", "params": { "color": "#e0607e", "h": 13, "w": 4.2, "d": 2.1, "shadowY": 2, "shadowRx": 6, "shadowRy": 3, "shadowAlpha": 0.38, "leftAlpha": 0.72, "topAlpha": 0.18, "topDy": 0.1, "topRx": 0.9, "topRy": 0.9, "topGlowAlpha": 0.2 } },
-    "piece.p4": { "kind": "proc", "preset": "pawn", "params": { "color": "#4aa3e0", "h": 13, "w": 4.2, "d": 2.1, "shadowY": 2, "shadowRx": 6, "shadowRy": 3, "shadowAlpha": 0.38, "leftAlpha": 0.72, "topAlpha": 0.18, "topDy": 0.1, "topRx": 0.9, "topRy": 0.9, "topGlowAlpha": 0.2 } },
+    "piece.p1": { "kind": "proc", "preset": "pawn", "params": { "style": "short" } },
+    "piece.p2": { "kind": "proc", "preset": "pawn", "params": { "style": "twintail" } },
+    "piece.p3": { "kind": "proc", "preset": "pawn", "params": { "style": "cap" } },
+    "piece.p4": { "kind": "proc", "preset": "pawn", "params": { "style": "bun" } },
 
     "building.*.l1": { "kind": "proc", "preset": "shop", "params": { "levels": 1, "hue": 32, "brand": "鹿特产" } },
     "building.*.l2": { "kind": "proc", "preset": "shop", "params": { "levels": 2, "hue": 30 } },
