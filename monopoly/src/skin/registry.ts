@@ -12,6 +12,7 @@ export type TileType = (typeof TILE_TYPES)[number];
 export const INNER_DECOS = ['d1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8'] as const;
 export const PROPS = [
   'awning', 'lantern', 'banner', 'rooftopBox', 'signTower', 'antenna', 'tree', 'lamp',
+  'flagpole', 'chimney', 'barrel', 'lionStone', 'snowPile', 'clothesline', 'steamVent', 'stoneLantern',
 ] as const;
 export const FX = ['coin', 'scaffold', 'dust', 'stamp', 'shine', 'spark', 'shard'] as const;
 
@@ -100,6 +101,16 @@ reg['prop.signTower'] = prop('signTower', { w: 15, d: 7, h: 20 }, 1, 'roof');
 reg['prop.antenna'] = prop('antenna', { w: 4, d: 2, h: 13 }, 1, 'roof');
 reg['prop.tree'] = prop('tree', { w: 14, d: 8, h: 30 }, 0, 'ground');
 reg['prop.lamp'] = prop('lamp', { w: 8, d: 4, h: 28 }, 0, 'ground');
+
+/* —— 素材库扩充 8 件（spec §5.2）：多为按街区分区择用的点缀件 —— */
+reg['prop.flagpole'] = prop('flagpole', { w: 4, d: 2, h: 34 }, 0, 'ground');
+reg['prop.chimney'] = prop('chimney', { w: 8, d: 5, h: 18 }, 1, 'roof');
+reg['prop.barrel'] = prop('barrel', { w: 10, d: 6, h: 12 }, 0, 'ground');
+reg['prop.lionStone'] = prop('lionStone', { w: 10, d: 6, h: 16 }, 0, 'ground');
+reg['prop.snowPile'] = prop('snowPile', { w: 18, d: 9, h: 6 }, 0, 'ground');
+reg['prop.clothesline'] = prop('clothesline', { w: 30, d: 2, h: 12 }, 0.9);
+reg['prop.steamVent'] = prop('steamVent', { w: 12, d: 7, h: 10 }, 0, 'ground');
+reg['prop.stoneLantern'] = prop('stoneLantern', { w: 8, d: 5, h: 20 }, 0, 'ground');
 
 // —— 玩家棋子 4 色 ——
 for (let p = 1; p <= 4; p++) {

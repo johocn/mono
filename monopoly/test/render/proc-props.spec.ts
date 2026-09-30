@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
-  antenna, awning, banner, lamp, lantern, rooftopBox, signTower, tree,
+  antenna, awning, banner, barrel, chimney, clothesline, flagpole, lamp, lantern,
+  lionStone, rooftopBox, signTower, snowPile, steamVent, stoneLantern, tree,
 } from '../../src/render/providers/proc-props';
 import { PROC_PRESETS } from '../../src/render/providers/proc';
-import type { TextRequest } from '../../src/render/providers/proc';
+import type { ProcPreset, TextRequest } from '../../src/render/providers/proc';
 
 interface Rec { op: string; pts?: number[]; style: Record<string, unknown> }
 
@@ -140,8 +141,79 @@ describe('prop.signTower / prop.antenna 屋顶招牌塔与天线（v5 line 226�
   });
 });
 
+/* —— 新增 8 件（spec §5.2）：多为按街区分区择用的点缀件 —— */
+const NEW_PROPS: [string, ProcPreset][] = [
+  ['flagpole', flagpole],
+  ['chimney', chimney],
+  ['barrel', barrel],
+  ['lionStone', lionStone],
+  ['snowPile', snowPile],
+  ['clothesline', clothesline],
+  ['steamVent', steamVent],
+  ['stoneLantern', stoneLantern],
+];
+const fillColors = (calls: Rec[]) => calls.filter((c) => c.op === 'fill').map((c) => c.style.color);
+
+describe('prop 新增 8 件（spec §5.2）', () => {
+  it('空 params 下八件都不抛错且都有绘制调用', () => {
+    for (const [name, fn] of NEW_PROPS) {
+      const { g, calls } = recorder();
+      expect(() => fn(g as never, ctxOf() as never), name).not.toThrow();
+      expect(calls.length, name).toBeGreaterThan(0);
+    }
+  });
+
+  it('形态签名（多边形 / 圆 / 椭圆 / 矩形计数）', () => {
+    const cases: [string, ProcPreset, Record<string, number>][] = [
+      ['flagpole', flagpole, { ellipse: 1, lineTo: 1, poly: 1, circle: 1 }],
+      ['chimney', chimney, { poly: 6, circle: 3 }],
+      ['barrel', barrel, { ellipse: 2, rect: 3 }],
+      ['lionStone', lionStone, { poly: 6, circle: 4 }],
+      ['snowPile', snowPile, { ellipse: 2, poly: 1 }],
+      ['clothesline', clothesline, { poly: 3, lineTo: 10 }],
+      ['steamVent', steamVent, { poly: 4, ellipse: 3 }],
+      ['stoneLantern', stoneLantern, { poly: 12, rect: 1, circle: 1 }],
+    ];
+    for (const [name, fn, want] of cases) {
+      const { g, calls } = recorder();
+      fn(g as never, ctxOf() as never);
+      for (const [op, n] of Object.entries(want)) expect(count(calls, op), `${name}.${op}`).toBe(n);
+    }
+  });
+
+  it('色键生效：palette 覆盖内建兜底色', () => {
+    const sp = { sign: '#110011', glow: '#220022', wallR: '#330033', wallL: '#440044' };
+    const draw = (fn: ProcPreset) => {
+      const { g, calls } = recorder();
+      fn(g as never, ctxOf(sp) as never);
+      return fillColors(calls);
+    };
+    const fp = draw(flagpole);
+    expect(fp).toContain('#110011');        // 三角旗 ← sign
+    expect(fp).toContain('#220022');        // 杆顶灯珠 ← glow
+    const bl = draw(barrel);
+    expect(bl).toContain('#330033');        // 桶身 ← wallR
+    expect(bl).toContain('#440044');        // 顶面 ← wallL
+    const sn = draw(snowPile);
+    expect(sn).toContain('#330033');        // 雪体 ← wallR
+    expect(sn).toContain('#220022');        // 高光 ← glow
+    const sv = draw(steamVent);
+    expect(sv).toContain('#220022');        // 槽口 ← glow
+    const sl = draw(stoneLantern);
+    expect(sl).toContain('#220022');        // 火袋暖窗 ← glow
+  });
+
+  it('晾衣绳布片按 clFills 逐片取色（字符串数组取值器 L）', () => {
+    const cloths = ['#aa0000', '#00aa00', '#0000aa'];
+    const { g, calls } = recorder();
+    clothesline(g as never, ctxOf({ clFills: cloths }) as never);
+    const f = fillColors(calls);
+    for (const col of cloths) expect(f).toContain(col);
+  });
+});
+
 describe('注册表', () => {
-  it('PROC_PRESETS 八个 prop preset 全部注册', () => {
+  it('PROC_PRESETS 十六个 prop preset 全部注册', () => {
     expect(PROC_PRESETS.awning).toBe(awning);
     expect(PROC_PRESETS.lantern).toBe(lantern);
     expect(PROC_PRESETS.banner).toBe(banner);
@@ -150,5 +222,13 @@ describe('注册表', () => {
     expect(PROC_PRESETS.antenna).toBe(antenna);
     expect(PROC_PRESETS.tree).toBe(tree);
     expect(PROC_PRESETS.lamp).toBe(lamp);
+    expect(PROC_PRESETS.flagpole).toBe(flagpole);
+    expect(PROC_PRESETS.chimney).toBe(chimney);
+    expect(PROC_PRESETS.barrel).toBe(barrel);
+    expect(PROC_PRESETS.lionStone).toBe(lionStone);
+    expect(PROC_PRESETS.snowPile).toBe(snowPile);
+    expect(PROC_PRESETS.clothesline).toBe(clothesline);
+    expect(PROC_PRESETS.steamVent).toBe(steamVent);
+    expect(PROC_PRESETS.stoneLantern).toBe(stoneLantern);
   });
 });

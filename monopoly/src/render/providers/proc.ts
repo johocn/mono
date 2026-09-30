@@ -116,7 +116,10 @@ const builtin: ProcPreset = (g, ctx) => {
 };
 
 import { barn, gate, market3, onsenHouse, shop, sign, stall } from './proc-building';
-import { antenna, awning, banner, lamp, lantern, rooftopBox, signTower, tree } from './proc-props';
+import {
+  antenna, awning, banner, barrel, chimney, clothesline, flagpole, lamp, lantern,
+  lionStone, rooftopBox, signTower, snowPile, steamVent, stoneLantern, tree,
+} from './proc-props';
 import { showcaseGround, showcaseHud, showcaseMini, showcasePanel, showcaseSky, showcaseSkyline } from './proc-showcase';
 import { diceBody, diceFace, uiButton, uiDock, uiLabel, uiPanel, uiPlayerBar } from './proc-hud';
 import { uiMusicOff, uiMusicOn, uiSoundOff, uiSoundOn } from './proc-audio';
@@ -148,6 +151,14 @@ export const PROC_PRESETS: Record<string, ProcPreset> = {
   antenna,
   tree,
   lamp,
+  flagpole,
+  chimney,
+  barrel,
+  lionStone,
+  snowPile,
+  clothesline,
+  steamVent,
+  stoneLantern,
   showcasePanel,
   showcaseSky,
   showcaseSkyline,
