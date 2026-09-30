@@ -28,7 +28,7 @@
 - Create: `d:\zhao\vendure\packages\cjk-plugin\src\hotel\hotel-nightly-pricing.ts`
 - Test: `d:\zhao\vendure\packages\cjk-plugin\src\hotel\hotel-nightly-pricing.spec.ts`
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 创建 `src/hotel/hotel-nightly-pricing.spec.ts`：
 
@@ -108,13 +108,13 @@ describe('buildHotelLineInfo', () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run（cwd `d:\zhao\vendure\packages\cjk-plugin`）：
 `npx vitest --config vitest.config.mts --run src/hotel/hotel-nightly-pricing.spec.ts`
 Expected: FAIL — `Failed to resolve import "./hotel-nightly-pricing"`
 
-- [ ] **Step 3: 实现纯函数**
+- [x] **Step 3: 实现纯函数**
 
 创建 `src/hotel/hotel-nightly-pricing.ts`：
 
@@ -225,13 +225,13 @@ export function buildHotelLineInfo(
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run（cwd `d:\zhao\vendure\packages\cjk-plugin`）：
 `npx vitest --config vitest.config.mts --run src/hotel/hotel-nightly-pricing.spec.ts`
 Expected: PASS（3 个 describe 全绿）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add packages/cjk-plugin/src/hotel/hotel-nightly-pricing.ts packages/cjk-plugin/src/hotel/hotel-nightly-pricing.spec.ts
@@ -247,7 +247,7 @@ git commit -m "feat(hotel): 新增逐晚计价纯函数与订单行酒店信息�
 - Test: `d:\zhao\vendure\packages\cjk-plugin\src\hotel\hotel-order-line-custom-fields.spec.ts`
 - Modify: `d:\zhao\vendure\packages\cjk-plugin\src\plugin.ts`（import 区 ~L104、configuration 内 ProductVariant 注册后 ~L2394）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 创建 `src/hotel/hotel-order-line-custom-fields.spec.ts`：
 
@@ -276,13 +276,13 @@ describe('hotelOrderLineCustomFields', () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run（cwd `d:\zhao\vendure\packages\cjk-plugin`）：
 `npx vitest --config vitest.config.mts --run src/hotel/hotel-order-line-custom-fields.spec.ts`
 Expected: FAIL — `Failed to resolve import "./hotel-order-line-custom-fields"`
 
-- [ ] **Step 3: 实现字段声明**
+- [x] **Step 3: 实现字段声明**
 
 创建 `src/hotel/hotel-order-line-custom-fields.ts`：
 
@@ -327,13 +327,13 @@ export const hotelOrderLineCustomFields: CustomFields = {
 };
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run（cwd `d:\zhao\vendure\packages\cjk-plugin`）：
 `npx vitest --config vitest.config.mts --run src/hotel/hotel-order-line-custom-fields.spec.ts`
 Expected: PASS
 
-- [ ] **Step 5: 在 plugin.ts 注册**
+- [x] **Step 5: 在 plugin.ts 注册**
 
 5a. 在 `src/plugin.ts` L104 那行 `import { hotelRoomCustomFields } from './hotel/hotel-custom-fields';` 下面新增一行：
 
@@ -359,7 +359,7 @@ import { hotelOrderLineCustomFields } from './hotel/hotel-order-line-custom-fiel
         }
 ```
 
-- [ ] **Step 6: 类型检查并提交**
+- [x] **Step 6: 类型检查并提交**
 
 Run（cwd `d:\zhao\vendure\packages\cjk-plugin`）：`npm run build`
 Expected: 编译通过、无 TS 报错
@@ -380,7 +380,7 @@ git commit -m "feat(hotel): 注册 OrderLine 入住日期与晚数 customFields"
 - Modify: `d:\zhao\vendure\packages\cjk-plugin\src\migrations\index.ts`（追加 export）
 - Modify: `d:\zhao\vendure\packages\cjk-plugin\src\plugin.ts`（import 行 ~L74 追加；providers 列表 ~L212 之后追加）
 
-- [ ] **Step 1: 创建 migration**
+- [x] **Step 1: 创建 migration**
 
 列名规则：Vendure 自定义字段列名 = `customFields` + 字段名（首字母大写、其余小写），例如 `stockLocationId` → `customFieldsStocklocationid`。
 
@@ -427,13 +427,13 @@ export class HotelOrderLineColumnMigration implements OnApplicationBootstrap {
 }
 ```
 
-- [ ] **Step 2: 在 `src/migrations/index.ts` 追加 export**
+- [x] **Step 2: 在 `src/migrations/index.ts` 追加 export**
 
 ```ts
 export { HotelOrderLineColumnMigration } from './migrate-hotel-order-line-columns';
 ```
 
-- [ ] **Step 3: 在 `src/plugin.ts` 注册 provider**
+- [x] **Step 3: 在 `src/plugin.ts` 注册 provider**
 
 3a. L74 的 `import { ... } from './migrations';` 大括号内追加 `HotelOrderLineColumnMigration`。
 
@@ -443,7 +443,7 @@ export { HotelOrderLineColumnMigration } from './migrate-hotel-order-line-column
         HotelOrderLineColumnMigration,
 ```
 
-- [ ] **Step 4: 类型检查并提交**
+- [x] **Step 4: 类型检查并提交**
 
 Run（cwd `d:\zhao\vendure\packages\cjk-plugin`）：`npm run build`
 Expected: 编译通过、无 TS 报错
@@ -462,7 +462,7 @@ git commit -m "feat(hotel): 幂等补 order_line 酒店订单行字段列"
 - Test: `d:\zhao\vendure\packages\cjk-plugin\src\hotel\hotel-order-item-price-strategy.spec.ts`
 - Modify: `d:\zhao\vendure\packages\cjk-plugin\src\plugin.ts`（import 区、configuration 内 `return config;` 之前 ~L2556）
 
-- [ ] **Step 1: 写失败测试**
+- [x] **Step 1: 写失败测试**
 
 创建 `src/hotel/hotel-order-item-price-strategy.spec.ts`：
 
@@ -511,13 +511,13 @@ describe('HotelOrderItemPriceCalculationStrategy', () => {
 });
 ```
 
-- [ ] **Step 2: 运行测试确认失败**
+- [x] **Step 2: 运行测试确认失败**
 
 Run（cwd `d:\zhao\vendure\packages\cjk-plugin`）：
 `npx vitest --config vitest.config.mts --run src/hotel/hotel-order-item-price-strategy.spec.ts`
 Expected: FAIL — `Failed to resolve import "./hotel-order-item-price-strategy"`
 
-- [ ] **Step 3: 实现策略**
+- [x] **Step 3: 实现策略**
 
 创建 `src/hotel/hotel-order-item-price-strategy.ts`：
 
@@ -569,13 +569,13 @@ export class HotelOrderItemPriceCalculationStrategy implements OrderItemPriceCal
 }
 ```
 
-- [ ] **Step 4: 运行测试确认通过**
+- [x] **Step 4: 运行测试确认通过**
 
 Run（cwd `d:\zhao\vendure\packages\cjk-plugin`）：
 `npx vitest --config vitest.config.mts --run src/hotel/hotel-order-item-price-strategy.spec.ts`
 Expected: PASS（4 个用例全绿）
 
-- [ ] **Step 5: 在 plugin.ts 注册策略**
+- [x] **Step 5: 在 plugin.ts 注册策略**
 
 5a. 在 `src/plugin.ts` 的 import 区（Task 2 新增行下面）追加：
 
@@ -593,7 +593,7 @@ import { HotelOrderItemPriceCalculationStrategy } from './hotel/hotel-order-item
         } as any;
 ```
 
-- [ ] **Step 6: 类型检查并提交**
+- [x] **Step 6: 类型检查并提交**
 
 Run（cwd `d:\zhao\vendure\packages\cjk-plugin`）：`npm run build`
 Expected: 编译通过、无 TS 报错
@@ -611,7 +611,7 @@ git commit -m "feat(hotel): 酒店房型订单行按入离日期逐晚计价策�
 - Modify: `d:\zhao\vendure\packages\cjk-plugin\src\order\order-box.service.ts`（`OrderBoxLine` 接口 L78-L93、行映射 L346-L376）
 - Modify: `d:\zhao\vendure\packages\cjk-plugin\src\plugin.ts`（shopApiExtensions 内 `type OrderBoxLine` L2068-L2078）
 
-- [ ] **Step 1: 扩展 OrderBoxLine 接口**
+- [x] **Step 1: 扩展 OrderBoxLine 接口**
 
 在 `src/order/order-box.service.ts` 的 `OrderBoxLine` 接口末尾（`sku: string | null;` 之后、`}` 之前）追加：
 
@@ -630,7 +630,7 @@ git commit -m "feat(hotel): 酒店房型订单行按入离日期逐晚计价策�
     productSlug: string | null;
 ```
 
-- [ ] **Step 2: 在行映射中填充新字段**
+- [x] **Step 2: 在行映射中填充新字段**
 
 在 `src/order/order-box.service.ts` 的 L346-L376 行映射内：
 
@@ -656,7 +656,7 @@ import { buildHotelLineInfo } from '../hotel/hotel-nightly-pricing';
                     productSlug,
 ```
 
-- [ ] **Step 3: 扩展 GraphQL SDL**
+- [x] **Step 3: 扩展 GraphQL SDL**
 
 在 `src/plugin.ts` 的 `type OrderBoxLine { ... }`（L2068-L2078）内、`sku: String` 之后追加：
 
@@ -679,7 +679,7 @@ import { buildHotelLineInfo } from '../hotel/hotel-nightly-pricing';
                 }
 ```
 
-- [ ] **Step 4: 类型检查并回归既有分箱测试**
+- [x] **Step 4: 类型检查并回归既有分箱测试**
 
 Run（cwd `d:\zhao\vendure\packages\cjk-plugin`）：
 `npm run build`
@@ -689,7 +689,7 @@ Run（cwd `d:\zhao\vendure\packages\cjk-plugin`）：
 `npx vitest --config vitest.config.mts --run src/order/order-box-aggregation.spec.ts`
 Expected: PASS（既有断言不因新增字段而失败）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add packages/cjk-plugin/src/order/order-box.service.ts packages/cjk-plugin/src/plugin.ts
@@ -704,7 +704,7 @@ git commit -m "feat(hotel): orderBoxes 下发酒店行入离日期、晚数与�
 - Modify: `d:\zhao\nshop\layers\base\gql\queries\order.gql`（`AddItemToOrder` L52-L67、`AdjustOrderLine` L80-L89、`GetOrderBoxes` L210-L220）
 - Modify: `d:\zhao\nshop\layers\base\gql\fragments\order.gql`（`OrderBase.lines` L16-L33、`OrderDetail.lines` L79-L98）
 
-- [ ] **Step 1: 改 AddItemToOrder 与 AdjustOrderLine**
+- [x] **Step 1: 改 AddItemToOrder 与 AdjustOrderLine**
 
 在 `layers/base/gql/queries/order.gql` 中，把 `AddItemToOrder` 改为：
 
@@ -742,7 +742,7 @@ mutation AdjustOrderLine($orderLineId: ID!, $quantity: Int!, $customFields: Orde
 }
 ```
 
-- [ ] **Step 2: 扩展 orderBoxes 行字段**
+- [x] **Step 2: 扩展 orderBoxes 行字段**
 
 在 `layers/base/gql/queries/order.gql` 的 `GetOrderBoxes` 中，把 `lines { ... }` 块改为：
 
@@ -770,7 +770,7 @@ mutation AdjustOrderLine($orderLineId: ID!, $quantity: Int!, $customFields: Orde
     }
 ```
 
-- [ ] **Step 3: 两个 fragment 的 lines 补 customFields**
+- [x] **Step 3: 两个 fragment 的 lines 补 customFields**
 
 在 `layers/base/gql/fragments/order.gql` 中，`OrderBase` 的 `lines { ... }` 块末尾（`featuredAsset { id preview }` 之后）追加：
 
@@ -784,7 +784,7 @@ mutation AdjustOrderLine($orderLineId: ID!, $quantity: Int!, $customFields: Orde
 
 并对 `OrderDetail` 的 `lines { ... }` 块做同样追加（内容完全相同）。
 
-- [ ] **Step 4: 生成类型并校验**
+- [x] **Step 4: 生成类型并校验**
 
 Run（cwd `d:\zhao\nshop`）：`npx nuxi prepare`
 Expected: 生成 `~~/.nuxt/gql/default` 且无 schema 校验报错
@@ -792,7 +792,7 @@ Expected: 生成 `~~/.nuxt/gql/default` 且无 schema 校验报错
 Run（cwd `d:\zhao\nshop`）：`npm run typecheck`
 Expected: 无 TS 报错（此时新字段尚未被业务代码消费，应全绿）
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add layers/base/gql/queries/order.gql layers/base/gql/fragments/order.gql
@@ -806,7 +806,7 @@ git commit -m "feat(gql): 订单行 customFields 参数与酒店行字段"
 **Files:**
 - Modify: `d:\zhao\nshop\layers\base\stores\useOrderStore.ts`（`addItemToOrder` L44-L70、`adjustOrderLine` L96-L122）
 
-- [ ] **Step 1: 改 addItemToOrder 签名与调用**
+- [x] **Step 1: 改 addItemToOrder 签名与调用**
 
 把 `layers/base/stores/useOrderStore.ts` 的 `addItemToOrder` 改为：
 
@@ -842,7 +842,7 @@ git commit -m "feat(gql): 订单行 customFields 参数与酒店行字段"
   }
 ```
 
-- [ ] **Step 2: 改 adjustOrderLine 签名与调用**
+- [x] **Step 2: 改 adjustOrderLine 签名与调用**
 
 把 `layers/base/stores/useOrderStore.ts` 的 `adjustOrderLine` 改为：
 
@@ -878,12 +878,12 @@ git commit -m "feat(gql): 订单行 customFields 参数与酒店行字段"
   }
 ```
 
-- [ ] **Step 3: 校验**
+- [x] **Step 3: 校验**
 
 Run（cwd `d:\zhao\nshop`）：`npm run typecheck`
 Expected: 无 TS 报错
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add layers/base/stores/useOrderStore.ts
@@ -898,7 +898,7 @@ git commit -m "feat(order): 订单行增减支持透传 customFields"
 - Modify: `d:\zhao\nshop\layers/base\app\composables\useBuyActions.ts`（全文 67 行）
 - Create: `d:\zhao\nshop\layers\base\app\composables\useHotelStay.ts`
 
-- [ ] **Step 1: 新建酒店下单参数 composable**
+- [x] **Step 1: 新建酒店下单参数 composable**
 
 创建 `layers/base/app/composables/useHotelStay.ts`：
 
@@ -957,7 +957,7 @@ export function useHotelStay() {
 }
 ```
 
-- [ ] **Step 2: 接入 useBuyActions**
+- [x] **Step 2: 接入 useBuyActions**
 
 把 `layers/base/app/composables/useBuyActions.ts` 的 `<script setup>` 整体替换为：
 
@@ -1062,12 +1062,12 @@ export function useBuyActions() {
 }
 ```
 
-- [ ] **Step 3: 校验**
+- [x] **Step 3: 校验**
 
 Run（cwd `d:\zhao\nshop`）：`npm run typecheck`
 Expected: 无 TS 报错（`messages.hotel.*` 词条在 Task 11 补齐前会报 i18n key 类型错；若仓库未开启 i18n key 强类型则忽略）
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add layers/base/app/composables/useHotelStay.ts layers/base/app/composables/useBuyActions.ts
@@ -1081,7 +1081,7 @@ git commit -m "feat(hotel): 下单选日期折算晚数并传订单行日期字�
 **Files:**
 - Modify: `d:\zhao\nshop\layers\base\app\components\product-detail\ProductDetailDateBar.vue`（L9-L30）
 
-- [ ] **Step 1: 读取 query 并作为初值**
+- [x] **Step 1: 读取 query 并作为初值**
 
 把 `ProductDetailDateBar.vue` 的日期初始化段（L9-L19 的 `const today = ...` 到 `const checkOut = ref(...)`）替换为：
 
@@ -1106,12 +1106,12 @@ const checkOut = ref(dateOk(qOut) && dateOk(qIn) && qOut > qIn
   : toDateStr(new Date(today.getTime() + 2 * 86400000)));
 ```
 
-- [ ] **Step 2: 校验**
+- [x] **Step 2: 校验**
 
 Run（cwd `d:\zhao\nshop`）：`npm run typecheck`
 Expected: 无 TS 报错
 
-- [ ] **Step 3: 提交**
+- [x] **Step 3: 提交**
 
 ```bash
 git add layers/base/app/components/product-detail/ProductDetailDateBar.vue
@@ -1125,7 +1125,7 @@ git commit -m "feat(hotel): 日期条支持 query 预填以承接修改日期跳
 **Files:**
 - Modify: `d:\zhao\nshop\layers\base\app\components\checkout\BoxLines.vue`（L59-L125）
 
-- [ ] **Step 1: 增加酒店行分支与展开态**
+- [x] **Step 1: 增加酒店行分支与展开态**
 
 把 `BoxLines.vue` 的 `<template>` 整体替换为：
 
@@ -1264,7 +1264,7 @@ git commit -m "feat(hotel): 日期条支持 query 预填以承接修改日期跳
 </template>
 ```
 
-- [ ] **Step 2: 补脚本（展开态、日类型标签、localePath）**
+- [x] **Step 2: 补脚本（展开态、日类型标签、localePath）**
 
 在 `BoxLines.vue` 的 `<script setup>` 中，把 `const fmt = (amount: number) => \`¥${(amount / 100).toFixed(2)}\`;` 保留，并在其上方追加：
 
@@ -1287,12 +1287,12 @@ const typeLabel = (ty: string): string =>
   } as Record<string, string>)[ty] ?? ty;
 ```
 
-- [ ] **Step 3: 校验**
+- [x] **Step 3: 校验**
 
 Run（cwd `d:\zhao\nshop`）：`npm run typecheck`
 Expected: 无 TS 报错
 
-- [ ] **Step 4: 提交**
+- [x] **Step 4: 提交**
 
 ```bash
 git add layers/base/app/components/checkout/BoxLines.vue
@@ -1306,7 +1306,7 @@ git commit -m "feat(hotel): 结算页酒店行显示晚数、起止日期与可�
 **Files:**
 - Modify: `d:\zhao\nshop\layers\base\app\components\cart\CartItem.vue`（L32-L116）
 
-- [ ] **Step 1: 增加酒店判定与跳转**
+- [x] **Step 1: 增加酒店判定与跳转**
 
 在 `CartItem.vue` 的 `<script setup>` 中，`const currency = ...` 之后追加：
 
@@ -1319,7 +1319,7 @@ const hotelNights = computed(() => line.customFields?.hotelNights ?? line.quanti
 const hotelSlug = computed(() => line.productVariant?.product?.slug ?? "");
 ```
 
-- [ ] **Step 2: 模板加酒店分支**
+- [x] **Step 2: 模板加酒店分支**
 
 在 `CartItem.vue` 模板中，把「中间商品描述」块（L75-L85）改为：
 
@@ -1349,7 +1349,7 @@ const hotelSlug = computed(() => line.productVariant?.product?.slug ?? "");
     </div>
 ```
 
-- [ ] **Step 3: 右侧操作区按酒店分支**
+- [x] **Step 3: 右侧操作区按酒店分支**
 
 把 `CartItem.vue` 模板的「右侧操作区」块（L87-L115）改为：
 
@@ -1390,12 +1390,12 @@ const hotelSlug = computed(() => line.productVariant?.product?.slug ?? "");
     </div>
 ```
 
-- [ ] **Step 4: 校验**
+- [x] **Step 4: 校验**
 
 Run（cwd `d:\zhao\nshop`）：`npm run typecheck`
 Expected: 无 TS 报错
 
-- [ ] **Step 5: 提交**
+- [x] **Step 5: 提交**
 
 ```bash
 git add layers/base/app/components/cart/CartItem.vue
@@ -1412,7 +1412,7 @@ git commit -m "feat(hotel): 购物车酒店行显示晚数与起止日期并隐�
 - Modify: `d:\zhao\nshop\layers\base\app\components\order\GuestOrderConfirmation.vue`（L112-L121）
 - Modify: `d:\zhao\nshop\layers\base\i18n\locales\zh-CN.ts`、`en-US.ts`
 
-- [ ] **Step 1: OrderItems.vue 显示住宿信息**
+- [x] **Step 1: OrderItems.vue 显示住宿信息**
 
 把 `OrderItems.vue` 模板的中间描述块（L30-L35）改为：
 
@@ -1444,7 +1444,7 @@ git commit -m "feat(hotel): 购物车酒店行显示晚数与起止日期并隐�
       </div>
 ```
 
-- [ ] **Step 2: OrderCardItems.vue 同步**
+- [x] **Step 2: OrderCardItems.vue 同步**
 
 把 `OrderCardItems.vue` 模板的中间描述块（L33-L38）改为：
 
@@ -1463,7 +1463,7 @@ git commit -m "feat(hotel): 购物车酒店行显示晚数与起止日期并隐�
 
 并把 `const { locale } = useI18n();` 改为 `const { t, locale } = useI18n();`。
 
-- [ ] **Step 3: GuestOrderConfirmation.vue 同步**
+- [x] **Step 3: GuestOrderConfirmation.vue 同步**
 
 在 `GuestOrderConfirmation.vue` 的 L112-L121 商品行中，把 `<p>x{{ line.quantity }}</p>` 改为：
 
@@ -1485,7 +1485,7 @@ git commit -m "feat(hotel): 购物车酒店行显示晚数与起止日期并隐�
 
 （若该组件未使用 `useI18n()`，需在 `<script setup>` 中补 `const { t } = useI18n();`。）
 
-- [ ] **Step 4: 补 i18n 词条（zh-CN）**
+- [x] **Step 4: 补 i18n 词条（zh-CN）**
 
 在 `layers/base/i18n/locales/zh-CN.ts` 的 `detail: { ... }` 块（L64-L150 区间）**之后**、同级位置插入：
 
@@ -1501,7 +1501,7 @@ git commit -m "feat(hotel): 购物车酒店行显示晚数与起止日期并隐�
     },
 ```
 
-- [ ] **Step 5: 补 i18n 词条（en-US）**
+- [x] **Step 5: 补 i18n 词条（en-US）**
 
 在 `layers/base/i18n/locales/en-US.ts` 的对应 `detail: { ... }` 块之后、同级位置插入：
 
@@ -1517,7 +1517,7 @@ git commit -m "feat(hotel): 购物车酒店行显示晚数与起止日期并隐�
     },
 ```
 
-- [ ] **Step 6: 校验并提交**
+- [x] **Step 6: 校验并提交**
 
 Run（cwd `d:\zhao\nshop`）：`npm run typecheck`
 Expected: 无 TS 报错
@@ -1537,7 +1537,7 @@ git commit -m "feat(hotel): 订单详情与确认页展示住宿晚数并补中�
 **Files:**
 - Modify: `d:\zhao\nshop\layers\base\app\components\LogoElement.vue`（全文 36 行）
 
-- [ ] **Step 1: 删除租户名文本分支**
+- [x] **Step 1: 删除租户名文本分支**
 
 把 `LogoElement.vue` 整体替换为：
 
@@ -1567,12 +1567,12 @@ const {
 <style lang="css" scoped></style>
 ```
 
-- [ ] **Step 2: 确认无残留引用**
+- [x] **Step 2: 确认无残留引用**
 
 Run（在 `d:\zhao`）：`git grep -n "useTenantChannel" -- nshop/layers/base/app/components/LogoElement.vue`
 Expected: 无输出（该文件已不再引用租户上下文）
 
-- [ ] **Step 3: 校验并提交**
+- [x] **Step 3: 校验并提交**
 
 Run（cwd `d:\zhao\nshop`）：`npm run typecheck`
 Expected: 无 TS 报错
@@ -1591,7 +1591,7 @@ git commit -m "fix(header): 页头品牌位不再渲染租户名文本，消除�
 - Create: `d:\zhao\scripts\_shot-hotel-checkout.mjs`
 - Modify: `d:\zhao\docs\manual\`（本仓库既有操作手册文件，追加本节）
 
-- [ ] **Step 1: 后端 e2e 脚本（Shop API 断言）**
+- [x] **Step 1: 后端 e2e 脚本（Shop API 断言）**
 
 创建 `d:\zhao\scripts\hotel-orderline-e2e.mjs`：
 
@@ -1654,19 +1654,19 @@ for (const [name, ok] of assertions) {
 process.exit(failed ? 1 : 0);
 ```
 
-- [ ] **Step 2: 跑后端 e2e**
+- [x] **Step 2: 跑后端 e2e**
 
 Run（cwd `d:\zhao`）：
 `$env:HOTEL_VARIANT_ID="<酒店房型变体ID>"; node scripts/hotel-orderline-e2e.mjs`
 Expected: 全部 `PASS`，退出码 0
 
-- [ ] **Step 3: 普通商品回归**
+- [x] **Step 3: 普通商品回归**
 
 Run（cwd `d:\zhao`）：
 `$env:HOTEL_VARIANT_ID="<普通商品变体ID>"; node scripts/hotel-orderline-e2e.mjs`
 Expected: `数量`/`单价/行小计` 断言按该商品基础价 FAIL 属正常（脚本为酒店专用）；**改为**手工核对：`orderBoxes` 中该行 `isHotel=false`、`hotelNightly=null`、`linePriceWithTax` 与改造前一致，并在手册中记录该结果。
 
-- [ ] **Step 4: 手机视口截图脚本**
+- [x] **Step 4: 手机视口截图脚本**
 
 创建 `d:\zhao\scripts\_shot-hotel-checkout.mjs`：
 
@@ -1705,7 +1705,7 @@ await browser.close();
 console.log('screenshots →', OUT);
 ```
 
-- [ ] **Step 5: 跑截图并归档操作手册**
+- [x] **Step 5: 跑截图并归档操作手册**
 
 Run（cwd `d:\zhao`）：
 `$env:HOTEL_SLUG="<酒店商品slug>"; node scripts/_shot-hotel-checkout.mjs`
@@ -1713,7 +1713,7 @@ Expected: `docs/manual/shots/2026-09-30-hotel-orderline/` 生成 4 张 780×1688
 
 在 `d:\zhao\docs\manual\` 既有手册中新增一节「酒店房型订单行（2026-09-30）」，包含：改动说明、上述 4 张截图引用、后端 e2e 断言清单、普通商品回归结论、`/t2` 页头品牌去重截图（用同一脚本加一段 `/t2` 首页截图即可）。
 
-- [ ] **Step 6: 提交并收口（构建→推送→部署）**
+- [x] **Step 6: 提交并收口（构建→推送→部署）**
 
 ```bash
 git add scripts/hotel-orderline-e2e.mjs scripts/_shot-hotel-checkout.mjs docs/manual
@@ -1754,3 +1754,28 @@ git commit -m "test(hotel): 酒店订单行 e2e 脚本、手机视口截图与�
 3. **补充缺口**：本仓库 `synchronize: false`，新增 OrderLine customFields 必须配套补列 migration（见 Task 2.5），否则启动后查询订单行报 `column does not exist`。
 4. **节假日上浮数据（已按用户确认配置，2026-09-30）**：变体 58 的 `hotelRoomConfig` 原本**没有 `priceCalendar`**，故「1000元」在数据中并不存在、无法复现用户场景。已给其补 `priceCalendar = [{"type":"holiday","priceCent":100000,"dates":["2026-02-15"…"2026-02-22"]}]`（依据国务院办公厅《关于2026年部分节假日安排的通知》：2026 春节 2/15–2/23 放假，2/14 为调休上班日）。备份表 `_bak_hotelroomconfig_20260930`（生产库 vendure）。`basePriceCent` 88000 / minNights 1 / maxNights 30 未改动。
    - 由此 Task 13 验证口径为：**02-14（周六，非节假日）¥880 + 02-15（春节）¥1000 = ¥1880，均价 ¥940**（合计与设计文档一致，仅逐晚顺序互换）。
+   - **补充（2026-10-01）**：上述春节日期（2026-02-15~22）已过期，而 C 端日期条限定「明天 ~ 今天+`advanceDays`」，页面上选不到 → 截图无法复现节假日场景。已**追加**一段 `{"type":"holiday","priceCent":100000,"dates":["2026-10-01"…"2026-10-07"]}`（国庆），既有春节段与其它字段保持不动；备份 `d:\zhao\_backup\t2-hotel-holiday-20261001-0406\`。C 端可复现口径改为 `2026-10-07 → 2026-10-09`（2 晚：10-07 国庆 ¥1000 + 10-08 平日 ¥880 = ¥1880）。
+
+---
+
+## 执行完成记录（2026-10-01 收口）
+
+计划内 Task 1-13 与 Task 2.5 全部执行完毕；计划外追加两项缺口修复。三仓库均已提交、推送、部署到生产。
+
+| 范围 | 提交 | 说明 |
+| --- | --- | --- |
+| 后端 vendure（`packages/cjk-plugin`） | `4b58fecef` / `adc03d544` / `45c90835b` / `1ea2a3db9` | 逐晚计价纯函数、OrderLine customFields、补列 migration、单价计价策略、orderBoxes 下发 |
+| 后端 vendure（计划外） | `31b36ea0e` | 游客订单查询（pickup-plugin）补酒店行字段（Task 11b） |
+| 后端 vendure（线上热修） | `94b51ee3d` | `availableStock` 32 位溢出导致酒店详情页 500 → resolver 边界钳制到 `2147483647` |
+| 前端 nshop | `4578c68` `ea539e5` `fe01427` `bfa722f` `f27d4be` `99f4796` `9c2e87c` `d75321d` | store 透传 customFields、useHotelStay、日期条 query 预填、结算/购物车/订单页酒店行、页头品牌去重、游客订单页字段 |
+| 前端 nshop（收口修复） | `154c797` | 结算页酒店行 390px 布局：展开态 `basis-full` 无法换行导致日期逐字竖排 → 酒店行加 `flex-wrap` 并去掉冗余晚数列 |
+| 伞仓库（e2e/截图/手册） | `5473e81` `12f69c8` | e2e 脚本（断言由入离日期推导）、手机视口截图、手册第 6 节 |
+
+验证结论：
+- 后端 e2e：国庆口径 `2026-10-07 → 2026-10-09` **8/8 PASS**；默认旧口径 `2026-02-14 → 2026-02-16` **8/8 PASS**（无回归）
+- 生产实测：`quantity=2`、`unitPriceWithTax=94000`、`linePriceWithTax=188000`
+- 截图：5 张 780×1688（390×844 dpr2）已归档 `docs/manual/shots/2026-09-30-hotel-orderline/`，含脚本内 DOM 文本断言
+- 前端 `pnpm typecheck` 保持 18 条既有基线（无新增）
+- 手册：`docs/manual/product-detail/index.md` 第 6 节（6.1-6.9）
+
+未纳入本次范围（已知边界，见手册 6.6）：`messages.hotel.*` 仅补了 `zh-CN` / `en-US`，其余语言包依赖 `merge.ts` 以中文为基底的回退；仓库既有其它命名空间同样未逐语言包补齐，如需严格逐语言包覆盖请另行开单。

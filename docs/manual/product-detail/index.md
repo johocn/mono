@@ -276,11 +276,19 @@ node scripts/_shot-hotel-checkout.mjs     # 默认 BASE=https://www.youshop.cn/t
 
 ### 6.5 普通商品回归
 
-取 t2 渠道非酒店变体（`温泉门票` variantId=57）加购，断言：`isHotel === false`、`hotelNightly` 为空（`null` 或空数组，GraphQL 列表类型查询需带子字段）、`linePriceWithTax === unitPriceWithTax × quantity`。结果 3 条全 PASS。
+接口层：取 t2 渠道非酒店变体（`温泉门票` variantId=57）加购，断言：`isHotel === false`、`hotelNightly` 为空（`null` 或空数组，GraphQL 列表类型查询需带子字段）、`linePriceWithTax === unitPriceWithTax × quantity`。结果 3 条全 PASS。
 
-### 6.6 已知边界（i18n 兜底）
+页面层（为防止 6.9 的 `flex-wrap` 改动波及普通商品行，另加一次实机回归）：同一录图脚本新开干净会话加购该普通商品，进结算页截图并断言「商品名 / 单价 / 增加数量 / 减少数量 / 行小计 / 删除」齐全，且「增加数量」按钮与单价在同一水平带（y 中心差 < 12px，实测 0.0px）。
 
-- `messages.hotel.*`（`nights / dateRange / nightlyDetail / changeDates / stayTotal / selectDatesFirst / nightsOutOfRange`）目前**仅 `zh-CN` 与 `en-US` 两个语言包完整定义**，其余语言包未定义该命名空间，按回退链落到中文兜底；新增语言时需同步补词条。
+![结算页普通商品行回归：单价 ¥168.00、步进器、行小计 ¥336.00 同排，未受酒店行改动影响](../shots/2026-09-30-hotel-orderline/06-checkout-normal-product.png)
+
+- 结论：`flex-wrap` 仅作用于酒店行（`:class="l.isHotel ? …"`），普通商品行渲染与改动前一致，无回归。
+- 该图同时暴露一个**改动前既有**问题：普通商品行的商品名称被右侧固定列（单价/步进器/小计/删除）挤压到约 1 个字宽后被 `truncate` 省略（见 6.6 已知边界）。
+
+### 6.6 已知边界
+
+- **i18n 兜底**：`messages.hotel.*`（`nights / dateRange / nightlyDetail / changeDates / stayTotal / selectDatesFirst / nightsOutOfRange`）目前**仅 `zh-CN` 与 `en-US` 两个语言包完整定义**，其余语言包未定义该命名空间，按回退链落到中文兜底（`merge.ts` 以中文为基底深合并）；新增语言时需同步补词条。
+- **普通商品行描述列过窄（改动前既有，未修）**：结算页 `BoxLines.vue` 普通商品行在 390px 下，右侧固定列（单价 / 步进器 / 行小计 `w-14` / 删除）合计已占满行宽，中间描述列被压到约 1 字宽后被 `truncate` 省略，商品名几乎不可读（见 6.5 截图）。本次仅修了酒店行，**普通商品行布局改动属设计变更，需先出 mockup 定稿后再改**。
 
 ### 6.7 本次线上 500 缺陷记录
 
