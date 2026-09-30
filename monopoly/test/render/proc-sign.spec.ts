@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sign, shop } from '../../src/render/providers/proc-building';
+import { market3, sign, shop } from '../../src/render/providers/proc-building';
 import { PROC_PRESETS } from '../../src/render/providers/proc';
 import type { TextRequest } from '../../src/render/providers/proc';
 
@@ -25,20 +25,30 @@ const baseCtx = (levels: 1 | 2 | 3, brand?: string) => ({
   state: { level: levels },
 });
 
-describe('L3 商超楼', () => {
-  it('L3 画玻璃幕墙（2 行 × 4 列 = 16 片）与冷色玻璃', () => {
+describe('L3 商超楼（market3：成排暖窗；青幕墙与霓虹已废）', () => {
+  it('L3 画成排暖窗（3 行 × 4 列 × 2 面 = 24 片）', () => {
     const { g, calls } = recorder();
     shop(g as never, baseCtx(3) as never);
     const cs = calls.map((c) => String(c.style.color ?? ''));
-    expect(cs).toContain('#9fd8ff');
-    expect(cs.filter((c) => c === '#9fd8ff').length).toBe(16);
+    expect(cs).toContain('#ffd79a');
+    expect(cs.filter((c) => c === '#ffd79a').length).toBe(24);
     expect(cs).toContain('hsl(30,20%,40%)');
   });
 
-  it('L3 有霓虹轮廓描边', () => {
+  it('去青回归：产物不含青幕墙 / 霓虹描边色', () => {
     const { g, calls } = recorder();
     shop(g as never, baseCtx(3) as never);
-    expect(calls.map((c) => String(c.style.color ?? ''))).toContain('#5ef0c0');
+    const cs = calls.map((c) => String(c.style.color ?? ''));
+    expect(cs).not.toContain('#9fd8ff');
+    expect(cs).not.toContain('#5ef0c0');
+  });
+
+  it('skin.json 的 l3 若仍指 shop，也兜到 market3（同一产物）', () => {
+    const viaShop = recorder();
+    shop(viaShop.g as never, baseCtx(3) as never);
+    const viaM3 = recorder();
+    market3(viaM3.g as never, baseCtx(3) as never);
+    expect(viaShop.calls.length).toBe(viaM3.calls.length);
   });
 });
 

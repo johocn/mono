@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { shop, hsl, rgba } from '../../src/render/providers/proc-building';
+import { barn, gate, hsl, market3, onsenHouse, rgba, shop, stall } from '../../src/render/providers/proc-building';
 import { PROC_PRESETS } from '../../src/render/providers/proc';
 import { resolve } from '../../src/skin/resolve';
 
@@ -84,5 +84,77 @@ describe('proc preset: shop（等距楼）', () => {
     expect(r.level).toBe(2);
     expect((r.provider as { preset: string }).preset).toBe('shop');
     expect((r.provider as { params: Record<string, unknown> }).params.hue).toBe(150);
+  });
+});
+
+describe('proc preset: 建筑 6 原型（Task 3 新增 5 个）', () => {
+  const ctxOf2 = (params: Record<string, unknown>, state: Record<string, unknown> = {}) => ({
+    geo: { hw: 24, hh: 13, ox: 195, oy: 104 },
+    box: { w: 48, d: 26, h: 72 },
+    cx: 195,
+    cy: 104,
+    s: 1,
+    params,
+    state: { level: 2, ...state },
+  });
+  /* 8 个 palette 色键全给上：断言每个键都真的被某个原型读走 */
+  const PAL = {
+    wallL: '#111111', wallR: '#222222', roof: '#333333', win: '#444444',
+    sign: '#555555', glow: '#666666', tileFill: '#777777', tileEdge: '#888888',
+  };
+  const ellipses = (calls: Array<{ op: string }>) => calls.filter((c) => c.op === 'ellipse').length;
+
+  it('PROC_PRESETS 已注册 5 个新原型', () => {
+    expect(PROC_PRESETS.stall).toBe(stall);
+    expect(PROC_PRESETS.market3).toBe(market3);
+    expect(PROC_PRESETS.onsenHouse).toBe(onsenHouse);
+    expect(PROC_PRESETS.gate).toBe(gate);
+    expect(PROC_PRESETS.barn).toBe(barn);
+  });
+
+  it('空 params 下都不抛错且有产物（L4 兜底永不空白）', () => {
+    for (const preset of [stall, market3, onsenHouse, gate, barn]) {
+      const { g, calls } = recorder();
+      expect(() => preset(g as never, ctxOf2({}) as never)).not.toThrow();
+      expect(calls.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('palette 色键逐键生效：stall 读 wallL/wallR/roof/win/sign/glow', () => {
+    const { g, calls } = recorder();
+    stall(g as never, ctxOf2({ hue: 30, ...PAL }) as never);
+    const cs = colors(calls);
+    for (const k of ['wallL', 'wallR', 'roof', 'win', 'sign', 'glow'] as const) {
+      expect(cs).toContain(PAL[k]);
+    }
+  });
+
+  it('market3 去青回归：产物不含青幕墙 / 霓虹色', () => {
+    const { g, calls } = recorder();
+    market3(g as never, ctxOf2({ hue: 200 }) as never);
+    const cs = colors(calls);
+    expect(cs).not.toContain('#9fd8ff');
+    expect(cs).not.toContain('#5ef0c0');
+    expect(cs).not.toContain('#29a9e0');
+  });
+
+  it('onsenHouse 的汤池与汤雾各自独立触发（steam 不再顺带画池）', () => {
+    const base = ctxOf2({ hue: 30 });
+    const none = recorder(); onsenHouse(none.g as never, base as never);
+    const pool = recorder(); onsenHouse(pool.g as never, { ...base, params: { hue: 30, pool: true } } as never);
+    const steam = recorder(); onsenHouse(steam.g as never, { ...base, params: { hue: 30, steam: true } } as never);
+    expect(ellipses(pool.calls) - ellipses(none.calls)).toBe(3);
+    expect(ellipses(steam.calls) - ellipses(none.calls)).toBe(6);
+  });
+
+  it('gate / barn 同样读色键（sign 匾额 / roof 顶檐）', () => {
+    const gt = recorder();
+    gate(gt.g as never, ctxOf2({ hue: 30, sign: '#123456', roof: '#abcdef' }) as never);
+    expect(colors(gt.calls)).toContain('#123456');
+    expect(colors(gt.calls)).toContain('#abcdef');
+
+    const br = recorder();
+    barn(br.g as never, ctxOf2({ hue: 30, roof: '#abcdef' }) as never);
+    expect(colors(br.calls)).toContain('#abcdef');
   });
 });

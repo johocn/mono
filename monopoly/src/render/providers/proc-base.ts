@@ -10,6 +10,14 @@ export const str = (p: P, k: string, d: string): string => (typeof p[k] === 'str
 export const arr = <T>(p: P, k: string): T[] | null => (Array.isArray(p[k]) ? (p[k] as T[]) : null);
 
 /**
+ * 主题色键取值器（spec §4）：`params` 里的 palette 色键优先，缺则落 preset 内建兜底。
+ * 名字取 `c` 是为了命中 `tools/eslint-plugin-mono` 的兜底豁免表（num/str/arr/n/c/fb）——
+ * 兜底色值只有写在它的第 3 实参里才不算「写死」。
+ */
+export const c = (p: P, k: string, d: string): string =>
+  (typeof p[k] === 'string' && p[k] !== '' ? (p[k] as string) : d);
+
+/**
  * L4 内建兜底默认值容器（spec §3.6.4）：把一个 preset 的全部几何/色值默认值集中声明一次。
  * 取值器（num/str/arr/n/c/fb）的实参子树是 `no-visual-number` / `no-hardcoded-color` 唯一豁免的位置。
  */

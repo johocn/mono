@@ -83,7 +83,7 @@
 
     "building.*.l1": { "kind": "proc", "preset": "shop", "params": { "levels": 1, "hue": 32, "brand": "鹿特产" } },
     "building.*.l2": { "kind": "proc", "preset": "shop", "params": { "levels": 2, "hue": 30 } },
-    "building.*.l3": { "kind": "proc", "preset": "shop", "params": { "levels": 3, "hue": 200 } },
+    "building.*.l3": { "kind": "proc", "preset": "market3", "params": { "levels": 3, "hue": 200 } },
     "building.*.sign": { "kind": "proc", "preset": "sign", "params": { "levels": 2, "brand": "门店" } },
 
     "prop.awning": { "kind": "proc", "preset": "awning", "params": {} },

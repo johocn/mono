@@ -8,7 +8,7 @@
     "bindings[].paletteBySlot": "32 长度数组，按地块序号逐格给配色；优先于 palette",
     "bindings[].params": "元素级参数，逐键压过 palette（单素材独立风格）",
     "order": "后写的 binding 覆盖先写的（同键覆盖、异键累加）——故「精确 id」必须写在「通配」之后",
-    "preset": "preset 字段在对应 proc preset **注册之后**才能写（未注册 → 落 builtin 纯色块）。Task 3 注册 stall/market3/onsenHouse/gate/barn 时再补回 l1 / l3 / 五条精确 id 的 preset"
+    "preset": "proc preset 名（缺省 → 沿用 skin.json / 内建解析结果）。已注册原型：shop（L1 坡顶小铺 / L2 平顶楼）/ stall（L1 坡顶摊位）/ market3（L3 三层市集楼）/ onsenHouse（温泉汤屋）/ gate（牌楼门）/ barn（鹿舍仓房）。写未注册的名字会静默落 builtin 纯色块"
   },
   "palettes": {
     "warm-market": { "wallL": "#cdb78f", "wallR": "#a8926a", "roof": "#8f4a33", "win": "#ffcf7a", "sign": "#f5c451", "tileFill": "#4a3b2a", "tileEdge": "#8a7550", "glow": "#ffd9a0" },
@@ -20,6 +20,7 @@
   "bindings": [
     {
       "match": "building.*.l1",
+      "preset": "stall",
       "paletteBySlot": [
         "warm-market","warm-market","warm-market","warm-market","warm-market","warm-market",
         "snow-deer","snow-deer","snow-deer","snow-deer","snow-deer","snow-deer",
@@ -31,6 +32,7 @@
     },
     {
       "match": "building.*.l2",
+      "preset": "shop",
       "paletteBySlot": [
         "warm-market","warm-market","warm-market","warm-market","warm-market","warm-market",
         "snow-deer","snow-deer","snow-deer","snow-deer","snow-deer","snow-deer",
@@ -42,6 +44,7 @@
     },
     {
       "match": "building.*.l3",
+      "preset": "market3",
       "paletteBySlot": [
         "warm-market","warm-market","warm-market","warm-market","warm-market","warm-market",
         "snow-deer","snow-deer","snow-deer","snow-deer","snow-deer","snow-deer",
@@ -53,14 +56,14 @@
     },
     { "match": "building.*.sign", "palette": "warm-market" },
 
-    { "match": "building.s4.l2", "palette": "onsen-mist", "params": { "steam": true } },
-    { "match": "building.s6.l2", "palette": "onsen-mist", "params": { "steam": true } },
-    { "match": "building.s13.l2", "palette": "warm-market" },
-    { "match": "building.s0.l3", "palette": "papercut" },
-    { "match": "building.s30.l3", "palette": "warm-market" },
+    { "match": "building.s4.l2", "preset": "onsenHouse", "palette": "onsen-mist", "params": { "steam": true } },
+    { "match": "building.s6.l2", "preset": "onsenHouse", "palette": "onsen-mist", "params": { "steam": true } },
+    { "match": "building.s13.l2", "preset": "gate", "palette": "warm-market" },
+    { "match": "building.s0.l3", "preset": "barn", "palette": "papercut" },
+    { "match": "building.s30.l3", "preset": "market3", "palette": "warm-market" },
 
     { "match": "prop.*", "palette": "warm-market" },
-    { "match": "prop.signTower", "palette": "papercut", "params": { "glow": false } },
+    { "match": "prop.signTower", "palette": "papercut" },
 
     { "match": "board.tile.core", "palette": "warm-market" },
     { "match": "board.tile.shop", "palette": "warm-market" },

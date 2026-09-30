@@ -52,10 +52,10 @@ export interface ProcCtx {
 export type ProcPreset = (g: Graphics, ctx: ProcCtx) => void;
 
 /* 取值器定义在依赖零的 proc-base.ts，此处转出以保持既有 import 路径可用 */
-export { num, str, arr, fb } from './proc-base';
-import { num, str, arr } from './proc-base';
+export { num, str, arr, c, fb } from './proc-base';
+import { num, str, arr, c } from './proc-base';
 
-/* —— 地砖：菱形填充 + 描边（归属色/类型色/选中高亮） —— */
+/* —— 地砖：菱形填充 + 描边（归属色/类型色/选中高亮；palette 色键优先） —— */
 const tile: ProcPreset = (g, ctx) => {
   const { cx, cy, geo, params, state } = ctx;
   const s = ctx.s;
@@ -66,12 +66,12 @@ const tile: ProcPreset = (g, ctx) => {
   const edgeWSel = typeof params.edgeWSel === 'number' ? (params.edgeWSel as number) : edgeW;
   const color = owner !== null && ownerColors[owner]
     ? ownerColors[owner]
-    : selected
+    : c(params, 'tileEdge', selected
       ? str(params, 'selectedEdge', str(params, 'edge', '#ffffff'))
-      : str(params, 'edge', '#ffffff');
+      : str(params, 'edge', '#ffffff'));
   const width = selected ? edgeWSel : edgeW;
   g.poly(ptsToPoly(dia(cx, cy, geo.hw * s, geo.hh * s)))
-    .fill({ color: str(params, 'fill', '#000000') })
+    .fill({ color: c(params, 'tileFill', str(params, 'fill', '#000000')) })
     .stroke(width === null ? { color } : { color, width });
 };
 
@@ -83,7 +83,7 @@ const tileEdge: ProcPreset = (g, ctx) => {
   const dy = num(params, 'dy', 0);
   const lift = num(params, 'lift', 0);
   g.poly(ptsToPoly(dia(cx, cy + dy * s, geo.hw * inset * s, geo.hh * inset * s, lift * s)))
-    .stroke({ color: str(params, 'edge', '#ffffff'), width: num(params, 'width', 1) });
+    .stroke({ color: c(params, 'tileEdge', str(params, 'edge', '#ffffff')), width: num(params, 'width', 1) });
 };
 
 /* —— 背景纵向渐变 —— */
@@ -115,7 +115,7 @@ const builtin: ProcPreset = (g, ctx) => {
     .stroke({ color: str(params, 'edge', '#6b7f76'), width: num(params, 'edgeW', 1) });
 };
 
-import { shop, sign } from './proc-building';
+import { barn, gate, market3, onsenHouse, shop, sign, stall } from './proc-building';
 import { antenna, awning, banner, lamp, lantern, rooftopBox, signTower, tree } from './proc-props';
 import { showcaseGround, showcaseHud, showcaseMini, showcasePanel, showcaseSky, showcaseSkyline } from './proc-showcase';
 import { diceBody, diceFace, uiButton, uiDock, uiLabel, uiPanel, uiPlayerBar } from './proc-hud';
@@ -135,6 +135,11 @@ export const PROC_PRESETS: Record<string, ProcPreset> = {
   pawn,
   shop,
   sign,
+  stall,
+  market3,
+  onsenHouse,
+  gate,
+  barn,
   awning,
   lantern,
   banner,

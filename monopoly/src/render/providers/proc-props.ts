@@ -3,7 +3,7 @@ import { up, win, type Pt } from '../iso';
 import { ptsToPoly } from '../paint';
 import { BUILDING_HEIGHTS } from '../../skin/registry';
 import { hsl } from './proc-building';
-import { arr, fb } from './proc-base';
+import { arr, c, fb } from './proc-base';
 import type { ProcCtx } from './proc';
 
 type P = Record<string, unknown>;
@@ -100,21 +100,24 @@ function isoBox(g: Graphics, cx: number, cy: number, w: number, d: number, h: nu
 
 /* ============ 遮阳篷（L1 摊位，v5 line 212–216） ============ */
 export function awning(g: Graphics, ctx: ProcCtx): void {
-  const { G, S, A } = getters(ctx.params as P);
+  const p = ctx.params as P;
+  const { G, S, A } = getters(p);
   const { cx, y0, w, d, h } = frame(ctx);
   const F: Pt = [cx, y0 + d];
   const L: Pt = [cx - w, y0];
   fillPoly(g, win(L, F, h, G('awU1'), G('awU2'), G('awV1'), G('awV2')), S('awBase'));
   const us = A('awStripeUs');
+  const stripe = c(p, 'sign', S('awStripe'));
   for (let i = 0; i < us.length; i++) {
-    fillPoly(g, win(L, F, h, us[i], us[i] + G('awStripeW'), G('awV1'), G('awV2')), S('awStripe'));
+    fillPoly(g, win(L, F, h, us[i], us[i] + G('awStripeW'), G('awV1'), G('awV2')), stripe);
   }
   fillPoly(g, win(L, F, h, G('awU1'), G('awU2'), G('awV1') - G('awLipH'), G('awV1')), S('awLip'));
 }
 
 /* ============ 红灯笼（v5 lantern line 118–127；两处挂点 line 249–250） ============ */
 export function lantern(g: Graphics, ctx: ProcCtx): void {
-  const { G, S } = getters(ctx.params as P);
+  const p = ctx.params as P;
+  const { G, S } = getters(p);
   const { cx, y0, w, d, h } = frame(ctx);
   const s = ctx.s;
   const at = typeof ctx.state.at === 'string' ? (ctx.state.at as string) : 'door';
@@ -125,8 +128,9 @@ export function lantern(g: Graphics, ctx: ProcCtx): void {
   const r = G('laR') * s;
   g.moveTo(lx, ly - G('laRod') * s).lineTo(lx, ly - r * G('laRodEnd'))
     .stroke({ color: S('laRodFill'), width: G('laRodW') * s });
-  g.ellipse(lx, ly, r, r * G('laRy')).fill({ color: S('laFill') });
-  g.ellipse(lx - r * G('laHiDx'), ly - r * G('laHiDy'), r * G('laHiRx'), r * G('laHiRy')).fill({ color: S('laGlow') });
+  g.ellipse(lx, ly, r, r * G('laRy')).fill({ color: c(p, 'sign', S('laFill')) });
+  g.ellipse(lx - r * G('laHiDx'), ly - r * G('laHiDy'), r * G('laHiRx'), r * G('laHiRy'))
+    .fill({ color: c(p, 'glow', S('laGlow')) });
   g.rect(lx - r * G('laCapHalf'), ly - r * G('laCapTop'), r * G('laCapW'), r * G('laCapH')).fill({ color: S('laCap') });
   g.rect(lx - r * G('laCapHalf'), ly + r * G('laCapBot'), r * G('laCapW'), r * G('laCapH')).fill({ color: S('laCap') });
   const ch = typeof ctx.state.char === 'string' ? (ctx.state.char as string) : '';
@@ -135,7 +139,8 @@ export function lantern(g: Graphics, ctx: ProcCtx): void {
 
 /* ============ 竖招幌子（v5 vBanner line 82–89；挂点 line 244–246） ============ */
 export function banner(g: Graphics, ctx: ProcCtx): void {
-  const { G, S } = getters(ctx.params as P);
+  const p = ctx.params as P;
+  const { G, S } = getters(p);
   const { cx, y0, w, d, h } = frame(ctx);
   const s = ctx.s;
   const py = y0 + d * G('bnDy') - h * G('bnV');
@@ -147,7 +152,7 @@ export function banner(g: Graphics, ctx: ProcCtx): void {
   const bw = G('bnW') * s;
   const ch = G('bnCh') * s;
   g.roundRect(bx - bw / 2, by, bw, text.length * ch, G('bnRx') * s)
-    .fill({ color: S('bnFill') })
+    .fill({ color: c(p, 'sign', S('bnFill')) })
     .stroke({ color: hsl(G('bnEdgeH'), G('bnEdgeS'), G('bnEdgeL')), width: G('bnEdgeW') * s });
   const chars = [...text];
   for (let i = 0; i < chars.length; i++) {
@@ -166,7 +171,8 @@ export function rooftopBox(g: Graphics, ctx: ProcCtx): void {
 
 /* ============ 屋顶招牌塔 + 红灯（v5 line 226–229） ============ */
 export function signTower(g: Graphics, ctx: ProcCtx): void {
-  const { G, S } = getters(ctx.params as P);
+  const p = ctx.params as P;
+  const { G, S } = getters(p);
   const { cx, cy, w, d } = frame(ctx);
   const s = ctx.s;
   const tcy = cy - d * G('stDy');
@@ -174,7 +180,7 @@ export function signTower(g: Graphics, ctx: ProcCtx): void {
   isoBox(g, cx, tcy, w * G('stW'), d * G('stD'), th, S('stT'), S('stL'), S('stR'));
   g.moveTo(cx, tcy - th).lineTo(cx, tcy - th - G('stMastH') * s)
     .stroke({ color: S('stMastFill'), width: G('stMastW') * s });
-  g.circle(cx, tcy - th - G('stLampDy') * s, G('stLampR') * s).fill({ color: S('stLamp') });
+  g.circle(cx, tcy - th - G('stLampDy') * s, G('stLampR') * s).fill({ color: c(p, 'glow', S('stLamp')) });
 }
 
 /* ============ 独立天线（可从招牌塔上分离出来单独挂） ============ */
@@ -205,12 +211,13 @@ export function tree(g: Graphics, ctx: ProcCtx): void {
 
 /* ============ 路灯（v5 streetLamp line 110–116）—— ground ============ */
 export function lamp(g: Graphics, ctx: ProcCtx): void {
-  const { G, S } = getters(ctx.params as P);
+  const p = ctx.params as P;
+  const { G, S } = getters(p);
   const { cx, cy } = frame(ctx);
   const s = ctx.s * G('lpScale');
   const h = G('lpH') * s;
   g.ellipse(cx, cy + G('lpShDy') * s, G('lpShRx') * s, G('lpShRy') * s).fill({ color: S('lpSh') });
   g.rect(cx - (G('lpPoleW') * s) / 2, cy - h, G('lpPoleW') * s, h).fill({ color: S('lpPoleFill') });
   g.circle(cx, cy - h - G('lpHeadDy') * s, G('lpGlowR') * s).fill({ color: S('lpGlow') });
-  g.circle(cx, cy - h - G('lpHeadDy') * s, G('lpBulbR') * s).fill({ color: S('lpBulb') });
+  g.circle(cx, cy - h - G('lpHeadDy') * s, G('lpBulbR') * s).fill({ color: c(p, 'glow', S('lpBulb')) });
 }
