@@ -77,7 +77,8 @@ await page.locator('header').first().waitFor({ timeout: 30000 });
 await page.waitForTimeout(800);
 await page.screenshot({ path: `${OUT}/05-header-brand.png`, fullPage: false });
 
-// ============ 普通商品行回归（全新 context，干净匿名购物车；验证 flex-wrap 改动未波及 v-else 分支） ============
+// ============ 普通商品行回归（全新 context，干净匿名购物车）
+// 验证折行布局：商品名独占首行（可用宽 ≥200px）、单价与步进器折到第二行、56×56 缩略图 ============
 const NORMAL_VARIANT_ID = process.env.NORMAL_VARIANT_ID || '57'; // t2「温泉门票」，hotelRoomConfig 为 null
 const ADMIN_API = process.env.ADMIN_API || 'https://e.joho.cn/admin-api';
 const ADMIN_USER = process.env.ADMIN_USER || 'superadmin';
@@ -129,19 +130,29 @@ console.log(`\n变体 ${NORMAL_VARIANT_ID} → 商品「${prod.name}」slug=${pr
 const ctx2 = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
 const page2 = await ctx2.newPage();
 
-// UI 正常流程加购：详情页 → 加入购物车
+// UI 正常流程加购：详情页 → 加入购物车 → 结算页。
+// 站点刚重启/首屏 hydration 未完成时点击会落空，故加购后校验结算页是否真出现商品行，最多重试 3 次。
 const normalUrl = `${BASE}/product/${encodeURIComponent(prod.slug)}`;
-console.log('普通商品详情页 →', normalUrl);
-await page2.goto(normalUrl, { waitUntil: 'domcontentloaded' });
-const normalAdd = page2.getByRole('button', { name: /加入购物车|Add to cart/ }).first();
-await normalAdd.waitFor({ timeout: 30000 });
-await normalAdd.click();
-await page2.waitForTimeout(1500);
-
-// 结算页
-await page2.goto(`${BASE}/checkout`, { waitUntil: 'domcontentloaded' });
 const normalLine = page2.locator('li:has([aria-label="增加数量"])').first();
-await normalLine.waitFor({ timeout: 30000 });
+let added = false;
+for (let attempt = 1; attempt <= 3 && !added; attempt++) {
+  console.log(`普通商品详情页 → ${normalUrl}（第 ${attempt} 次加购）`);
+  await page2.goto(normalUrl, { waitUntil: 'domcontentloaded' });
+  const normalAdd = page2.getByRole('button', { name: /加入购物车|Add to cart/ }).first();
+  await normalAdd.waitFor({ timeout: 30000 });
+  await page2.waitForTimeout(600); // 等 hydration，避免点击落空
+  await normalAdd.click();
+  await page2.waitForTimeout(2000);
+
+  await page2.goto(`${BASE}/checkout`, { waitUntil: 'domcontentloaded' });
+  added = await normalLine.waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false);
+  if (!added) console.log('  加购未生效，重试…');
+}
+if (!added) {
+  console.error('FAIL  普通商品加购失败：结算页未出现商品行（已重试 3 次）');
+  await browser.close();
+  process.exit(1);
+}
 
 // 步进器 +1：1 → 2（同时验证步进器可用与行小计随之变化）
 await page2.locator('[aria-label="增加数量"]').first().click();
@@ -168,13 +179,39 @@ const yc = (b) => b.y + b.height / 2;
 console.log('  boundingBox 增加数量:', JSON.stringify(plusBox));
 console.log('  boundingBox 单价  :', JSON.stringify(unitBox));
 console.log('  boundingBox 行小计:', JSON.stringify(totalBox));
+
+// 折行布局断言一：商品名独占首行（与操作行不在同一水平带）
+const nameBox = await normalLine.locator('div.leading-tight > div').first().boundingBox();
+const thumbBox = await normalLine.locator('img').first().boundingBox();
+console.log('  boundingBox 商品名:', JSON.stringify(nameBox));
+console.log('  boundingBox 缩略图:', JSON.stringify(thumbBox));
+
+const thumbOk = thumbBox && Math.round(thumbBox.width) === 56 && Math.round(thumbBox.height) === 56;
+console.log(`${thumbOk ? 'PASS' : 'FAIL'}  普通商品-缩略图 56×56：实际 ${thumbBox ? `${Math.round(thumbBox.width)}×${Math.round(thumbBox.height)}` : 'n/a'}`);
+if (!thumbOk) failures.push('普通商品-缩略图 56×56');
+
+const nameW = nameBox ? nameBox.width : NaN;
+const nameOk = Number.isFinite(nameW) && nameW >= 200;
+console.log(`${nameOk ? 'PASS' : 'FAIL'}  普通商品-商品名可用宽 ≥200px：实际 ${Number.isFinite(nameW) ? nameW.toFixed(1) : 'n/a'}px（改造前约 49px，仅容 1 字）`);
+if (!nameOk) failures.push('普通商品-商品名可用宽');
+
+const foldDy = nameBox && unitBox ? yc(unitBox) - yc(nameBox) : NaN;
+console.log(`  y 中心：商品名 ${nameBox ? yc(nameBox).toFixed(1) : 'n/a'} ｜ 单价 ${unitBox ? yc(unitBox).toFixed(1) : 'n/a'} ｜ 差 = ${Number.isFinite(foldDy) ? foldDy.toFixed(1) : 'n/a'}px（折行应 >20）`);
+if (Number.isFinite(foldDy) && foldDy > 20) {
+  console.log('PASS  普通商品-折行：商品名独占首行，价格与操作折到第二行');
+} else {
+  console.error('FAIL  普通商品-折行：商品名与价格仍在同一水平带（未折行）');
+  failures.push('普通商品-折行');
+}
+
+// 折行布局断言二：第二行内部 单价与步进器同带
 const dy = plusBox && unitBox ? Math.abs(yc(plusBox) - yc(unitBox)) : NaN;
 console.log(`  y 中心：单价 ${unitBox ? yc(unitBox).toFixed(1) : 'n/a'} ｜ 增加数量 ${plusBox ? yc(plusBox).toFixed(1) : 'n/a'} ｜ 差 = ${Number.isFinite(dy) ? dy.toFixed(1) : 'n/a'}px（阈值 <12）`);
 if (Number.isFinite(dy) && dy < 12) {
-  console.log('PASS  普通商品-同一水平带：价格与步进器未因 flex-wrap 换行');
+  console.log('PASS  普通商品-操作行同带：单价与步进器并排于第二行');
 } else {
-  console.error('FAIL  普通商品-同一水平带：价格与步进器垂直错位');
-  failures.push('普通商品-同一水平带');
+  console.error('FAIL  普通商品-操作行同带：单价与步进器垂直错位');
+  failures.push('普通商品-操作行同带');
 }
 console.log('  行内文本:', (await normalLine.innerText().catch(() => '')).replace(/\s+/g, ' '));
 
