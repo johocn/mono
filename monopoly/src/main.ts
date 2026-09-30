@@ -27,7 +27,7 @@ import { SHARE_VERSION } from './data/share';
 import { FATE_DECK, type ItemCardKind } from './data/cards';
 import { DEMO_OWNER } from './data/board';
 import { STOCK_TILE_INDEX } from './data/stocks';
-import { DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED, LABEL_GROUND } from './skin/layout';
+import { BUILDING_SCALE, BUILDING_Y_OFFSET, DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED, LABEL_GROUND } from './skin/layout';
 import { SHOP_DEFAULTS, parseShopConfig, type ShopConfig } from './skin/shop-config';
 import { allElementIds } from './skin/registry';
 import {
@@ -176,14 +176,19 @@ export async function boot(): Promise<void> {
   const themePatch = opts.theme === 'off' ? null : mergePatches(compileTheme(theme, ids), forced);
 
   const stage = await createStage(canvas, { bg: BG_FALLBACK, dpr: window.devicePixelRatio || 2 });
+  /* 地块序号 → 建筑层级（与楼体、楼顶名牌同源一份） */
+  const slotLevels = slotLevelsOf();
   const scene = new Scene({
     layers: stage.layers,
     geo,
     bg: { color: tokens.bgBottom ?? '#0c1513', alpha: 1 },
     instantiateDeps: {
-      skin, defaultSkin, overrides: shops.overrides, theme: themePatch, slotLevels: slotLevelsOf(),
+      skin, defaultSkin, overrides: shops.overrides, theme: themePatch, slotLevels,
     },
-    placement: { pawnGap: 9.6, pawnFrontDy: 1.45, pawnScale: 0.62, buildingScale: 0.72, buildingYOffset: 1 },
+    placement: {
+      pawnGap: 9.6, pawnFrontDy: 1.45, pawnScale: 0.62,
+      buildingScale: BUILDING_SCALE, buildingYOffset: BUILDING_Y_OFFSET,
+    },
     assetBase: './skins',
     skinIds: skinPackIds,
   });
@@ -274,6 +279,10 @@ export async function boot(): Promise<void> {
       ownedText: tokens.labelOwnedText ?? '#ffffff',
       ownerOf: ownedOf,
       textOf: shops.shortAt,
+      /* 楼顶名牌（spec §6.2）：有楼浮上楼顶，无楼回落到地面字牌 */
+      levelOf: (i) => slotLevels[i],
+      /* 当前格三重标记（spec §6.3）：放大 1.25× + 金描边 + 指示三角 */
+      currentSlot: game ? currentPlayer(game.state).pos : undefined,
     }, LABEL_GROUND);
     hud?.update();
     panels?.update();

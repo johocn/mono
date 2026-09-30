@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { labelPlacement, labelTextOf } from '../../src/render/LabelView';
+import { labelPlacement, labelTextOf, labelSize, roofLabelY, clampLabelText } from '../../src/render/LabelView';
+import { LABEL_ROOF, LABEL_CURRENT_SCALE } from '../../src/skin/layout';
 
 const GEO = { hw: 21, hh: 10.5, ox: 195, oy: 96 };
 
@@ -20,5 +21,34 @@ describe('label 标签（v5 样张 line 312–314）', () => {
   it('labelTextOf 用短名', () => {
     expect(labelTextOf(4)).toBe('国信温泉');
     expect(labelTextOf(0)).toBe('鹿乡小镇');
+  });
+});
+
+describe('名牌几何（spec §6.2）', () => {
+  it('4 字 fs10、3 字 fs11、5 字自动降 fs8、>5 字截断', () => {
+    expect(labelSize('长峰特产').fs).toBe(LABEL_ROOF.fs);        // 4 字
+    expect(labelSize('金鹿源').fs).toBe(LABEL_ROOF.fsShort);     // 3 字
+    expect(labelSize('鹿茸市场部').fs).toBe(LABEL_ROOF.fsNarrow);// 5 字
+    expect(clampLabelText('一二三四五六')).toBe('一二三四…');
+  });
+
+  it('4 字胶囊宽 ≤ 相邻格横向间距 48', () => {
+    expect(labelSize('长峰特产').w).toBeLessThanOrEqual(48);
+  });
+
+  it('当前格放大 1.25×', () => {
+    expect(labelSize('长峰特产', true).fs).toBeCloseTo(LABEL_ROOF.fs * LABEL_CURRENT_SCALE, 1);
+  });
+
+  it('楼顶落位 = 格心 − 楼高 − lift − h/2', () => {
+    expect(roofLabelY(200, 72)).toBe(200 - 72 - LABEL_ROOF.lift - LABEL_ROOF.h / 2);
+  });
+
+  it('有楼走楼顶分支（h = 胶囊 h），无楼仍走地面分支', () => {
+    const p = labelPlacement(100, 200, GEO, { dy: 0.46, fs: 6.2, padX: 5, padTop: 6.6, h: 9.4, rx: 3.2 }, 72);
+    expect(p.cy).toBeLessThan(200);
+    expect(p.h).toBe(LABEL_ROOF.h);
+    const g = labelPlacement(100, 200, GEO, { dy: 0.46, fs: 6.2, padX: 5, padTop: 6.6, h: 9.4, rx: 3.2 });
+    expect(g.cy).toBeCloseTo(204.83, 2);
   });
 });

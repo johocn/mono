@@ -56,6 +56,20 @@ export const LABEL_GROUND = { dy: 0.46, fs: 6.2, padX: 5, padTop: 6.6, h: 9.4, r
 export const LABEL_CURRENT_SCALE = 1.25;
 export const LABEL_MAX_CHARS = 4;            // >4 字截断加 '…'
 
+/* —— 当前格三重标记（spec §6.3）：地砖金环（`drawLabels` 画在标签层，恒在楼体之上）
+   + 名牌描边/放大 + 指示三角 —— */
+export const LABEL_CURRENT_RING = '#ffd76a';        // 金环 / 描边 / 三角
+export const LABEL_CURRENT_TEXT = '#ffffff';        // 当前格名牌文字色
+export const LABEL_STROKE_CUR = 1.8;                // 当前格描边宽（非当前格用 LABEL_ROOF.strokeW）
+export const LABEL_TRI_W = 8;                       // 指示三角宽（底边）
+export const LABEL_TRI_H = 5;                       // 指示三角高
+/** 当前格地砖金环：向外扩张量 / 线宽 / 外层透明度（`dia(hw+out, hh+out)` 为外圈光晕） */
+export const LABEL_RING = { in: 1.5, out: 3, inW: 1.6, outW: 3, outA: 0.3 };
+
+/** 楼体屏幕缩放与基线偏移（= `Scene` placement 的 buildingScale / buildingYOffset，同源一份值） */
+export const BUILDING_SCALE = 0.72;
+export const BUILDING_Y_OFFSET = 1;
+
 /* —— 落地地块卡（spec §7.3）：位于棋盘（底 ≈312）与底坞（顶 606）之间 —— */
 export const TILE_CARD_X = 8;
 export const TILE_CARD_Y = 508;
