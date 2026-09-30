@@ -14,11 +14,12 @@ export const CARD_H = 88;
 export const HUD_DOCK_H = 184;
 export const HUD_LABEL_H = 24;
 export const HUD_LABEL_Y = DOCK_Y + 12;          // 618 = 中心 y
-export const HUD_BAR_W = 86;
+/** 资产条并入 1 条 4 段：4 × 94.5 + 0 间隔 = 378，恰好铺满 6..384（spec §7.2/C5，不新增 id） */
+export const HUD_BAR_W = 94.5;
 export const HUD_BAR_H = 40;
 export const HUD_BAR_Y = DOCK_Y + 26;            // 632 = 顶
 export const HUD_BAR_X0 = 6;
-export const HUD_BAR_GAP = 11;
+export const HUD_BAR_GAP = 0;
 export const HUD_DICE_SIZE = 52;
 export const HUD_DICE_Y = DOCK_Y + 78;           // 684 = 顶
 export const HUD_DICE_X0 = 139;                  // 左
@@ -46,7 +47,25 @@ export const HUD_PERSONA_DX = 26;
 export const HUD_PERSONA_DY = -11;
 
 /** 默认皮肤几何（= public/skins/default/skin.json 的 geo；供渲染层免写死引用） */
-export const DEFAULT_GEO = { hw: 21, hh: 10.5, ox: 195, oy: 96 };
+export const DEFAULT_GEO = { hw: 24, hh: 13, ox: 195, oy: 104 };
+
+/* —— 楼顶名牌（spec §6.2/§6.3）：纵向被 2×hh=26 / 13 锁死，故胶囊 h=13、字号靠横向吃满格宽 —— */
+export const LABEL_ROOF = { fs: 10, fsShort: 11, fsNarrow: 8, padX: 6, h: 13, rx: 6, lift: 5, strokeW: 1.1 };
+/** 地面字牌排版（`drawLabels` 第 4 参；原 main.ts 的 LABEL_PARAMS 迁入此处） */
+export const LABEL_GROUND = { dy: 0.46, fs: 6.2, padX: 5, padTop: 6.6, h: 9.4, rx: 3.2 };
+export const LABEL_CURRENT_SCALE = 1.25;
+export const LABEL_MAX_CHARS = 4;            // >4 字截断加 '…'
+
+/* —— 落地地块卡（spec §7.3）：位于棋盘（底 ≈312）与底坞（顶 606）之间 —— */
+export const TILE_CARD_X = 8;
+export const TILE_CARD_Y = 508;
+export const TILE_CARD_W = 374;
+export const TILE_CARD_H = 76;
+
+/* —— 停留气泡（spec §6.7）：锚在棋子头顶上方 8px —— */
+export const BUBBLE_W = 100;
+export const BUBBLE_H = 44;
+export const BUBBLE_GAP = 8;
 
 /* —— M5 浮层（手牌 / 股票盘 / 抽卡翻牌 / 结算面板；元素一律 pass 4 + 定格台位） —— */
 /* 手牌行：5 槽横排，落在底坞（606）之上 */

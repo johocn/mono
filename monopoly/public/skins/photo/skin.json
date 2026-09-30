@@ -1,7 +1,7 @@
 {
   "id": "photo",
   "meta": { "name": "图片素材皮肤示例（零代码换风格验证）" },
-  "geo": { "hw": 21, "hh": 10.5, "ox": 195, "oy": 96 },
+  "geo": { "hw": 24, "hh": 13, "ox": 195, "oy": 104 },
   "tokens": {},
   "elements": {
     "board.center.fountain": { "kind": "image", "src": "tex/fountain.png", "anchor": [0.5, 1] },

@@ -7,7 +7,7 @@ import { innerSpecs, fountainSpec } from './render/InnerView';
 import { PAWN_COUNT, pawnSpecs } from './render/PieceView';
 import { buildingSpecs, slotLevelsOf, streetPropSpecs } from './render/BuildingView';
 import { showcaseSpecs } from './render/ShowcaseView';
-import { drawLabels, type LabelParams } from './render/LabelView';
+import { drawLabels } from './render/LabelView';
 import { ipos } from './render/iso';
 import { autoPlay, createGame, currentPlayer, type Game, type SettleResult } from './core/game';
 import { applyStep, type AiStep } from './core/ai';
@@ -26,7 +26,7 @@ import { SHARE_VERSION } from './data/share';
 import { FATE_DECK, type ItemCardKind } from './data/cards';
 import { DEMO_OWNER } from './data/board';
 import { STOCK_TILE_INDEX } from './data/stocks';
-import { DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED } from './skin/layout';
+import { DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED, LABEL_GROUND } from './skin/layout';
 import { SHOP_DEFAULTS, parseShopConfig, type ShopConfig } from './skin/shop-config';
 import { allElementIds } from './skin/registry';
 import {
@@ -66,8 +66,7 @@ export interface UrlOptions {
 const CURRENT_INDEX = 4;
 const CURRENT_CELL: [number, number] = [5, 9];
 
-/** 字牌排版参数（M2 起固定，drawLabels 的第 4 参） */
-const LABEL_PARAMS: LabelParams = { dy: 0.46, fs: 6.2, padX: 5, padTop: 6.6, h: 9.4, rx: 3.2 };
+
 
 export function parseOptions(search: string): UrlOptions {
   const q = new URLSearchParams(search);
@@ -272,7 +271,7 @@ export async function boot(): Promise<void> {
       ownedText: tokens.labelOwnedText ?? '#ffffff',
       ownerOf: ownedOf,
       textOf: shops.shortAt,
-    }, LABEL_PARAMS);
+    }, LABEL_GROUND);
     hud?.update();
     panels?.update();
     share?.update();

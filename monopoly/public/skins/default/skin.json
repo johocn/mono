@@ -1,7 +1,7 @@
 {
   "id": "default",
   "meta": { "name": "默认程序化（v5 定稿）" },
-  "geo": { "hw": 21, "hh": 10.5, "ox": 195, "oy": 96 },
+  "geo": { "hw": 24, "hh": 13, "ox": 195, "oy": 104 },
   "tokens": {
     "gold": "#f5c451",
     "bgTop": "#1a2b2a",

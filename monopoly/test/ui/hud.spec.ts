@@ -4,8 +4,8 @@ import {
   buyOffer, hitAreas, hudSpecs, primaryAction, primaryLabel, upgradeOffer, statusText,
 } from '../../src/ui/Hud';
 import {
-  AUDIO_BGM_BOX, AUDIO_KEY_SIZE, AUDIO_SFX_BOX, BOTTOM_BTN_Y, DOCK_Y, HUD_BAR_H, HUD_BAR_W,
-  HUD_BTN_AI_W, HUD_BTN_AI_X, HUD_DICE_Y, STAGE_W,
+  AUDIO_BGM_BOX, AUDIO_KEY_SIZE, AUDIO_SFX_BOX, BOTTOM_BTN_Y, DOCK_Y, HUD_BAR_GAP, HUD_BAR_H,
+  HUD_BAR_W, HUD_BAR_X0, HUD_BTN_AI_W, HUD_BTN_AI_X, HUD_DICE_Y, STAGE_W,
 } from '../../src/skin/layout';
 import type { Dice } from '../../src/core/dice';
 import type { Seat } from '../../src/data/ai';
@@ -141,10 +141,10 @@ describe('hud spec 组装（pass 4 / fixed / depth 顺序）', () => {
     g.state.players[1].bankrupt = true;
     const bars = hudSpecs(g.state).filter((s) => s.id === 'ui.playerBar');
     expect(bars.map((s) => s.fixed?.cx)).toEqual([
-      HUD_BAR_W / 2 + 6,
-      HUD_BAR_W * 1.5 + 6 + 11,
-      HUD_BAR_W * 2.5 + 6 + 22,
-      HUD_BAR_W * 3.5 + 6 + 33,
+      HUD_BAR_W / 2 + HUD_BAR_X0,
+      HUD_BAR_W * 1.5 + HUD_BAR_X0 + HUD_BAR_GAP,
+      HUD_BAR_W * 2.5 + HUD_BAR_X0 + HUD_BAR_GAP * 2,
+      HUD_BAR_W * 3.5 + HUD_BAR_X0 + HUD_BAR_GAP * 3,
     ]);
     expect(bars.every((s) => (s.fixed?.cy ?? 0) - HUD_BAR_H / 2 > DOCK_Y)).toBe(true);
     expect(bars.map((s) => s.state?.active)).toEqual([true, false, false, false]);

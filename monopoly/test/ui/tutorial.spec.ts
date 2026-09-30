@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { TUTORIAL_STEPS } from '../../src/data/tutorial';
 import { shouldShowTutorial, type Rect } from '../../src/ui/tutorial';
-import { STAGE_W, HUD_BTN_BUY_X, HUD_DICE_X0, HUD_BAR_X0, PANEL_SLOT_X0 } from '../../src/skin/layout';
+import {
+  STAGE_W, HUD_BTN_BUY_X, HUD_DICE_X0, HUD_BAR_X0, HUD_BAR_W, PANEL_SLOT_X0,
+} from '../../src/skin/layout';
 
 describe('tutorial 步骤表', () => {
   it('四步齐备，标题 ≤ 6 字、说明 ≤ 20 字', () => {
@@ -43,7 +45,7 @@ describe('mountTutorial 矩形来源', () => {
     expect(rectsOf(1).some((r) => r.x === HUD_BTN_BUY_X)).toBe(true);
     expect(rectsOf(2).some((r) => r.x === HUD_BAR_X0)).toBe(true);
     expect(rectsOf(2).some((r) => r.x === PANEL_SLOT_X0)).toBe(true);
-    expect(rectsOf(3).some((r) => r.w === 86)).toBe(true);           // HUD_BAR_W
+    expect(rectsOf(3).some((r) => r.w === HUD_BAR_W)).toBe(true);    // HUD_BAR_W（1 条 4 段后 94.5）
   });
   it('步进到底自动收尾并写标记；跳过立即收尾', () => {
     /* DOM 交互（[data-tour-step] 生命周期 / localStorage 标记）由 Playwright 闸门
