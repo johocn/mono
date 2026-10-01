@@ -1,6 +1,6 @@
 import { brandAt, PLAYER_NAME } from '../data/board';
 import { buyPrice, canUpgrade, nextLevel } from '../data/economy';
-import { buyable, discounted } from '../core/estate';
+import { buyable, discounted, ownedBy } from '../core/estate';
 import { buyDiscountOf, currentPlayer, netWorth, type Game, type GameState } from '../core/game';
 import { abilityOfPlayer } from '../data/abilities';
 /** AI 席位（`null` = 真人）；从 `src/data/ai` 取，避免 ui → ui 横向依赖 */
@@ -19,7 +19,7 @@ import {
 /** 主按钮在四个阶段里的动作（spec §5.1 回合流程的显式化）；监狱禁行时为 `skip` */
 export type HudPrimaryAction = 'roll' | 'move' | 'settle' | 'end' | 'skip';
 export type HudActionId =
-  HudPrimaryAction | 'buy' | 'upgrade' | 'hand' | 'ai:fast' | 'ai:skip' | 'audio:sfx' | 'audio:bgm';
+  HudPrimaryAction | 'buy' | 'upgrade' | 'hand' | 'sell' | 'ai:fast' | 'ai:skip' | 'audio:sfx' | 'audio:bgm';
 
 /**
  * HUD 的运行时可见性开关（由 `main.ts` 按局面派生，HUD 自身不读浮层状态，避免 ui → ui 横向依赖）：
@@ -132,18 +132,27 @@ export function hudSpecs(
 
   const aiSeat = state.over ? null : (seats[state.current] ?? null);
 
-  /* 两枚静音键常驻于顶部右侧（spec §7.3）：必须在 AI 分支早退之前推入，且 r 继续递增（14 / 15，13 让给牌袋键） */
+  /* 两枚静音键常驻于顶部右侧（spec §7.3）：必须在 AI 分支早退之前推入，且 r 继续递增
+     （15 / 16：10 主按钮、11/12 次要键、13 牌袋键、14 出售键） */
   const pushAudioKeys = (): void => {
     const half = AUDIO_KEY_SIZE / 2;
-    bar(audio.sfx ? 'ui.sound.on' : 'ui.sound.off', 14,
+    bar(audio.sfx ? 'ui.sound.on' : 'ui.sound.off', 15,
       AUDIO_SFX_BOX.left + half, AUDIO_SFX_BOX.top + half, { on: audio.sfx });
-    bar(audio.bgm ? 'ui.music.on' : 'ui.music.off', 15,
+    bar(audio.bgm ? 'ui.music.on' : 'ui.music.off', 16,
       AUDIO_BGM_BOX.left + half, AUDIO_BGM_BOX.top + half, { on: audio.bgm });
   };
   /* 牌袋键（spec §7.3）：复用状态行右侧「跳过本次」键位（不新增 id）；仅真人回合推入 */
   const pushHandKey = (): void => {
     bar('ui.qk', 13, HUD_QK_SKIP_X + HUD_QK_W / 2, HUD_QK_Y + HUD_QK_H / 2, {
       label: ui.handOpen === true ? '收起手牌' : '手牌', enabled: true,
+    });
+  };
+  /* 「出售」键（spec §3.5 / §3.6 B）：真人回合落在 `HUD_QK_FAST_X`（AI 回合的「加速」占用位）；
+     无地时保留键位并置灰（enabled=false），避免布局跳动 */
+  const pushSellKey = (): void => {
+    const p = currentPlayer(state);
+    bar('ui.qk', 14, HUD_QK_FAST_X + HUD_QK_W / 2, HUD_QK_Y + HUD_QK_H / 2, {
+      label: '出售', enabled: ownedBy(state.estates, p.id).length > 0,
     });
   };
 
@@ -211,11 +220,12 @@ export function hudSpecs(
     }
   }
   pushHandKey();
+  pushSellKey();
   pushAudioKeys();
 
   if (card) {
     const e = state.estates[pos];
-    bar('ui.tileCard', 16, TILE_CARD_X + TILE_CARD_W / 2, TILE_CARD_Y + TILE_CARD_H / 2, {
+    bar('ui.tileCard', 17, TILE_CARD_X + TILE_CARD_W / 2, TILE_CARD_Y + TILE_CARD_H / 2, {
       title: `停在 ${brandAt(pos)} · 你在这里`,
       sub: e
         ? `等级 L${e.level} · 持有 ${PLAYER_NAME[e.owner - 1]}`
@@ -223,12 +233,12 @@ export function hudSpecs(
     });
     const by = TILE_CARD_BTN_Y + HUD_BTN_H / 2;
     if (buy) {
-      bar('ui.button.secondary', 17, HUD_BTN_BUY_X + HUD_BTN_SECONDARY_W / 2, by, {
+      bar('ui.button.secondary', 18, HUD_BTN_BUY_X + HUD_BTN_SECONDARY_W / 2, by, {
         action: 'buy', label: `买地 ￥${buy.price}`, enabled: buy.enabled,
       });
     }
     if (up) {
-      bar('ui.button.secondary', 18, HUD_BTN_UPGRADE_X + HUD_BTN_SECONDARY_W / 2, by, {
+      bar('ui.button.secondary', 19, HUD_BTN_UPGRADE_X + HUD_BTN_SECONDARY_W / 2, by, {
         action: 'upgrade', label: `升级 ￥${up.cost}`, enabled: up.enabled,
       });
     }
@@ -255,6 +265,11 @@ export function hitAreas(state: GameState, seats: readonly Seat[] = [], ui: HudU
   }
   /* 牌袋键（开合抽屉不改 state，故与「跳过本次」同区位复用）；仅真人回合存在 */
   out.push({ action: 'hand', x: HUD_QK_SKIP_X, y: HUD_QK_Y, w: HUD_QK_W, h: HUD_QK_H, enabled: true });
+  /* 「出售」键（spec §3.5）：落在 AI 回合「加速」占用位；无地时置灰（与 hudSpecs 同源） */
+  out.push({
+    action: 'sell', x: HUD_QK_FAST_X, y: HUD_QK_Y, w: HUD_QK_W, h: HUD_QK_H,
+    enabled: ownedBy(state.estates, currentPlayer(state).id).length > 0,
+  });
   const pa = primaryAction(state);
   if (pa) {
     out.push({ action: pa, x: HUD_BTN_PRIMARY_X, y: BOTTOM_BTN_Y, w: HUD_BTN_PRIMARY_W, h: HUD_BTN_H, enabled: true });
