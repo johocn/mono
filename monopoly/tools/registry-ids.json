@@ -325,5 +325,8 @@
   "ui.tradeSell",
   "ui.panelClose",
   "ui.bubble",
-  "ui.tileCard"
+  "ui.tileCard",
+  "ui.preview",
+  "ui.cancel",
+  "board.tile.candidate"
 ]
