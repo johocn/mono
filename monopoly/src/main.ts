@@ -13,14 +13,15 @@ import { pickLineForSeat, QUOTE_MAX_CHARS } from './data/lines';
 import { buildingSpecs, slotLevelsOf, startLevelsOf, streetPropSpecs } from './render/BuildingView';
 import { showcaseSpecs } from './render/ShowcaseView';
 import { drawLabels } from './render/LabelView';
-import { ipos } from './render/iso';
+import { ipos, tileAtPoint } from './render/iso';
 import { autoPlay, createGame, currentPlayer, type Game, type SettleResult } from './core/game';
 import { applyStep, type AiStep } from './core/ai';
 import { pathIndices, type Advance } from './core/board-path';
+import { candidatesFor, canTarget, type TargetKind } from './core/targeting';
 import { bboxOf, choreography, frameFor, type CamPose, type Cell, type ChoreographyOpts, type View } from './core/framing';
 import { createCamera } from './render/camera';
 import { hudSpecs, mountHud, type HudActionId, type HudHandle } from './ui/Hud';
-import { mountPanels, overlayOf, panelSpecs, type PanelActionId, type PanelHandle } from './ui/panels';
+import { mountPanels, overlayOf, panelSpecs, type PanelActionId, type PanelHandle, type TargetingView } from './ui/panels';
 import { createAiDriver, type AiDriver } from './ui/aiDriver';
 import { createAudioEngine } from './ui/audio';
 import { mountSetup, readPlan, resolveSeats, type SeatPlan } from './ui/setup';
@@ -35,7 +36,7 @@ import { SHARE_VERSION } from './data/share';
 import { FATE_DECK, type ItemCardKind } from './data/cards';
 import { DEMO_OWNER, PLAYER_NAME, type BuildLevel } from './data/board';
 import { STOCK_TILE_INDEX } from './data/stocks';
-import { BUILDING_SCALE, BUILDING_Y_OFFSET, BUBBLE_HOLD_MS, BUBBLE_MOVE_HOLD_MS, CAM_AI_SCALE, CAM_BACK_MS, CAM_FALLBACK_MAX_ZOOM, CAM_FOLLOW_ZOOM, CAM_IDLE_ZOOM, CAM_MAX_ZOOM, CAM_MIN_ZOOM, CAM_PUSH_MS, CAM_SETTLE_MS, CAM_TILE_PAD, CAM_VIEW_CX, CAM_VIEW_CY, CAM_VIEW_H, CAM_VIEW_W, DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED, LABEL_GROUND, STAGE_H, STAGE_W, UI_BREAK_W } from './skin/layout';
+import { BUILDING_SCALE, BUILDING_Y_OFFSET, BUBBLE_HOLD_MS, BUBBLE_MOVE_HOLD_MS, CAM_AI_SCALE, CAM_BACK_MS, CAM_FALLBACK_MAX_ZOOM, CAM_FOLLOW_ZOOM, CAM_IDLE_ZOOM, CAM_MAX_ZOOM, CAM_MIN_ZOOM, CAM_PUSH_MS, CAM_SETTLE_MS, CAM_TILE_PAD, CAM_VIEW_CX, CAM_VIEW_CY, CAM_VIEW_H, CAM_VIEW_W, DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED, LABEL_GROUND, STAGE_H, STAGE_W, TILE_PICK_TOL, UI_BREAK_W } from './skin/layout';
 import { SHOP_DEFAULTS, parseShopConfig, type ShopConfig } from './skin/shop-config';
 import { allElementIds } from './skin/registry';
 import {
@@ -452,6 +453,8 @@ export async function boot(): Promise<void> {
 
   /* —— 手牌抽屉 / 落地地块卡的运行时可见性（spec §7.2/§7.3）—— */
   let handOpen = false;
+  /* —— M19-D2 选目标态：等待玩家在棋盘上点选候选格（`null` = 未在选目标） —— */
+  let uiSel: TargetingView | null = null;
   /** 抽屉展开态：教程期间强制展开（第 3 步要亮 5 个槽）；AI 回合自动收起（该区位被「加速 / 跳过」占用） */
   const handOpenEff = (): boolean =>
     (handOpen || tutorial !== null) && !(seats[game?.state.current ?? 0] ?? null);
@@ -516,12 +519,17 @@ export async function boot(): Promise<void> {
       ...pawnSpecs(pawnStates),
       /* 停留事件气泡（spec §6.7）：当前玩家棋子头顶，跟 pawnSpecs 同一分组口径 */
       ...bubbleSpecs(pawnStates, bubble, geo, PLACEMENT),
+      /* M19-D2 选目标态：候选格金框高亮（c/r 取自既有 cells 表，字段与 boardTileSpecs 同口径） */
+      ...(uiSel ? candidatesFor(uiSel.kind, g.state).map((idx): ElementSpec => {
+        const cell = cells[idx];
+        return { id: 'board.tile.candidate', c: cell.c, r: cell.r, pass: 1, state: { index: idx } };
+      }) : []),
       /* spec §7.2：play 版式不再常驻中部橱窗（`?show=b|c` 演示版式完整保留），
          中部条带交给环境层近景街市带；落地时由地块卡（`ui.tileCard`）滑入 */
       ...hudSpecs(g.state, fxPending || fx.busy(), seats, driver?.isFast() ?? false, audio.prefs(),
         { tileCard: tileCardOn(g), handOpen: handOpenEff(), callout }),
       /* M5 浮层：手牌抽屉（默认收起）+ 抽卡翻牌 / 股票盘 / 结算面板（未触发时为空） */
-      ...panelSpecs(g.state, handOpenEff()),
+      ...panelSpecs(g.state, handOpenEff(), uiSel),
     ];
   };
 
@@ -560,6 +568,8 @@ export async function boot(): Promise<void> {
     /* 遮挡修复：`#mono-slots`（右上轮播 + 左下战报）是 DOM，恒在画布之上 ⇒ 任何浮层展开时
        整块隐藏，否则必然压住事件卡（canvas 的 `ui.card`）左下角。无浮层时 `false` = 逐像素回现状。 */
     slots?.setHidden(game !== null && overlayOf(game.state) !== null);
+    /* 选目标命中层仅在选目标态吃事件（否则 pointer-events:none 穿透到画布 / 其它覆盖层） */
+    pickLayer.style.pointerEvents = uiSel ? 'auto' : 'none';
   };
 
   /**
@@ -698,11 +708,65 @@ export async function boot(): Promise<void> {
   ): AiStep =>
     a === 'buy' ? { kind: 'buy' } : a === 'upgrade' ? { kind: 'upgrade' } : { kind: a };
 
-  const stepOfPanel = (a: PanelActionId, target?: number | string): AiStep => {
+  /**
+   * M19-D2 选目标命中层：覆盖全舞台的透明 DOM 层（像素拾取不进 Pixi）。
+   * z-index 8 = 与 HUD 同层、**低于 `#mono-panels` 的 9**（否则底部「取消」键被盖住点不到）；
+   * 仅 `uiSel !== null` 时 `pointer-events:auto`（由 `paint()` 同步），其余时刻穿透。
+   * 指针坐标：命中层挂在 `#mono-ui`（`fitUi` 缩放层）内，故用其自身的 `getBoundingClientRect()`
+   * 宽度 ÷ 逻辑宽（390）求缩放比 `k`，再把 `clientX/Y − rect.left/top` 除以 `k` 还原到 390×844 逻辑空间，
+   * 交给 `tileAtPoint` 反查格号——避免直接用手写常数或假设 k=1。
+   */
+  const pickLayer = document.createElement('div');
+  pickLayer.id = 'mono-pick';
+  pickLayer.style.cssText =
+    'position:absolute;left:0;top:0;width:100%;height:100%;z-index:8;pointer-events:none';
+  fitRoot.appendChild(pickLayer);
+
+  /** CSS 指针坐标 → 舞台逻辑坐标（390×844 空间） */
+  const toStageXY = (clientX: number, clientY: number): { px: number; py: number } => {
+    const rect = pickLayer.getBoundingClientRect();
+    const k = rect.width > 0 ? rect.width / STAGE_W : 1;
+    return { px: (clientX - rect.left) / k, py: (clientY - rect.top) / k };
+  };
+
+  const onBoardMove = (e: PointerEvent): void => {
+    const g = game;
+    if (!uiSel || !g) return;
+    const { px, py } = toStageXY(e.clientX, e.clientY);
+    const idx = tileAtPoint(px, py, { geo, tol: TILE_PICK_TOL });
+    /* 悬停态变化才重画（重画预演条三行文案） */
+    const hovered = idx !== null && canTarget(uiSel.kind, idx, g.state) ? idx : null;
+    if (hovered === uiSel.hovered) return;
+    uiSel = { kind: uiSel.kind, hovered };
+    paint();
+  };
+
+  const onBoardDown = (e: PointerEvent): void => {
+    const g = game;
+    if (!uiSel || !g) return;
+    const kind = uiSel.kind;
+    const { px, py } = toStageXY(e.clientX, e.clientY);
+    const idx = tileAtPoint(px, py, { geo, tol: TILE_PICK_TOL });
+    uiSel = null;
+    /* 命中候选格 → 落库该卡；点空处 = 取消（清态重画） */
+    if (idx !== null && canTarget(kind, idx, g.state)) dispatch({ kind: 'card', card: kind, target: idx });
+    else paint();
+  };
+  pickLayer.addEventListener('pointermove', onBoardMove);
+  pickLayer.addEventListener('pointerdown', onBoardDown);
+
+  const stepOfPanel = (a: PanelActionId, target?: number | string): AiStep | null => {
+    if (a === 'card:cancel') { uiSel = null; paint(); return null; }
     if (a === 'card:close' || a === 'settle:close') return { kind: 'close' };
     if (a === 'stock:buy') return { kind: 'trade', code: String(target), shares: 1 };
     if (a === 'stock:sell') return { kind: 'trade', code: String(target), shares: -1 };
-    return { kind: 'card', card: a.slice('card:'.length) as ItemCardKind, target: typeof target === 'number' ? target : undefined };
+    const kind = a.slice('card:'.length) as ItemCardKind;
+    if (kind === 'bomb' || kind === 'demolish' || kind === 'barrier' || kind === 'teleport') {
+      uiSel = { kind: kind as TargetKind, hovered: null };
+      paint();
+      return null;                                  // 进入选目标态，不立即 dispatch
+    }
+    return { kind: 'card', card: kind };            // pardon / doubleRent 无需目标
   };
 
   /* —— 新手引导（spec §7）：仅在含真人席位的局、首访一次；「重看引导」入口见开局面板 —— */
@@ -734,8 +798,9 @@ export async function boot(): Promise<void> {
     /* 浮层动作：关浮层 / 股票买卖 / 打手牌（目标由命中区 `data-target` 带出） */
     panels = mountPanels(fitRoot, g, (a: PanelActionId, target?: number | string) => {
       if (fx.busy()) fx.skip();
-      dispatch(stepOfPanel(a, target));
-    }, () => ({ handOpen: handOpenEff() }));
+      const step = stepOfPanel(a, target);
+      if (step) dispatch(step);
+    }, () => ({ handOpen: handOpenEff(), sel: uiSel }));
     /* 三角内容位（spec §6 版式 A 补全）：右上轮播 + 左下事件战报；与浮层同层、随舞台缩放 */
     slots = mountSlots(fitRoot, slotCfg);
     driver = createAiDriver({
@@ -882,6 +947,8 @@ export async function boot(): Promise<void> {
     stage, scene, opts, geo, skin, missingAssets, game, paint, sim, fx, fxPreview, perf, shops, VERSION,
     audio, seats, aiDriver: driver, hudSeats: () => seats,
     tutorial: () => tutorial, mountTutorial: replayTour, themeConsole,
+    /* 选目标交互（M19-D2）：`cellXY(idx)` 供 e2e 由格号取舞台坐标；`uiSel()` 断言是否在选目标态 */
+    cellXY, uiSel: () => uiSel,
     /* 相机（spec §8 V19/V20）：`camera.current()` 读位姿、`camPreview` 直接切态；
        `camMax` 是可变对象，供 V20 断言降级后的倍率上限 */
     camera, camMax, camPreview,
