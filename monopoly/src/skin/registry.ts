@@ -1,5 +1,6 @@
 import {
-  AUDIO_KEY_SIZE, BUBBLE_H, BUBBLE_W, HUD_BAR_W, PANEL_CANCEL_W, PANEL_CLOSE_H, PANEL_CLOSE_W,
+  AUDIO_KEY_SIZE, BUBBLE_H, BUBBLE_W, HUD_BAR_W, PANEL_BID_H, PANEL_BID_W, PANEL_CANCEL_W,
+  PANEL_CLOSE_H, PANEL_CLOSE_W, PANEL_DEBT_H, PANEL_DEBT_W,
   PANEL_PREVIEW_H, PANEL_PREVIEW_W, PANEL_SLOT_H, PANEL_SLOT_W,
   PANEL_TALL_H, PANEL_TALL_W, TILE_CARD_H, TILE_CARD_W,
 } from './layout';
@@ -226,6 +227,9 @@ reg['ui.tileCard'] = showcaseEntry('ui.tileCard', { w: TILE_CARD_W, d: 1, h: TIL
 reg['ui.preview'] = showcaseEntry('ui.preview', { w: PANEL_PREVIEW_W, d: 1, h: PANEL_PREVIEW_H });
 reg['ui.cancel'] = showcaseEntry('ui.cancel', { w: PANEL_CANCEL_W, d: 1, h: PANEL_SLOT_H });
 reg['board.tile.candidate'] = showcaseEntry('board.tile.candidate', { w: TILE.w, d: TILE.d, h: TILE.h });
+/* M20.1 破产拍卖浮层（可见元素，走注册表；台位由 panels.ts 给）：债务条 + 出价键 */
+reg['ui.bid'] = showcaseEntry('ui.bid', { w: PANEL_BID_W, d: 1, h: PANEL_BID_H });
+reg['ui.bidDebt'] = showcaseEntry('ui.bidDebt', { w: PANEL_DEBT_W, d: 1, h: PANEL_DEBT_H });
 
 export const REGISTRY: Record<string, RegistryEntry> = reg;
 

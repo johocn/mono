@@ -56,6 +56,13 @@ export const PANEL_D = fb({
   /* M19-D2 选目标预演条：深底金边 + 三行（标题 / 后果 / 受影响方，纵向居中） */
   previewR: 8, previewFill: '#06120a', previewEdge: '#f5c451', previewEdgeW: 1.2,
   previewLineDy: 12, previewFs: 12, previewTextFill: '#ffe9b0',
+  /* M20.1 破产拍卖：出价键（uiBid）三态 + 债务条（uiBidDebt）三段文字 */
+  bidR: 8, bidFill: '#1f2f2a', bidFillOn: '#2f5c3f', bidFillOff: '#141d1a',
+  bidEdge: '#3a4a42', bidEdgeOn: '#f5c451', bidEdgeW: 1.2,
+  bidFs: 14, bidLabelDy: 0, bidTextOn: '#ffe9b0', bidTextOff: '#5b6b63',
+  debtR: 8, debtFill: '#06120a', debtEdge: '#f5c451', debtEdgeW: 1.2,
+  debtFs: 12, debtTextFill: '#e8e4d8', debtRemainFill: '#f5c451',
+  debtLabel: '待清偿', debtRaisedLabel: '已筹', debtRemainLabel: '还差',
 });
 
 const G = (p: Record<string, unknown>, k: keyof typeof PANEL_D): number => num(p, k, PANEL_D[k] as number);
@@ -199,7 +206,8 @@ export const uiSettleRow: ProcPreset = (g, ctx) => {
 };
 
 /* —— 落地地块卡：深底圆角金边 + 首行（金点 + 文案）+ 次行（等级 / 持有）——
-   文案由 UI 层组装后经 `state.title` / `state.sub` 传入（preset 不含业务语义） —— */
+   文案由 UI 层组装后经 `state.title` / `state.sub` 传入（preset 不含业务语义）；
+   几何/字号一律 × s（拍卖浮层把地契卡缩到 0.5 时字随卡一起缩，HUD 侧 s=1 逐值不变） —— */
 export const tileCard: ProcPreset = (g, ctx) => {
   const { cx, cy, box, params, state, s, text } = ctx;
   const w = box.w * s;
@@ -209,19 +217,19 @@ export const tileCard: ProcPreset = (g, ctx) => {
     .fill({ color: S(params, 'tileFill') })
     .stroke({ color: S(params, 'tileEdge'), width: G(params, 'tileEdgeW') });
   if (!text) return;
-  const dotR = G(params, 'tileDotR');
-  const tx = x0 + G(params, 'tilePadX');
-  const titleY = cy + G(params, 'tileTitleDy');
+  const dotR = G(params, 'tileDotR') * s;
+  const tx = x0 + G(params, 'tilePadX') * s;
+  const titleY = cy + G(params, 'tileTitleDy') * s;
   g.circle(tx + dotR, titleY, dotR).fill({ color: S(params, 'tileTitleFill') });
   text({
     text: typeof state.title === 'string' ? state.title : '',
-    x: tx + dotR * 2 + G(params, 'tileDotGap'), y: titleY,
-    size: G(params, 'tileTitleFs'), fill: S(params, 'tileTitleFill'), align: 'left',
+    x: tx + dotR * 2 + G(params, 'tileDotGap') * s, y: titleY,
+    size: G(params, 'tileTitleFs') * s, fill: S(params, 'tileTitleFill'), align: 'left',
   });
   text({
     text: typeof state.sub === 'string' ? state.sub : '',
-    x: tx, y: cy + G(params, 'tileSubDy'),
-    size: G(params, 'tileSubFs'), fill: S(params, 'tileSubFill'), align: 'left',
+    x: tx, y: cy + G(params, 'tileSubDy') * s,
+    size: G(params, 'tileSubFs') * s, fill: S(params, 'tileSubFill'), align: 'left',
   });
 };
 
@@ -254,4 +262,43 @@ export const uiPreview: ProcPreset = (g, ctx) => {
   for (let i = 0; i < lines.length; i++) {
     text({ text: lines[i], x: cx, y: cy + (i - mid) * dy, size: fs, fill: S(params, 'previewTextFill') });
   }
+};
+
+/* —— M20.1 破产拍卖出价键：圆角底 + 居中文字（enabled/primary 决定三态配色）——
+   文案由 UI 层经 `state.label` 传入（preset 不含业务语义） —— */
+export const uiBid: ProcPreset = (g, ctx) => {
+  const { cx, cy, box, params, state, s, text } = ctx;
+  const w = box.w * s;
+  const h = box.h * s;
+  const enabled = state.enabled === true;
+  const primary = state.primary === true;
+  const fill = !enabled ? S(params, 'bidFillOff') : primary ? S(params, 'bidFillOn') : S(params, 'bidFill');
+  g.roundRect(cx - w / 2, cy - h / 2, w, h, G(params, 'bidR'))
+    .fill({ color: fill })
+    .stroke({ color: enabled ? S(params, 'bidEdgeOn') : S(params, 'bidEdge'), width: G(params, 'bidEdgeW') });
+  if (!text) return;
+  text({
+    text: typeof state.label === 'string' ? state.label : '',
+    x: cx, y: cy + G(params, 'bidLabelDy'),
+    size: G(params, 'bidFs'), fill: enabled ? S(params, 'bidTextOn') : S(params, 'bidTextOff'),
+  });
+};
+
+/* —— M20.1 破产拍卖债务条：深底圆角 + 三段文字（待清偿 / 已筹 / 还差，横向三等分）——
+   数值由 UI 层经 `state.total` / `state.raised` / `state.remain` 传入 —— */
+export const uiBidDebt: ProcPreset = (g, ctx) => {
+  const { cx, cy, box, params, state, s, text } = ctx;
+  const w = box.w * s;
+  const h = box.h * s;
+  g.roundRect(cx - w / 2, cy - h / 2, w, h, G(params, 'debtR'))
+    .fill({ color: S(params, 'debtFill') })
+    .stroke({ color: S(params, 'debtEdge'), width: G(params, 'debtEdgeW') });
+  if (!text) return;
+  const total = typeof state.total === 'number' ? state.total : 0;
+  const raised = typeof state.raised === 'number' ? state.raised : 0;
+  const remain = typeof state.remain === 'number' ? state.remain : 0;
+  const fs = G(params, 'debtFs');
+  text({ text: `${S(params, 'debtLabel')} ￥${total}`, x: cx - w / 4, y: cy, size: fs, fill: S(params, 'debtTextFill') });
+  text({ text: `${S(params, 'debtRaisedLabel')} ￥${raised}`, x: cx, y: cy, size: fs, fill: S(params, 'debtTextFill') });
+  text({ text: `${S(params, 'debtRemainLabel')} ￥${remain}`, x: cx + w / 4, y: cy, size: fs, fill: S(params, 'debtRemainFill') });
 };

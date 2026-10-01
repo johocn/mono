@@ -167,6 +167,23 @@ export const PANEL_SETTLE_ROW_H = 40;
 export const PANEL_SETTLE_ROW_Y = 340;
 export const PANEL_SETTLE_ROW_GAP = 8;
 
+/* —— M20.1 破产拍卖浮层（版式 B · 债务条 + 左卡右档）——
+   新增两个可见元素 ui.bid（出价键）/ ui.bidDebt（债务条）的几何与台位；
+   地契卡复用既有 ui.tileCard（缩到 PANEL_BID_CARD_S），故不新增卡元素。 */
+export const PANEL_BID_CARD_CX = 112;            // 地契卡中心 x（左）
+export const PANEL_BID_CARD_CY = 470;            // 地契卡中心 y
+export const PANEL_BID_CARD_S = 0.5;             // 地契卡缩放（374×76 → 187×38）
+export const PANEL_BID_X = 214;                  // 出价键左缘
+export const PANEL_BID_W = 152;                  // 出价键宽
+export const PANEL_BID_H = 40;                   // 出价键高
+export const PANEL_BID_Y0 = 400;                 // 首枚出价键顶边（三档 + 放弃纵排）
+export const PANEL_BID_STEP = 48;                // 出价键纵向步距
+export const PANEL_BID_S = 1;                    // 出价键缩放
+export const PANEL_DEBT_CX = PANEL_CX;           // 债务条中心 x（= 195）
+export const PANEL_DEBT_CY = 350;                // 债务条中心 y
+export const PANEL_DEBT_W = 346;                 // 债务条宽
+export const PANEL_DEBT_H = 34;                  // 债务条高
+
 /* 浮层关闭键（抽卡翻牌用）：卡面放大后移到卡面正下方、水平居中（卡底 476.8 → 键 488..524） */
 export const PANEL_CLOSE_W = 140;
 export const PANEL_CLOSE_H = 36;

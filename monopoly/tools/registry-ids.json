@@ -330,5 +330,7 @@
   "ui.tileCard",
   "ui.preview",
   "ui.cancel",
-  "board.tile.candidate"
+  "board.tile.candidate",
+  "ui.bid",
+  "ui.bidDebt"
 ]
