@@ -53,3 +53,6 @@ export function sellValue(level: number): number {
   for (let l = 1; l <= Math.min(level, MAX_LEVEL); l++) invested += buyPrice(l);
   return Math.floor(invested * SELL_RATIO);
 }
+
+/** 拍卖 AI 估值：以该级租金 × 此倍率为「愿意付的上限」基线（M20.1，spec §3.1） */
+export const BID_RENT_MULT = 6;

@@ -34,12 +34,14 @@ export interface AiParams {
   cardPolicy: 'defensive' | 'offensive' | 'arbitrage';
   stockPolicy: 'none' | 'momentum' | 'dip';
   targetLeader: boolean;
+  /** 拍卖估值倍率（M20.1）：保守 0.6 / 激进 1.4 / 投机 1.0 */
+  bidMult: number;
 }
 
 export const PERSONA_PARAMS: Record<Persona, AiParams> = {
-  conservative: { reserve: 400, buyMax: 300, upgradeEager: false, cardPolicy: 'defensive', stockPolicy: 'none', targetLeader: false },
-  aggressive: { reserve: 100, buyMax: Infinity, upgradeEager: true, cardPolicy: 'offensive', stockPolicy: 'momentum', targetLeader: true },
-  speculative: { reserve: 200, buyMax: Infinity, upgradeEager: true, cardPolicy: 'arbitrage', stockPolicy: 'dip', targetLeader: true },
+  conservative: { reserve: 400, buyMax: 300, upgradeEager: false, cardPolicy: 'defensive', stockPolicy: 'none', targetLeader: false, bidMult: 0.6 },
+  aggressive: { reserve: 100, buyMax: Infinity, upgradeEager: true, cardPolicy: 'offensive', stockPolicy: 'momentum', targetLeader: true, bidMult: 1.4 },
+  speculative: { reserve: 200, buyMax: Infinity, upgradeEager: true, cardPolicy: 'arbitrage', stockPolicy: 'dip', targetLeader: true, bidMult: 1.0 },
 };
 
 export function personaParams(p: Persona): AiParams {
