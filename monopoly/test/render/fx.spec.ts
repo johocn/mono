@@ -6,7 +6,7 @@ import { FX_EASE_FALLBACK, FX_LEVELS, FX_NOFX_SPEED, FX_SHAKE_AMP, FX_SHAKE_MS }
 import type { FxTokens } from '../../src/skin/types';
 
 /** spec §5.6 的九行动效清单（与 FxKind 一一对应） */
-const KINDS: FxKind[] = ['dice', 'hop', 'buy', 'upgrade', 'rent', 'card', 'deck', 'stock', 'end'];
+const KINDS: FxKind[] = ['dice', 'hop', 'buy', 'upgrade', 'rent', 'card', 'deck', 'stock', 'end', 'land'];
 
 describe('fx 动画参数表 motionFor（spec §5.6 九条）', () => {
   it('9 个场景各返回 { durationMs>0, ease 非空 }', () => {

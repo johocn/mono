@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { bboxOf, bboxUnion, frameFor, choreography, type Cell } from '../../src/core/framing';
+import { bboxOf, bboxUnion, frameFor, choreography, landingPose, type Cell } from '../../src/core/framing';
 import { BOARD_COLS, BOARD_ROWS, ringPath } from '../../src/data/board';
 import { ipos } from '../../src/render/iso';
 import {
-  CAM_DEGRADE_EPS, CAM_FOLLOW_ZOOM, CAM_MAX_ZOOM, CAM_MIN_ZOOM, CAM_TILE_PAD,
+  CAM_DEGRADE_EPS, CAM_FOLLOW_ZOOM, CAM_LAND_ZOOM, CAM_MAX_ZOOM, CAM_MIN_ZOOM, CAM_TILE_PAD,
   CAM_VIEW_CX, CAM_VIEW_CY, CAM_VIEW_H, CAM_VIEW_W, DEFAULT_GEO,
 } from '../../src/skin/layout';
 
@@ -170,5 +170,23 @@ describe('framing.choreography（spec §3.2 三段编排 + 退化规则）', () 
     expect(tail.pose.cx).toBeCloseTo(expectPose.cx, 6);
     expect(tail.pose.cy).toBeCloseTo(expectPose.cy, 6);
     expect(tail.pose.zoom).toBeCloseTo(expectPose.zoom, 9);
+  });
+});
+
+describe('framing.landingPose 落格特写取景', () => {
+  it('以最后一格为中心、按 CAM_LAND_ZOOM 推近', () => {
+    const cells = [[5, 3], [5, 4]] as const;
+    const pose = landingPose(cells as unknown as Cell[], DEFAULT_GEO, VIEW, OPTS.pad);
+    const [cx, cy] = ipos(5, 4, DEFAULT_GEO);
+    expect(pose.cx).toBeCloseTo(cx, 6);
+    expect(pose.cy).toBeCloseTo(cy, 6);
+    expect(pose.zoom).toBe(CAM_LAND_ZOOM);
+  });
+
+  it('空序列不产生 Infinity（退回原点中心的合法位姿）', () => {
+    const pose = landingPose([], DEFAULT_GEO, VIEW, OPTS.pad);
+    expect(Number.isFinite(pose.cx)).toBe(true);
+    expect(Number.isFinite(pose.cy)).toBe(true);
+    expect(pose.zoom).toBe(CAM_LAND_ZOOM);
   });
 });

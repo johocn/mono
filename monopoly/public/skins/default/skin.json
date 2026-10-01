@@ -171,6 +171,7 @@
     "fx.scaffold": { "kind": "proc", "preset": "fxScaffold", "params": {} },
     "fx.spark": { "kind": "proc", "preset": "fxSpark", "params": {} },
     "fx.shard": { "kind": "proc", "preset": "fxShard", "params": {} },
+    "fx.pulse": { "kind": "proc", "preset": "fxPulse", "params": {} },
     "fx.shine": { "kind": "proc", "preset": "fxShine", "params": {} },
 
     "dice.body": { "kind": "proc", "preset": "diceBody", "params": {} },

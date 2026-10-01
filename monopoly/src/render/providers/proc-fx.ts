@@ -20,6 +20,8 @@ export const FX_D = fb({
   sparkR: 7, sparkFill: '#fff6d0',
   /* 碎片：菱形脉冲块 */
   shardW: 8, shardH: 12, shardFill: '#8fe3ff', shardAlpha: 0.9,
+  /* 脉冲环：地块落格特写的扩散光环 */
+  pulseR: 9, pulseEdge: '#ffe08a', pulseEdgeW: 2,
   /* 高光：横扫亮条 */
   shineW: 12, shineH: 30, shineFill: 'rgba(255,255,255,.6)',
 });
@@ -95,6 +97,13 @@ export const fxShard: ProcPreset = (g, ctx) => {
   const h = G(params, 'shardH') * s;
   g.poly([cx, cy - h / 2, cx + w / 2, cy, cx, cy + h / 2, cx - w / 2, cy])
     .fill({ color: S(params, 'shardFill'), alpha: G(params, 'shardAlpha') });
+};
+
+/* —— 脉冲环：地块落格特写的扩散光环（缩放/淡出由 fx.ts 施加在容器上） —— */
+export const fxPulse: ProcPreset = (g, ctx) => {
+  const { cx, cy, params, s } = ctx;
+  g.circle(cx, cy, G(params, 'pulseR') * s)
+    .stroke({ color: S(params, 'pulseEdge'), width: G(params, 'pulseEdgeW') });
 };
 
 /* —— 高光：横扫亮条（缩放/位移由 fx.ts 施加） —— */

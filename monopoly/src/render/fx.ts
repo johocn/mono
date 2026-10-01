@@ -6,7 +6,8 @@ import {
   FX_COIN_S, FX_DECK_MS, FX_DECK_S, FX_DICE_CX, FX_DICE_CY, FX_DICE_HOP, FX_DICE_MS,
   FX_DICE_S, FX_DICE_SPIN, FX_DUST_ARC, FX_DUST_COUNT, FX_DUST_MS, FX_DUST_S,
   FX_EASE_FALLBACK, FX_END_COUNT, FX_END_MS, FX_END_S, FX_FLIP_MS, FX_FLIP_SCALE_X,
-  FX_HOP_ARC, FX_HOP_KICK_MS, FX_HOP_MS, FX_HOP_S, FX_LEVELS, FX_LEVEL_STEP, FX_LIT_S,
+  FX_HOP_ARC, FX_HOP_KICK_MS, FX_HOP_MS, FX_HOP_S,
+  FX_LAND_MS, FX_LAND_PULSE_S, FX_LAND_PUSH_MS, FX_LAND_RING_S, FX_LEVELS, FX_LEVEL_STEP, FX_LIT_S,
   FX_MS_PER_S, FX_NOFX_SPEED, FX_PER_LEVEL_LIT_MS, FX_PULSE_MS, FX_PULSE_S,
   FX_RENT_MS, FX_SCAFFOLD_MS, FX_SCAFFOLD_S, FX_SCAFFOLD_S0, FX_SHAKE_AMP, FX_SHAKE_MS,
   FX_SHARD_S, FX_SHINE_DX, FX_SHINE_MS, FX_SPARK_ARC, FX_SPARK_MS, FX_STAMP_DEG,
@@ -17,7 +18,7 @@ import type { Cell } from '../core/framing';
 
 /** spec §5.6 的九条动效（一 kind 一行） */
 export type FxKind =
-  | 'dice' | 'hop' | 'buy' | 'upgrade' | 'rent' | 'card' | 'deck' | 'stock' | 'end';
+  | 'dice' | 'hop' | 'buy' | 'upgrade' | 'rent' | 'card' | 'deck' | 'stock' | 'end' | 'land';
 
 /**
  * 动效的空间归属（spec §5.4）：`world` = 跟相机（落点由格坐标 `ipos` 算出），
@@ -33,7 +34,7 @@ export type FxKind =
  */
 export const FX_SPACE: Record<FxKind, 'world' | 'ui'> = {
   hop: 'world', buy: 'world', upgrade: 'world', rent: 'world', deck: 'world', stock: 'world', end: 'world',
-  dice: 'ui', card: 'ui',
+  land: 'world', dice: 'ui', card: 'ui',
 };
 
 export type FxTimeline = ReturnType<typeof gsap.timeline>;
@@ -116,6 +117,8 @@ export function motionFor(kind: FxKind, tokens?: FxTokens | null): Motion {
       return { durationMs: FX_DECK_MS, ease: t.ease, shakeMs: t.shakeMs, shakeAmp: t.shakeAmp };
     case 'stock':
       return { durationMs: FX_STOCK_MS, ease: t.ease, pulseMs: FX_PULSE_MS, pulseS: FX_PULSE_S };
+    case 'land':
+      return { durationMs: FX_LAND_MS, ease: t.ease, pulseMs: FX_LAND_PUSH_MS, pulseS: FX_LAND_PULSE_S };
     default:
       return {
         durationMs: FX_END_MS, ease: t.ease, count: FX_END_COUNT,
@@ -358,6 +361,15 @@ export function createFx(deps: FxDeps): FxHandle {
         const pulse = secs(finite(m.pulseMs, FX_PULSE_MS));
         const peak = finite(m.pulseS, FX_PULSE_S);
         t.fromTo(shard.scale, { x: 1, y: 1 }, { x: peak, y: peak, duration: pulse, ease, yoyo: true, repeat: 2 }, 0);
+        break;
+      }
+      case 'land': {
+        /* 落格特写：地块脉冲环（相机同时推近，本环随世界空间一起放大）——扩散一圈后淡出 */
+        const ring = spawn('fx.pulse', { cx: x0, cy: y0, s: FX_LAND_RING_S, state: { owner: 0 } }, target);
+        const pulse = secs(finite(m.pulseMs, FX_LAND_PUSH_MS));
+        const peak = finite(m.pulseS, FX_LAND_PULSE_S);
+        t.fromTo(ring.scale, { x: 1, y: 1 }, { x: peak, y: peak, duration: pulse, ease }, 0);
+        t.to(ring, { alpha: 0, duration: pulse, ease }, pulse);
         break;
       }
       default: {

@@ -22,7 +22,7 @@ export const PROPS = [
   'awning', 'lantern', 'banner', 'rooftopBox', 'signTower', 'antenna', 'tree', 'lamp',
   'flagpole', 'chimney', 'barrel', 'lionStone', 'snowPile', 'clothesline', 'steamVent', 'stoneLantern',
 ] as const;
-export const FX = ['coin', 'scaffold', 'dust', 'stamp', 'shine', 'spark', 'shard'] as const;
+export const FX = ['coin', 'scaffold', 'dust', 'stamp', 'shine', 'spark', 'shard', 'pulse'] as const;
 
 const tile = (t: TileType): RegistryEntry => ({
   id: `board.tile.${t}`,

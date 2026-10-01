@@ -264,6 +264,13 @@ export const FX_STOCK_MS = 460;
 export const FX_PULSE_MS = 160;
 export const FX_PULSE_S = 1.6;
 export const FX_SHARD_S = 6;                     // 碎片（股票脉冲）动效缩放（原 2.6 太小，静帧不可辨）
+/* —— M19-D3 落格特写（相机第④拍）：推近 → 脉冲环 → 停顿 → 回落点取景 —— */
+export const FX_LAND_PUSH_MS = 320;              // 推近段时长（同时是脉冲环单次脉冲时长）
+export const FX_LAND_PUNCH_MS = 400;             // 到位后停顿
+export const FX_LAND_BACK_MS = 420;              // 回落点取景段时长
+export const FX_LAND_MS = FX_LAND_PUSH_MS + FX_LAND_PUNCH_MS + FX_LAND_BACK_MS;   // 整段特写时长
+export const FX_LAND_RING_S = 3.4;               // 脉冲环元素基础缩放
+export const FX_LAND_PULSE_S = 2.2;              // 脉冲环峰值放大倍率
 /* 破产/胜利：全屏特效 + 结算展开（火花铺开半径 ≈ 舞台半宽 → 铺满屏） */
 export const FX_END_MS = 900;
 export const FX_END_COUNT = 16;
@@ -329,6 +336,7 @@ export const CAM_IDLE_ZOOM = 1;                   // 静止态 = 恒等变换（
 export const CAM_MIN_ZOOM = 1.6;                  // 低于此值判为「退化」，跳过起势段
 export const CAM_MAX_ZOOM = 4;                    // 单格取景理论值 4.53，封顶防过近
 export const CAM_FOLLOW_ZOOM = 3.6;               // 跟拍段固定倍率（可见 ≈2.5 格宽 × 4.4 格高）
+export const CAM_LAND_ZOOM = 3.2;                 // 落格特写推近倍率
 export const CAM_TILE_PAD = 1;                    // 取景外扩格数
 export const CAM_DEGRADE_EPS = 0.02;              // fit 与 CAM_MIN_ZOOM 的容差（浮点）
 export const CAM_LEAD_MS = 380;

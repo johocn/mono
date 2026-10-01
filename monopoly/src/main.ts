@@ -18,7 +18,7 @@ import { autoPlay, createGame, currentPlayer, type Game, type SettleResult } fro
 import { applyStep, type AiStep } from './core/ai';
 import { pathIndices, type Advance } from './core/board-path';
 import { candidatesFor, canTarget, type TargetKind } from './core/targeting';
-import { bboxOf, choreography, frameFor, type CamPose, type Cell, type ChoreographyOpts, type View } from './core/framing';
+import { bboxOf, choreography, frameFor, landingPose, type CamPose, type Cell, type ChoreographyOpts, type View } from './core/framing';
 import { createCamera } from './render/camera';
 import { hudSpecs, mountHud, type HudActionId, type HudHandle } from './ui/Hud';
 import { mountPanels, overlayOf, panelSpecs, type PanelActionId, type PanelHandle, type TargetingView } from './ui/panels';
@@ -36,7 +36,7 @@ import { SHARE_VERSION } from './data/share';
 import { FATE_DECK, type ItemCardKind } from './data/cards';
 import { DEMO_OWNER, PLAYER_NAME, type BuildLevel } from './data/board';
 import { STOCK_TILE_INDEX } from './data/stocks';
-import { BUILDING_SCALE, BUILDING_Y_OFFSET, BUBBLE_HOLD_MS, BUBBLE_MOVE_HOLD_MS, CAM_AI_SCALE, CAM_BACK_MS, CAM_FALLBACK_MAX_ZOOM, CAM_FOLLOW_ZOOM, CAM_IDLE_ZOOM, CAM_MAX_ZOOM, CAM_MIN_ZOOM, CAM_PUSH_MS, CAM_SETTLE_MS, CAM_TILE_PAD, CAM_VIEW_CX, CAM_VIEW_CY, CAM_VIEW_H, CAM_VIEW_W, DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED, LABEL_GROUND, STAGE_H, STAGE_W, TILE_PICK_TOL, UI_BREAK_W } from './skin/layout';
+import { BUILDING_SCALE, BUILDING_Y_OFFSET, BUBBLE_HOLD_MS, BUBBLE_MOVE_HOLD_MS, CAM_AI_SCALE, CAM_BACK_MS, CAM_FALLBACK_MAX_ZOOM, CAM_FOLLOW_ZOOM, CAM_IDLE_ZOOM, CAM_MAX_ZOOM, CAM_MIN_ZOOM, CAM_PUSH_MS, CAM_SETTLE_MS, CAM_TILE_PAD, CAM_VIEW_CX, CAM_VIEW_CY, CAM_VIEW_H, CAM_VIEW_W, DEFAULT_GEO, FX_FRAMES, FX_LAND_BACK_MS, FX_LAND_PUNCH_MS, FX_LAND_PUSH_MS, FX_LEVELS, FX_NOFX_SPEED, LABEL_GROUND, STAGE_H, STAGE_W, TILE_PICK_TOL, UI_BREAK_W } from './skin/layout';
 import { SHOP_DEFAULTS, parseShopConfig, type ShopConfig } from './skin/shop-config';
 import { allElementIds } from './skin/registry';
 import {
@@ -401,7 +401,11 @@ export async function boot(): Promise<void> {
         const settle = keys[keys.length - 1]?.pose ?? frameCells([cellAt(mv.to)]);
         return {
           before: () => { if (!open) camera.follow([seq[0] ?? cellAt(mv.from), cellAt(mv.to)], hopMs, geo); },
-          after: () => push(settle, CAM_SETTLE_MS),
+          after: () => {
+            /* ④ 落格特写（推近 → 脉冲环 → 停顿 → 回落点取景）；浮层展开（`open`）走取景禁区不推近 */
+            const near = landingPose([cellAt(mv.to)], geo, CAM_VIEW, CAM_TILE_PAD);
+            if (!open) camera.landing(near, settle, FX_LAND_PUSH_MS, FX_LAND_PUNCH_MS, FX_LAND_BACK_MS);
+          },
         };
       }
       case 'settle': {
@@ -602,8 +606,9 @@ export async function boot(): Promise<void> {
       paint();
       return;
     }
-    /* 与 `fx.play` 同刻、同判空（spec §5.3）：`buy`/`upgrade` 失败无 fx → 也不出声 */
-    if (sfxOn) audio.play(ctx.kind);
+    /* 与 `fx.play` 同刻、同判空（spec §5.3）：`buy`/`upgrade` 失败无 fx → 也不出声。
+       `land`（落格特写）不属 `SfxKind` 的 9 演出 + ui cue，无独立音效，故不发声。 */
+    if (sfxOn && ctx.kind !== 'land') audio.play(ctx.kind);
     fxPending = true;
     cam?.before();
     paint();
@@ -615,8 +620,9 @@ export async function boot(): Promise<void> {
     fx.play(ctx, () => {
       fxPending = false; mood = 'calm';
       if (!reportHold) setBubble(null, 0);
-      cam?.after?.();
+      /* 先重画（清 `fx` 层）再跑相机收尾：`after` 里新起的动效（如落格脉冲环）才不会被随后的一帧 paint 抹掉 */
       paint();
+      cam?.after?.();
     });
     if (bubbleTop) fxLayer.addChild(bubbleTop);
   };

@@ -32,6 +32,8 @@ export interface CameraHandle {
   reset(ms?: number): void;
   /** 跟拍段的折线时间线：沿 cells 逐格推进，倍率恒为 CAM_FOLLOW_ZOOM */
   follow(cells: readonly Cell[], totalMs: number, geo: Geo): void;
+  /** M19-D3 落格特写：推近 → 停顿 → 回落点取景（三段式；与 `follow` 共用同一时轴） */
+  landing(near: CamPose, back: CamPose, pushMs: number, holdMs: number, backMs: number): void;
   current(): CamPose;
   /** 跟拍段倍率实调（`?debug=1` 控制台的调参滑杆；初值 = `CAM_FOLLOW_ZOOM`） */
   setFollowZoom(z: number): void;
@@ -135,6 +137,19 @@ export function createCamera(deps: { world: Container }): CameraHandle {
     line = tl;
   };
 
+  const landing: CameraHandle['landing'] = (near, back, pushMs, holdMs, backMs) => {
+    killAll();
+    const tl = gsap.timeline({ onUpdate: apply, onComplete: () => { line = null; } });
+    const push = pushMs / FX_MS_PER_S;
+    const hold = holdMs / FX_MS_PER_S;
+    const backDur = backMs / FX_MS_PER_S;
+    /* ① 推近到落格特写 → ② 停顿（原地保持）→ ③ 回落点取景 */
+    tl.to(cur, { cx: near.cx, cy: near.cy, zoom: near.zoom, duration: push, ease: CAM_EASE }, 0);
+    tl.to({}, { duration: hold }, push);
+    tl.to(cur, { cx: back.cx, cy: back.cy, zoom: back.zoom, duration: backDur, ease: CAM_EASE }, push + hold);
+    line = tl;
+  };
+
   const busy = (): boolean =>
     (tween !== null && tween.isActive()) || (line !== null && line.isActive());
 
@@ -145,6 +160,7 @@ export function createCamera(deps: { world: Container }): CameraHandle {
     snap,
     reset,
     follow,
+    landing,
     current: () => ({ ...cur }),
     setFollowZoom: (z) => { followZoom = z; },
     followZoom: () => followZoom,

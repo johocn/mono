@@ -8,7 +8,7 @@
 import { BOARD_COLS, BOARD_ROWS, RING_SIZE, ringPath, tileIndexOf } from '../data/board';
 import { ipos, type Geo } from '../render/iso';
 import {
-  CAM_DEGRADE_EPS, CAM_IDLE_ZOOM, CAM_LEAD_MS, CAM_PUSH_MS, CAM_SETTLE_MS, FX_HOP_MS,
+  CAM_DEGRADE_EPS, CAM_IDLE_ZOOM, CAM_LAND_ZOOM, CAM_LEAD_MS, CAM_PUSH_MS, CAM_SETTLE_MS, FX_HOP_MS,
 } from '../skin/layout';
 
 /** 舞台空间包围盒 */
@@ -142,4 +142,13 @@ export function choreography(
   const settleBox = bboxOf([prev, last, nextCell(last)], opts.pad, geo);
   keys.push({ at: 1, pose: frameFor(settleBox, view, opts.min, opts.max) });
   return keys;
+}
+
+/**
+ * M19-D3 落格特写取景：以序列最后一格为中心、按 `CAM_LAND_ZOOM` 推近。
+ * 保留为独立纯函数，不改动 `choreography`（其末帧恒为落点取景，settle 回归依赖该语义）。
+ */
+export function landingPose(cells: readonly Cell[], geo: Geo, view: View, pad: number): CamPose {
+  const last = cells[cells.length - 1] ?? [0, 0];
+  return frameFor(bboxOf([last], pad, geo), view, CAM_LAND_ZOOM, CAM_LAND_ZOOM);
 }
