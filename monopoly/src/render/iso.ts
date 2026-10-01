@@ -1,4 +1,6 @@
-import type { BuildLevel } from '../data/board';
+import {
+  BOARD_COLS, BOARD_ROWS, RING_SIZE, ringPath, type BuildLevel,
+} from '../data/board';
 
 export interface Geo { hw: number; hh: number; ox: number; oy: number }
 
@@ -46,4 +48,34 @@ export function compareDepth(a: { c: number; r: number }, b: { c: number; r: num
 /** 层级 → 墙高（高度表由注册表/皮肤传入） */
 export function hostHeight(level: BuildLevel, heights: Record<number, number>): number {
   return heights[level];
+}
+
+/* —— M19-D2 屏幕反查：像素 → 格号（命中容差外返回 null） —— */
+
+/** 反查视图参数：几何 + 命中容差（容差由 layout.TILE_PICK_TOL 提供，避免裸常数） */
+export interface TilePickView {
+  geo: Geo;
+  tol: number;
+}
+
+const PICK_RING = ringPath(BOARD_COLS, BOARD_ROWS);
+
+/**
+ * 取距 (px, py) **最近**的格心；若最近距离仍在 `tol` 内则返回其格号，否则返回 null。
+ * 纯函数、无副作用；用于透明 DOM 命中层把点击像素反解为棋盘格号。
+ */
+export function tileAtPoint(px: number, py: number, view: TilePickView): number | null {
+  const { geo, tol } = view;
+  let best: number | null = null;
+  let bestD = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < RING_SIZE; i++) {
+    const [c, r] = PICK_RING[i] ?? [0, 0];
+    const [x, y] = ipos(c, r, geo);
+    const d = Math.hypot(px - x, py - y);
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return bestD <= tol ? best : null;
 }

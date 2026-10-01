@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ipos, dia, up, win, depthKey, compareDepth, hostHeight } from '../../src/render/iso';
+import { ipos, dia, up, win, depthKey, compareDepth, hostHeight, tileAtPoint } from '../../src/render/iso';
 
 const GEO = { hw: 21, hh: 10.5, ox: 195, oy: 96 };
 
@@ -49,5 +49,20 @@ describe('iso', () => {
     expect(hostHeight(1, H)).toBe(26);
     expect(hostHeight(3, H)).toBe(72);
     expect(hostHeight(2, H)).toBe(46);
+  });
+});
+
+describe('iso.tileAtPoint 屏幕反查', () => {
+  it('命中格心 → 该格号；超容差 → null', () => {
+    const [cx, cy] = ipos(...([1, 7] as [number, number]), GEO);
+    expect(tileAtPoint(cx, cy, { geo: GEO, tol: 30 })).toBe(0);
+    /* 格心正上方 100px 已超出容差 */
+    expect(tileAtPoint(cx, cy - 100, { geo: GEO, tol: 30 })).toBeNull();
+  });
+
+  it('取距格心最近者', () => {
+    const near = ipos(...([11, 7] as [number, number]), GEO);
+    const hit = tileAtPoint(near[0] + 2, near[1] + 1, { geo: GEO, tol: 30 });
+    expect(hit).toBeTypeOf('number');
   });
 });
