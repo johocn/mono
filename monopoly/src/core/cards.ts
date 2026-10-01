@@ -121,3 +121,26 @@ export function bombDown(estates: Estates, index: number, actor: number): BombOu
   e.level = (e.level - 1) as 1 | 2 | 3 | 4;
   return { ok: true, index, owner, level: e.level };
 }
+
+/* —— 拆迁令：一次夷平目标地块**全部**楼体，删除 estate 键归无主 —— */
+
+export type DemolishFail = 'not-estate' | 'own-tile';
+
+export type DemolishOutcome =
+  | { ok: true; index: number; owner: number; level: number }
+  | { ok: false; reason: DemolishFail };
+
+/**
+ * 拆迁（M19-D1）：与 `bombDown` 同口径失败判定（非 shop / 无主 → not-estate；
+ * 自己的地块 → own-tile），但**任意级一次归无主**（bomb 只降 1 级）。
+ * 成功后 estate 键被删除，`level` 恒为 0（表示「无楼」）。
+ */
+export function demolishDown(estates: Estates, index: number, actor: number): DemolishOutcome {
+  if (typeAt(index) !== 'shop') return { ok: false, reason: 'not-estate' };
+  const e = estates[index];
+  if (!e) return { ok: false, reason: 'not-estate' };
+  if (e.owner === actor) return { ok: false, reason: 'own-tile' };
+  const owner = e.owner;
+  delete (estates as Record<number, Estate | undefined>)[index];
+  return { ok: true, index, owner, level: 0 };
+}

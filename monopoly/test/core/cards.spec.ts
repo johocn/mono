@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  barrierAt, bombDown, clearBarrier, createDeck, grant, handIndexOf, has,
+  barrierAt, bombDown, clearBarrier, createDeck, demolishDown, grant, handIndexOf, has,
   placeBarrier, use, type Hand,
 } from '../../src/core/cards';
 import { makeRng } from '../../src/core/dice';
@@ -31,7 +31,7 @@ describe('core.cards 牌堆（seed 定序 / 抽空洗牌）', () => {
   });
 });
 
-describe('core.cards 手牌（5 槽 / 去重）', () => {
+describe('core.cards 手牌（6 槽 / 去重）', () => {
   it('grant 去重：空手牌入 bomb 长度 1；再入 bomb → false', () => {
     const hand: Hand = [];
     expect(grant(hand, 'bomb')).toBe(true);
@@ -40,10 +40,10 @@ describe('core.cards 手牌（5 槽 / 去重）', () => {
     expect(hand).toHaveLength(1);
   });
 
-  it('填满 5 种后再 grant → false（满槽）', () => {
+  it('填满 6 种后再 grant → false（满槽）', () => {
     const hand: Hand = [];
     for (const c of ITEM_CARDS) expect(grant(hand, c.kind)).toBe(true);
-    expect(hand).toHaveLength(5);
+    expect(hand).toHaveLength(6);
     expect(grant(hand, 'bomb')).toBe(false);
   });
 
@@ -80,6 +80,25 @@ describe('core.cards 炸弹（降 1 级 / L1 炸回无主）', () => {
   });
 });
 
+describe('core.cards 拆迁令（任意级一次夷平 / 归无主）', () => {
+  it('L3 → 删键回无主，返回原主与原级数', () => {
+    const estates: Estates = { 3: { index: 3, owner: 2, level: 3, processing: false } };
+    expect(demolishDown(estates, 3, 1)).toEqual({ ok: true, index: 3, owner: 2, level: 0 });
+    expect(estates[3]).toBeUndefined();
+  });
+
+  it('非 shop / 无主 → not-estate；自己的地块 → own-tile', () => {
+    const estates: Estates = {
+      1: { index: 1, owner: 1, level: 2, processing: false },
+      4: { index: 4, owner: 1, level: 4, processing: false },
+    };
+    expect(demolishDown(estates, 5, 1)).toEqual({ ok: false, reason: 'not-estate' });  // chance 格
+    expect(demolishDown(estates, 6, 1)).toEqual({ ok: false, reason: 'not-estate' });  // shop 无主
+    expect(demolishDown(estates, 4, 1)).toEqual({ ok: false, reason: 'own-tile' });
+    expect(estates[4]).toEqual({ index: 4, owner: 1, level: 4, processing: false });
+  });
+});
+
 describe('core.cards 路障（设 / 查 / 撤）', () => {
   it('placeBarrier 重复 → false；barrierAt / clearBarrier 一致', () => {
     const barriers = {};
@@ -95,7 +114,7 @@ describe('core.cards 路障（设 / 查 / 撤）', () => {
 
 describe('core.cards 无 Math.random', () => {
   it('全部随机路径吃注入 rng（同 seed 可复现）', () => {
-    const kinds: ItemCardKind[] = ['bomb', 'barrier', 'pardon', 'teleport', 'doubleRent'];
+    const kinds: ItemCardKind[] = ['bomb', 'barrier', 'pardon', 'teleport', 'doubleRent', 'demolish'];
     const hand: Hand = [];
     const rnd = makeRng(3);
     const picks = Array.from({ length: 5 }, () => kinds[Math.floor(rnd() * kinds.length)]);
