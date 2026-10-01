@@ -1855,6 +1855,8 @@ git commit -m "test(hotel): 酒店订单行 e2e 脚本、手机视口截图与�
 
 已知边界（本轮未处理，待决策）：i18n 各语言包相对 zh-CN（773 键）仍存在既有缺口（bg-BG 缺 273 键等），依赖 `merge.ts` 中文兜底，非本任务引入。
 
+> **更正（2026-10-01，见下方「收口补记 · i18n 全语言包审计与漏译修复」）**：上述「bg-BG 缺 273 键」为**误报**。首版审计脚本只读了 `zhFallbackLocale` 的**第一个**参数对象，而该函数是 `(...overrides)` rest 参数、内部 reduce 深合并**全部**参数，写在第二个对象里的译文同样生效。修正后真实缺失 = **0**。
+
 ---
 
 ### 收口补记 · 首页「为你推荐」楼层空态修复（2026-10-01）
@@ -1881,3 +1883,41 @@ git commit -m "test(hotel): 酒店订单行 e2e 脚本、手机视口截图与�
 - 手册 `docs/manual/product-detail/index.md` 新增 6.12
 
 已知取舍：总商品数 ≤10 件时两个楼层内容重复；运营需区分应在后台 `shopContent` 配置「热门 / 推荐」积木而非依赖兜底切片。
+
+---
+
+### 收口补记 · i18n 全语言包审计与漏译修复（2026-10-01）
+
+承接上一节「已知边界」中悬置的 i18n 缺口问题（用户批准执行）。**结论先行：该「缺口」为误报，真实缺失 0；本轮实际修掉 33 条真漏译。**
+
+**审计脚本踩的两个坑（首版 → 修正）**：
+
+1. **只读第一个覆盖对象 → 误报 2635 条缺失**。语言包为 `defineI18nLocale(() => zhFallbackLocale({...覆盖1...}, {...覆盖2...}))`；`merge.ts` 的 `zhFallbackLocale(...overrides)` 是 rest 参数，内部 `deepMerge` reduce **全部**参数 —— 写在第二个对象里的译文同样生效。修正 `readOverride` 为「收集 `zhFallbackLocale(` 的全部顶层参数对象字面量并逐一 deepMerge」后，缺失归零。
+2. **把 zh-CN.ts 的尾部导出语句吞进对象字面量 → SyntaxError**。首版用 `lastIndexOf('}')` 定位对象结尾，把后面的 `export default defineI18nLocale(...)` 一并带入；改为按括号配平（跳过字符串与转义）的 `extractObject`。该函数同时被运行时探针复用（zh-CN 单列 `extractObject(src, src.indexOf('{'))` 分支，因为 zh-CN.ts 是 `export const zhMessages = {...}`，**没有** `zhFallbackLocale(` 包裹）。
+
+**过程事故（自我纠正）**：修正审计口径前，曾按错误清单派出 5 个子代理去「补齐」bg-BG / es-ES / ru-RU / de-DE / fr-FR，造成无谓改动（bg-BG/es-ES 删掉 obj2；ru-RU/de-DE/fr-FR 把键复制进 obj1 产生重复键）。发现归因错误后 **`git checkout --` 全部回滚这 5 个文件**，重新按修正后的清单执行。
+
+**审计结论**（`d:\zhao\scripts\_audit-i18n.mjs`）：zh-CN 773 叶子词条；12 语言包缺失 **0**、含汉字泄漏 **0**（`ja-JP`/`zh-CN` 豁免）；`ja-JP` 13 条「值等于中文」为汉字同形词（未使用/保存/配送/商品/数量/件…），属正常；8 语言包各有 2 条死键 `billing.firstName` / `billing.lastName`（zh-CN 无此键、全仓库代码未使用）→ 待清理，本轮不动。
+
+**本轮落地改动（9 个语言包，33 条）**：
+
+| 文件 | 改动 |
+| --- | --- |
+| `layers/base/i18n/locales/{bg-BG,de-DE,es-ES,fa-IR,fr-FR,it-IT,pt-BR,ru-RU}.ts` | 各 4 条 `shop.packageShipping` / `shop.warehouse` / `shop.shippingAdjustmentCharge` / `shop.shippingAdjustmentRefund`，原值照抄中文，已按各语言翻译 |
+| `layers/base/i18n/locales/en-US.ts` L24 | `site.shareDesc` 由中文改为英文 |
+
+- `shop.*` 渲染点：`layers/base/app/components/order/OrderShippingBreakdown.vue` L49/L54/L66
+- `site.shareDesc` 渲染点：`app/app.vue` L157/L159、`app/layouts/default.vue` L19、`layers/base/app/components/WechatShare.vue` L81（**无法用线上 meta description 验证**——t2 渠道 `shopIntro` 会覆盖）
+
+**验证**：
+
+- 本地 `_audit-i18n.mjs` 全表：缺失 0 / 含汉字 0
+- 新增运行时探针 `scripts/_probe-i18n-runtime.mjs`：从各语言包提取键（`home.hotGoods` / `home.recommendGoods` / `nav.my` / `nav.cart` / `nav.search`）→ 抓 `/t2` 与 `/{code}/t2` 的 SSR HTML → 断言命中本语言译文且无 `messages.*` 原始 key 泄漏。**12 语言全 PASS**
+- URL 形态确认：语言前缀在租户前缀**之前**（`/en/t2`），默认中文无前缀（`/t2`）；12 个 URL 全 HTTP 200
+- 手机视口截图（`scripts/_shot-i18n-locale.mjs`，390×844 dpr=2）：`docs/manual/shots/2026-10-01-i18n/home-{zh-CN,en,de,ja,ru,ko,fa}.png` 共 7 张，全部 200、无原始 key 泄漏；肉眼确认德语 chrome 全德语、波斯语整页 RTL
+- 本地 `pnpm build` + `node scripts/deploy.mjs`（本地构建，服务器仅 `pm2 restart nshop`，pm2 nshop online）
+- 手册 `docs/manual/product-detail/index.md` 新增 6.13
+
+边界（数据层，非本轮范围）：截图残留中文（休闲娱乐 / 养车 / 日常用品 / 美食）为 Vendure 后台**分类名/商品名**（单语种字段），不经 i18n 字典；i18n 字典层已干净。
+
+后续可选（未做）：清理 8 语言包死键 `billing.firstName` / `billing.lastName`；把 `_audit-i18n.mjs` 收敛为仓库常驻守卫（新增词条时防漏译）。

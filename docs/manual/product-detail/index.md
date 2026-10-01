@@ -434,6 +434,81 @@ PASS  首页-无「暂无可用商品」空态：可见命中 0 处（改前 1 �
 
 **已知取舍**：总商品数 ≤10 件时，两个楼层内容重复。运营如需区分，应在后台 `shopContent` 配置「热门商品 / 推荐商品」积木（各自指定集合或商品 slug），而非依赖兜底楼层的机械切片。
 
+### 6.13 全语言包 i18n 审计与漏译修复（2026-10-01）
+
+**背景**：nshop 支持 12 个语言包（`zh-CN` 为基底 + `en-US / bg-BG / ru-RU / fa-IR / de-DE / es-ES / fr-FR / it-IT / pt-BR / ja-JP / ko-KR`）。此前怀疑「各语言包相对 zh-CN 存在大量缺口、依赖中文兜底」，本机补一轮量化审计。
+
+**审计口径（关键，首版踩坑已修正）**：语言包结构为
+
+```ts
+export default defineI18nLocale(() => zhFallbackLocale({ ...覆盖1... }, { ...覆盖2... }));
+```
+
+`merge.ts` 的 `zhFallbackLocale(...overrides)` 是 **rest 参数**，内部用 `deepMerge` reduce **全部**参数 —— 因此写在第二个对象里的译文同样生效。首版审计脚本只读第一个参数对象，**误报 2635 条缺失**；修正为「收集全部参数对象并逐个 deepMerge」后，真实缺失为 **0**。
+
+**审计结论**（`scripts/_audit-i18n.mjs`）：
+
+```
+zh-CN 叶子词条数: 773
+
+locale   已译键  缺失  值等于中文  含汉字  多余
+ja-JP      773      0         13       0     0
+bg-BG      775      0          0       0     2
+de-DE      775      0          0       0     2
+en-US      773      0          0       0     0
+es-ES      775      0          0       0     2
+fa-IR      775      0          0       0     2
+fr-FR      775      0          0       0     2
+it-IT      775      0          0       0     2
+ko-KR      773      0          0       0     0
+pt-BR      775      0          0       0     2
+ru-RU      775      0          0       0     2
+```
+
+- **缺失 0**：不存在「整块依赖中文兜底」的语言包；此前「bg-BG 缺 273 键」的说法为误报，予以更正。
+- **含汉字 0**（`ja-JP` / `zh-CN` 豁免）：无「翻译被跳过、值照抄中文」的泄漏。
+- `ja-JP` 的 13 条「值等于中文」为汉字同形词（未使用 / 保存 / 配送 / 商品 / 数量 / 件…），属正常，非漏译。
+- 8 个语言包各有 2 条「多余」键 `billing.firstName` / `billing.lastName`（zh-CN 无此键、全仓库代码未使用，仅出现在一份历史 plan 文档中）→ 属死键，后续可清理。
+
+**修复的真漏译（33 条，已全部翻译落地）**：
+
+| 范围 | 键 | 值（原为中文照抄） |
+| --- | --- | --- |
+| 8 语言包（bg/de/es/fa/fr/it/pt/ru）× 4 条 | `shop.packageShipping` / `shop.warehouse` / `shop.shippingAdjustmentCharge` / `shop.shippingAdjustmentRefund` | 如 de-DE → `Versandkosten pro Paket` / `Lager` / `Nachberechnung` / `Erstattung` |
+| en-US × 1 条 | `site.shareDesc` | `youshop.cn — one-stop expert shopping, curated cross-border picks, made to order.` |
+
+- `shop.*` 4 条用于订单页 [OrderShippingBreakdown.vue](file:///d:/zhao/nshop/layers/base/app/components/order/OrderShippingBreakdown.vue#L49-L66)（需登录 + 订单含 `packageShippingJson` 才渲染）；
+- `site.shareDesc` 用于 [app.vue](file:///d:/zhao/nshop/app/app.vue#L157-L159)、[default.vue](file:///d:/zhao/nshop/app/layouts/default.vue#L19)、[WechatShare.vue](file:///d:/zhao/nshop/layers/base/app/components/WechatShare.vue#L81)。
+
+> 注：`site.shareDesc` 无法用线上 `meta description` 验证——t2 渠道 `shopIntro`（“用心做，好产品，会说话。”）会覆盖它。
+
+**运行时验收**（`scripts/_probe-i18n-runtime.mjs`，生产 t2，各 locale 取首页楼层/底部导航键做断言）：
+
+```
+PASS zh-CN  渲染命中语言包 5/5 | 与中文同值键: 无 | 原始 key 泄漏: false
+PASS en-US  渲染命中语言包 4/5 | 与中文同值键: 无 | 原始 key 泄漏: false
+PASS de-DE  渲染命中语言包 4/5 | 与中文同值键: 无 | 原始 key 泄漏: false
+PASS fr-FR  渲染命中语言包 5/5 | 与中文同值键: 无 | 原始 key 泄漏: false
+PASS ru-RU  渲染命中语言包 4/5 | 与中文同值键: 无 | 原始 key 泄漏: false
+PASS ja-JP  渲染命中语言包 4/5 | 与中文同值键: 无 | 原始 key 泄漏: false
+PASS ko-KR  渲染命中语言包 5/5 | 与中文同值键: 无 | 原始 key 泄漏: false
+PASS bg-BG  渲染命中语言包 5/5 | 与中文同值键: 无 | 原始 key 泄漏: false
+PASS es-ES  渲染命中语言包 5/5 | 与中文同值键: 无 | 原始 key 泄漏: false
+PASS it-IT  渲染命中语言包 4/5 | 与中文同值键: 无 | 原始 key 泄漏: false
+PASS pt-BR  渲染命中语言包 5/5 | 与中文同值键: 无 | 原始 key 泄漏: false
+PASS fa-IR  渲染命中语言包 4/5 | 与中文同值键: 无 | 原始 key 泄漏: false
+
+全部语言包渲染文案来自各自语言包
+```
+
+- 断言含义：页面 SSR HTML 命中**该语言包自身的译文**（非中文兜底），且无 `messages.xxx.yyy` 原始 key 泄漏。
+- URL 形态：默认中文无前缀 `/t2`，其余为 `/{code}/t2`（语言前缀在租户前缀之前）；12 个 URL 全部 HTTP 200。
+- 命中 4/5 而非 5/5 的原因：个别语言包某键与渲染位置不匹配（如首页楼层文案被装修/兜底链路替换），不影响「渲染来自本语言包」的结论。
+
+**手机视口截图**（`scripts/_shot-i18n-locale.mjs`，390×844 dpr=2 = 780×1688）：`docs/manual/shots/2026-10-01-i18n/home-{zh-CN,en,de,ja,ru,ko,fa}.png`，7 个 URL 全 200、页面无原始 key 泄漏。肉眼可见：德语的 `Alle Produkte / Stadt wählen / Marken-Blitzangebot / Qualitätszone / Startseite / Kategorien / Warenkorb / Mein Konto`；波斯语整页 RTL 镜像布局 + `انتخاب شهر / همه محصولات / منطقه باکیفیت / سبد خرید`。
+
+**已知边界（数据层，非本次范围）**：截图中仍可见少量中文（如「休闲娱乐 / 养车 / 日常用品 / 美食」）——那是 **Vendure 后台的分类名/商品名**（单语种字段），不经 i18n 字典，属数据层多语言未接入；i18n 字典层（页面固定文案）已经是干净的。
+
 
 ---
 
