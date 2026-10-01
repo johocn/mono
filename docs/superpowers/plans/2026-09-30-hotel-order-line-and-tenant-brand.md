@@ -1853,4 +1853,31 @@ git commit -m "test(hotel): 酒店订单行 e2e 脚本、手机视口截图与�
 - 加购 → 开购物车面板段加重试：首帧 hydration 未完成时首次点击可能落空，按「面板是否含 `共 2 晚`」判定，且仅在面板确为「购物车是空的」时才补点加购，避免重复加购把数量变成 2 致金额断言失配。
 - 价格段截图前滚动到「首个含价格的可见卡片」再截，否则首页首屏（轮播 / 金刚区）看不到价格，截图无法作为证据。
 
-已知边界（未处理，待决策）：首页「为你推荐」区块在 t2 商品数少时，`useCuratedGoods.ts` 去重（排除同页「热门商品」已展示项）后可能为空 → `GoodsCardBlock.vue` 渲染「当前城市/配送方式下暂无可用商品」空态，措辞具有误导性。候选修法：A 去重后为空则回退未去重列表；B 区块为空时整块隐藏。属首页数据契约变更，未在本轮改动。
+已知边界（本轮未处理，待决策）：i18n 各语言包相对 zh-CN（773 键）仍存在既有缺口（bg-BG 缺 273 键等），依赖 `merge.ts` 中文兜底，非本任务引入。
+
+---
+
+### 收口补记 · 首页「为你推荐」楼层空态修复（2026-10-01）
+
+计划外追加。起因：390px 巡检发现 t2 首页「热门商品」楼层正常（9 件）而「为你推荐」楼层渲染「当前城市/配送方式下暂无可用商品」。按「设计变更先出内联 mockup 定稿」规范，先出 A/B 两版式内联预览（PureShowWidget），用户选定 **方案 A · 回退未去重列表**。
+
+定位过程（两次误判，务必记录）：
+1. **首次归因错误**：判为装修积木 `useCuratedGoods.ts` 的同页去重把区块清空。实际经 Admin API 查证 `t2.customFields.shopContent = null` → 首页根本没走装修积木，而是走京东兜底楼层；改完 `useCuratedGoods` 部署后生产空态**依旧**（断言 FAIL 命中 1 处），据此推翻该判断。
+2. **真正根因**：`app/pages/index.vue` 兜底取数 `home-fallback-search` 一次 `SearchProducts(take: 20)` 后切 `hot = enriched.slice(0,10)` / `more = enriched.slice(10,20)`。t2 全站仅 9 件商品（`search.totalItems = 9`）→ `more` 恒空 → 骨架自动补位的 `recommend` 槽位（`HomeBlockRenderer.vue` 以 `autoGoods.more` 直渲 `GoodsCardBlock`）渲染空态。
+3. 定位手段：临时探针 `scripts/_probe_recommend.mjs`（Admin API 读渠道 `shopContent` + Playwright 390px dump 各楼层卡片数与空态归属，输出「热门商品 cards=9 / 为你推荐 cards=0 empty=true」）。用完即删。
+
+改动：
+
+| 文件 | 改动 |
+| --- | --- |
+| `app/pages/index.vue` L139-145 | `const hot = enriched.slice(0,10); const more = enriched.slice(10,20); return { hot, more: more.length ? more : hot }` |
+| `layers/base/app/composables/useCuratedGoods.ts` L200-214 | 同类缺陷的装修积木路径一并加固：去重排除后为空则回退未去重列表（`rest.length ? rest : items`）——仅在「原本会为空」时生效，非空场景行为完全不变 |
+
+验证：
+- 首次部署（仅 `useCuratedGoods` 改动）生产断言 **FAIL**（可见命中 1 处）→ 证伪归因，二次部署（补 `index.vue`）后 **PASS**（可见命中 0 处）
+- 截图 `09-home-recommend.png`（780×1688）：「为你推荐」楼层内为商品卡（¥168.00 / ¥880.00 等）
+- 酒店行 / 普通商品行 / 页头 / 价格本地化既有断言无回归；`pnpm build` 成功、`deploy.mjs` 部署 → 生产 `pm2 restart nshop`（online）
+- 断言按**可见元素**计数（PC 版式在 390px 下 `display:none`，其楼层同样存在，全 DOM 计数会误判）
+- 手册 `docs/manual/product-detail/index.md` 新增 6.12
+
+已知取舍：总商品数 ≤10 件时两个楼层内容重复；运营需区分应在后台 `shopContent` 配置「热门 / 推荐」积木而非依赖兜底切片。

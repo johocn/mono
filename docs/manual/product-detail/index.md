@@ -407,6 +407,33 @@ PASS  首页-价格本地化：无裸币种代码且带 ¥ 符号（改前形如
 
 截图：`docs/manual/shots/2026-09-30-hotel-orderline/07-category-price.png`（分类页）、`08-home-price.png`（首页），手机视口 390×844 dpr=2 = 780×1688。
 
+### 6.12 首页「为你推荐」楼层空态修复（2026-10-01）
+
+**现象**：t2 首页「热门商品」楼层正常展示 9 件商品，紧随其后的「为你推荐」楼层却渲染「当前城市/配送方式下暂无可用商品」（生产 SSR HTML / hydrated DOM 各命中 1 处）。
+
+**定位过程**（两次误判，记录以免重犯）：
+1. 首次归因于装修积木的同页去重（`useCuratedGoods.ts` 的 `products` computed 排除「热门商品」已展示 productId）——**不是本现象的原因**。经 Admin API 查证：t2 渠道 `customFields.shopContent = null`，首页并未走装修积木，而是走「京东兜底楼层」。
+2. 真正根因在 [index.vue](file:///d:/zhao/nshop/app/pages/index.vue#L139-L145) 的兜底取数：一次 `SearchProducts(take: 20)` 结果被切成 `hot = enriched.slice(0, 10)`、`more = enriched.slice(10, 20)`。t2 全站仅 9 件商品（`search.totalItems = 9`）→ **第二段恒为空** → 自动补位的 `recommend` 槽位（[HomeBlockRenderer.vue](file:///d:/zhao/nshop/layers/base/app/components/home/HomeBlockRenderer.vue#L60-L65) 以 `autoGoods.more` 直渲 `GoodsCardBlock`）渲染成空态。
+
+**修法**（方案 A：回退为同一列表，宁可两楼层重复，也不显示误导空态）：
+
+| 文件 | 改动 |
+| --- | --- |
+| `app/pages/index.vue` L139-145 | `more` 为空时回退为 `hot`：`return { hot, more: more.length ? more : hot }`（总商品 ≤10 件的店铺，两个楼层展示同一批商品） |
+| `layers/base/app/composables/useCuratedGoods.ts` L200-214 | 同类缺陷的装修积木路径一并加固：去重排除后为空则回退未去重列表（`rest.length ? rest : items`），仅在「原本会为空」时生效，非空场景行为不变 |
+
+**验收断言**（`scripts/_shot-hotel-checkout.mjs` 首页段，生产 t2）：
+
+```
+PASS  首页-无「暂无可用商品」空态：可见命中 0 处（改前 1 处）
+```
+
+> 断言按**可见元素**计数：PC 版式（≥1024px）在 390px 下为 `display:none`，其楼层同样存在，按全 DOM 计数会误判。
+
+截图：`docs/manual/shots/2026-09-30-hotel-orderline/09-home-recommend.png`——「为你推荐」楼层内为商品卡（`¥168.00` / `¥880.00` 等），不再出现空态文案。
+
+**已知取舍**：总商品数 ≤10 件时，两个楼层内容重复。运营如需区分，应在后台 `shopContent` 配置「热门商品 / 推荐商品」积木（各自指定集合或商品 slug），而非依赖兜底楼层的机械切片。
+
 
 ---
 

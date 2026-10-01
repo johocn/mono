@@ -334,6 +334,23 @@ for (const [label, url] of [['分类页', `${BASE}/category/${encodeURIComponent
   }, CARD_SEL);
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${OUT}/${label === '首页' ? '08-home-price' : '07-category-price'}.png`, fullPage: false });
+
+  // 首页另有「为你推荐」楼层：兜底楼层第二段（商品 11–20）为空时会渲染误导空态（改前可见 1 处），
+  // 改后可见层不应再出现该文案。PC 版式（≥1024px）在 390px 下为 display:none，故一律按可见元素计数。
+  if (label === '首页') {
+    const emptyCount = await page.locator('p:visible', { hasText: '暂无可用商品' }).count();
+    const noEmpty = emptyCount === 0;
+    console.log(`${noEmpty ? 'PASS' : 'FAIL'}  首页-无「暂无可用商品」空态：可见命中 ${emptyCount} 处（改前 1 处）`);
+    if (!noEmpty) failures.push('首页-无空态');
+
+    // 该楼层的截图证据：滚到可见的「为你推荐」标题再截，确认楼层内确有商品卡
+    const recTitle = page.locator('h2:visible', { hasText: '为你推荐' }).first();
+    if (await recTitle.count()) {
+      await recTitle.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(600);
+      await page.screenshot({ path: `${OUT}/09-home-recommend.png`, fullPage: false });
+    }
+  }
 }
 
 await browser.close();
