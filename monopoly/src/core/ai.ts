@@ -122,9 +122,13 @@ function idlePlan(state: GameState, persona: Persona, P: AiParams): AiStep[] {
   const pre: AiStep[] = [];
   if (P.cardPolicy === 'offensive' && targetsLeader(state, persona)) {
     const leader = leaderOf(state);
-    /* 炸弹：炸领先者名下最高级地块（必须是真实地块，且非自有，否则 bombDown 判非法） */
+    /* 拆迁令 / 炸弹：指向领先者名下最高级地块（必须是真实地块，且非自有，否则判非法）。
+       demolish 与 bomb **互斥**：优先 demolish（一次夷平），消耗后下回合再用 bomb；
+       二者共用 leaderBestTile 挑选，避免同格连打致整段 plan 顺序执行时第二步非法。 */
     const t = leaderBestTile(state);
-    if (hand.includes('bomb') && t !== null && state.estates[t]?.owner !== me.id) {
+    if (t !== null && hand.includes('demolish') && state.estates[t]?.owner !== me.id) {
+      pre.push({ kind: 'card', card: 'demolish', target: t });
+    } else if (t !== null && hand.includes('bomb') && state.estates[t]?.owner !== me.id) {
       pre.push({ kind: 'card', card: 'bomb', target: t });
     }
     /* 路障：铺在领先者前方 BARRIER_LEAD 格（领先者是自己时不自伤） */

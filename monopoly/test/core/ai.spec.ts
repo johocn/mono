@@ -118,3 +118,34 @@ describe('decideTurn 合法性与确定性', () => {
     expect(decideTurn(g.state, 'aggressive')).toEqual([]);
   });
 });
+
+describe('ai 拆迁令决策（与炸弹同源挑选，互斥）', () => {
+  /* 复用上方「激进：手牌目标选净资产最高者」的构造：领先者 foe[1] 坐拥一块 L3 自有地 */
+  function buildAggressiveState() {
+    const g = createGame({ seed: 3 });
+    const me = currentPlayer(g.state);
+    g.state.phase = 'idle';
+    const foe = g.state.players.filter((p) => p.id !== me.id);
+    foe.forEach((p, i) => { p.pos = 2 + i * 4; });
+    foe[1].cash = 99999;                    // 玩家 3 = 净资产最高
+    g.state.estates[foe[1].pos] = { index: foe[1].pos, owner: foe[1].id, level: 3, processing: false };
+    return { g, foe };
+  }
+
+  it('激进性格 + 持有 demolish → 拆迁令指向领先者最高级地块', () => {
+    const { g, foe } = buildAggressiveState();
+    const steps = decideTurn(g.state, 'aggressive');
+    const card = steps.find((s): s is Extract<AiStep, { kind: 'card' }> => s.kind === 'card' && s.card === 'demolish');
+    expect(card).toBeDefined();
+    expect(card!.target).toBe(foe[1].pos);
+  });
+
+  it('demolish 与 bomb 互斥（不同格，保证整段 plan 可顺序执行）', () => {
+    const { g } = buildAggressiveState();
+    const cards = decideTurn(g.state, 'aggressive').filter((s): s is Extract<AiStep, { kind: 'card' }> => s.kind === 'card');
+    const d = cards.find((c) => c.card === 'demolish');
+    const b = cards.find((c) => c.card === 'bomb');
+    expect(d).toBeDefined();
+    expect(b).toBeUndefined();
+  });
+});
