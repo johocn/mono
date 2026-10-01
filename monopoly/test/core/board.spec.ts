@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { TILES, ringPath, typeAt, shortAt, nameAt, RING_SIZE, tileIndexOf } from '../../src/data/board';
+import { TILES, ringPath, typeAt, shortAt, nameAt, RING_SIZE, tileIndexOf, START_PUBLIC_LEVEL } from '../../src/data/board';
 
 describe('board 数据（spec §4）', () => {
   it('正好 32 格', () => {
@@ -53,5 +53,24 @@ describe('board 数据（spec §4）', () => {
     expect(tileIndexOf(1, 7)).toBe(0);
     expect(tileIndexOf(11, 6)).toBe(11);
     expect(tileIndexOf(1, 6)).toBe(31);
+  });
+});
+
+describe('START_PUBLIC_LEVEL · M18 开局公共设施楼（D1）', () => {
+  it('只保留 4 栋：起点 L3 / 银行 L2 / 股票所 L2 / 医院 L2', () => {
+    expect(START_PUBLIC_LEVEL).toEqual({ 0: 3, 9: 2, 19: 2, 25: 2 });
+  });
+
+  it('4 处全是非商家格 —— 商家格开局一律无楼', () => {
+    for (const key of Object.keys(START_PUBLIC_LEVEL)) {
+      const i = Number(key);
+      expect(i).toBeGreaterThanOrEqual(0);
+      expect(i).toBeLessThan(RING_SIZE);
+      expect(typeAt(i)).not.toBe('shop');
+    }
+    expect(typeAt(0)).toBe('core');
+    expect(typeAt(9)).toBe('bank');
+    expect(typeAt(19)).toBe('stock');
+    expect(typeAt(25)).toBe('hospital');
   });
 });

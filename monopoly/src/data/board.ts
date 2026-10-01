@@ -70,6 +70,14 @@ export const TILE_LEVEL: Array<0 | BuildLevel> = [
   3, 1, 0, 1, 2, 0, 2, 0, 1, 0, 2, 1, 0, 2, 0, 1, 1, 0, 3, 0, 2, 0, 1, 0, 1, 0, 2, 0, 1, 0, 3, 0,
 ];
 
+/**
+ * M18 D1 · 开局保留的**公共设施楼**（play 模式唯一的开局有楼来源；未售商家格一律无楼）。
+ * 现状 `TILE_LEVEL` 是 v5 演示层级（18 栋楼几乎全落在商家格）；play 改走本表：
+ * 只有 4 处公共设施开局成楼，商家格等买家买下才从 L1 长起。
+ * 格位：0 鹿乡特色小镇（每回合必经，L3）/ 9 鹿乡银行（L2）/ 19 股票交易所（L2）/ 25 医院（L2）。
+ */
+export const START_PUBLIC_LEVEL: Record<number, BuildLevel> = { 0: 3, 9: 2, 19: 2, 25: 2 };
+
 export const RING_SIZE = 32;
 
 export const TILES: TileDef[] = TILE_NAMES.map((name, i) => ({
