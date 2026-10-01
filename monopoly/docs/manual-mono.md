@@ -784,6 +784,38 @@ $env:MONO_ORIGIN='http://127.0.0.1:52301'; node local/mono-shots-m18.mjs   # [m1
 
 **取证脚本**：[local/mono-shots-m18.mjs](file:///d:/zhao/monopoly/local/mono-shots-m18.mjs)。关键口径：与 `mono-shots-p2.mjs` 同源，用 `?demo=1` + `scene.buildOne()` + `overrides` 逐件定格（受控对照，不吃 `theme.json` 分派）；另开一页打 `?play=1&seed=20261001&nofx=1&humans=4&tour=0` 取真实开局与生长画面。**五级总表逐级 `scene.reset()` + 居中整幅取景**（因 L5 高过 L4、L4 高过 L3，并排摆放会互相遮挡且把 L4/L5 的退台 / 塔尖裁出画外）。机器闸门 6 项：`01_levels_distinct` / `02_levels_owner1_levels_distinct` / `street_two_colors` / `start_buildings_4` / `start_wall_ids` / `grown_buildings_7`。
 
+### M19 对抗玩法与落子沉浸（拆迁令 · 选目标 · 落格特写 · 路障明确 · 破坏表现）2026-10-02
+
+**范围**：对齐 spec `docs/superpowers/specs/2026-10-02-monopoly-m19-combat-and-landing-design.md` 的决策 **M19-D1..D5**（覆盖路线图诉求 ① 落子沉浸 与 ② 路障 / 炸弹 / 拆屋 + 选目标）。只作用于 `typeAt(i) === 'shop'` 的 17 个商家格，**不动地砖与店招**；不引入破产拍卖 / 银行 / 股票 / 设施入股 / 新闻（属 M20）。
+
+**五项需求与落点**：
+
+| # | 需求（D） | 落点 | 结果 |
+|---|---|---|---|
+| 1 | 新增「拆迁令」`demolish`，一次夷平归无主（D1） | [cards.ts](file:///d:/zhao/monopoly/src/data/cards.ts)：`ITEM_CARDS` 5 → 6（增 `demolish`）、`HAND_SIZE` 5 → 6 | 开局手牌 **6 种全送**，手牌槽 5 → 6；与炸弹区别：炸弹 `BOMB_RANGE = 1` 拆 1 级（L1 归无主），拆迁令任意级**一次归无主** |
+| 2 | 棋盘选目标态（D2） | [targeting.ts](file:///d:/zhao/monopoly/src/core/targeting.ts) 纯函数 `candidatesFor` / `canTarget` / `previewFor`；[iso.ts](file:///d:/zhao/monopoly/src/render/iso.ts) `tileAtPoint`；[panels.ts](file:///d:/zhao/monopoly/src/ui/panels.ts) 去掉 `cardTarget()` 自动挑目标 + 预演条 `ui.preview` + 取消键 `ui.cancel`；[main.ts](file:///d:/zhao/monopoly/src/main.ts) 命中层 `#mono-pick` | 点需目标道具 → 候选格高亮（`board.tile.candidate`）→ 点候选格提交 / 点空白或「取消」退出；相机冻结 idle 全景 |
+| 3 | 落格特写相机第 ④ 拍（D3） | [framing.ts](file:///d:/zhao/monopoly/src/core/framing.ts) `landingPose`；[camera.ts](file:///d:/zhao/monopoly/src/render/camera.ts) `landing()`；[fx.ts](file:///d:/zhao/monopoly/src/render/fx.ts) `fx.land` | 推近 `CAM_LAND_ZOOM`（≈3.2）→ 地块脉冲环 `fx.pulse` → 停顿 `FX_LAND_PUNCH_MS`（≈400ms）+ 落格重音 → 回落点取景；特写期间不展开浮层（取景禁区） |
+| 4 | 路障规则明确（D4） | [game.ts](file:///d:/zhao/monopoly/src/core/game.ts) `moveCurrent` | **core 不改**：`moveCurrent` 已在起点前方第 1 个路障处截断 → `clearBarrier` → 玩家停在该格并**照常结算**；M19 只补 UI 选目标（前方 1–6 格）与文档明确 |
+| 5 | 破坏表现 `fx.wreck`（D5） | [fx.ts](file:///d:/zhao/monopoly/src/render/fx.ts) 新增 `FxKind:'wreck'`（含 `FX_SPACE` / `motionFor`）；[registry.ts](file:///d:/zhao/monopoly/src/skin/registry.ts) 新增碎屑元素 `fx.rubble` | 用**旧层级** `building.s{idx}.l{oldLv}` 幽灵副本承载「下沉」+ `fx.rubble` 碎屑扇形飞散；不触碰地砖与店招（`building.s{idx}.sign`），仅 `shop` 格 |
+
+**归属通路 / 四级回退**：M19 新增/新用的可见元素 `ui.preview` / `ui.cancel` / `board.tile.candidate` / `fx.pulse` / `fx.rubble` 全走**既有** `skin.json` 的 `elements` 映射（如 `ui.preview → proc/uiPreview`、`board.tile.candidate → proc/tileEdge`、`fx.rubble → proc/fxRubble`），并由 `tools/lint-skin.mjs` 校验（`[theme] OK` / `[skin:default] OK` / `[skin:photo] OK`；`registry-ids.json: 332 ids`）。裸值只出现在 L4 内建兜底 `fb({...})`，`npm run build` 的 `check-hardcoded` 前置闸门保持 clean。
+
+**确定性**：M19 **未引入任何随机源**（无 `Math.random`、无 `makeRng` 调用）——拆迁令为确定性指定目标，候选格 / 预演条均由 state 纯函数派生，回放与 e2e 不受影响。
+
+**回归口径（本轮实测）**：
+
+```powershell
+npx tsc --noEmit                                 # 退出码 0、无输出
+npm run check                                    # eslint src tools 0 错；[theme] OK / [skin:default] OK / [skin:photo] OK；registry-ids.json: 332 ids；59 文件 / 602 例全绿
+npm run build                                    # [check-hardcoded] clean（29 个文件）→ ✓ built in 4.13s
+npx vitest run test/data/cards-data.spec.ts test/core/cards.spec.ts test/core/targeting.spec.ts test/render/iso.spec.ts test/core/game-cards.spec.ts test/core/ai.spec.ts test/ui/panels.spec.ts test/render/fx.spec.ts test/core/framing.spec.ts test/data/audio.spec.ts   # 10 文件 / 130 例全绿
+$env:MONO_ORIGIN='http://127.0.0.1:52301'; node local/mono-shots-m19.mjs   # [m19-shots] PASS · 8 项 gate 全 true、errors: []
+```
+
+**截图清单（3 张，均 390×844 @dpr2 手机视口，出 780×1688 PNG，入 `docs/verify/`）**：`mono-m19-01-hand-6`（展开手牌抽屉后的 6 个槽，含「拆迁令」）/ `mono-m19-02-select-target`（点「拆迁令」进入选目标态：候选格高亮 + 预演条 + 取消键）/ `mono-m19-03-wreck-hit`（拆迁令命中后：目标格归无主 + 破坏表现「旧楼层幽灵下沉 + 碎屑」，此页**不加 `nofx=1`** 以显真实动效）。目视复核要点：①② 同一手机视口下抽屉 6 槽不溢出、预演条三行文案清晰；③ 命中帧能同时看到楼体下沉与飞散碎屑。
+
+**取证脚本**：[local/mono-shots-m19.mjs](file:///d:/zhao/monopoly/local/mono-shots-m19.mjs)。关键口径：打 `?play=1&seed=20261002&humans=4&tour=0` **真实对局**（第 ①② 项加 `nofx=1`、第 ③ 项去掉以显动效），全程走与用户相同的 UI 路径（HUD 牌袋键 → 手牌槽 `card:demolish` → 棋盘 `#mono-pick` 命中层点选），由 `__monoMain.cellXY(idx)` 取舞台坐标再按 `#mono-ui` 放映矩形换算为页面 CSS 坐标后真实点击；因开局无「对手成楼商家格」⇒ 拆迁键默认不可点，脚本先给当前真人补一张「拆迁令」、在 `SHOP_TILE = 13` 安置一栋对手楼（`level: 1`）再操作（确定性布置，与 `local/mono-e2e-m19-select.mjs` 同源）。机器闸门 8 项：`hand_six_slots` / `demolish_enabled` / `ui_sel_demolish` / `candidates_present` / `target_intact_before_pick` / `cancel_key_present` / `wreck_target_cleared` / `ui_sel_cleared`（第 ③ 项先等 `fx.busy()` 抢拍动画中途帧，gate 只取「目标格 estate 已消失 + `uiSel()` 回到 null」的终态，保证确定性）。
+
 ### 最终验收（对照 spec §11 硬性标准）
 
 | # | spec §11 条目 | 证据 |
