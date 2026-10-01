@@ -1920,4 +1920,6 @@ git commit -m "test(hotel): 酒店订单行 e2e 脚本、手机视口截图与�
 
 边界（数据层，非本轮范围）：截图残留中文（休闲娱乐 / 养车 / 日常用品 / 美食）为 Vendure 后台**分类名/商品名**（单语种字段），不经 i18n 字典；i18n 字典层已干净。
 
-后续可选（未做）：清理 8 语言包死键 `billing.firstName` / `billing.lastName`；把 `_audit-i18n.mjs` 收敛为仓库常驻守卫（新增词条时防漏译）。
+**上游遗留键清理（16 条，追加）**：8 个语言包（bg/de/es/fa/fr/it/pt/ru）的**上游模板 `billing` 组**（obj1，`git blame` 指向 nuxtless 原作者 2025-11-25）保留了 `firstName` / `lastName`；zh-CN 的 `billing` 组没有这两个键（zh-CN 的同名键在 `account` 组里，路径不同），故被审计判为「多余」。全仓库无 `messages.billing.firstName|lastName` 引用（仅历史 plan 文档示例代码里出现）→ 死键，已删除。清理后 12 语言包「已译键」全部 = 773、「多余」全部 = 0。
+
+后续可选（未做）：把 `_audit-i18n.mjs` 收敛为仓库常驻守卫（新增词条时防漏译）；后台数据（分类名/商品名）多语言方案。

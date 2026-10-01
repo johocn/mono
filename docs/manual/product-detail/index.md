@@ -453,22 +453,22 @@ zh-CN 叶子词条数: 773
 
 locale   已译键  缺失  值等于中文  含汉字  多余
 ja-JP      773      0         13       0     0
-bg-BG      775      0          0       0     2
-de-DE      775      0          0       0     2
+bg-BG      773      0          0       0     0
+de-DE      773      0          0       0     0
 en-US      773      0          0       0     0
-es-ES      775      0          0       0     2
-fa-IR      775      0          0       0     2
-fr-FR      775      0          0       0     2
-it-IT      775      0          0       0     2
+es-ES      773      0          0       0     0
+fa-IR      773      0          0       0     0
+fr-FR      773      0          0       0     0
+it-IT      773      0          0       0     0
 ko-KR      773      0          0       0     0
-pt-BR      775      0          0       0     2
-ru-RU      775      0          0       0     2
+pt-BR      773      0          0       0     0
+ru-RU      773      0          0       0     0
 ```
 
 - **缺失 0**：不存在「整块依赖中文兜底」的语言包；此前「bg-BG 缺 273 键」的说法为误报，予以更正。
 - **含汉字 0**（`ja-JP` / `zh-CN` 豁免）：无「翻译被跳过、值照抄中文」的泄漏。
 - `ja-JP` 的 13 条「值等于中文」为汉字同形词（未使用 / 保存 / 配送 / 商品 / 数量 / 件…），属正常，非漏译。
-- 8 个语言包各有 2 条「多余」键 `billing.firstName` / `billing.lastName`（zh-CN 无此键、全仓库代码未使用，仅出现在一份历史 plan 文档中）→ 属死键，后续可清理。
+- **多余 0**：8 个语言包中「zh-CN 没有的键」已清零（见下「上游遗留键清理」）。
 
 **修复的真漏译（33 条，已全部翻译落地）**：
 
@@ -481,6 +481,8 @@ ru-RU      775      0          0       0     2
 - `site.shareDesc` 用于 [app.vue](file:///d:/zhao/nshop/app/app.vue#L157-L159)、[default.vue](file:///d:/zhao/nshop/app/layouts/default.vue#L19)、[WechatShare.vue](file:///d:/zhao/nshop/layers/base/app/components/WechatShare.vue#L81)。
 
 > 注：`site.shareDesc` 无法用线上 `meta description` 验证——t2 渠道 `shopIntro`（“用心做，好产品，会说话。”）会覆盖它。
+
+**上游遗留键清理（16 条）**：8 个语言包（bg/de/es/fa/fr/it/pt/ru）的**上游模板 `billing` 组**（obj1，来源 nuxtless 原始作者，2025-11-25）里保留了 `firstName` / `lastName`，而 zh-CN 的 `billing` 组没有这两个键（zh-CN 的 `firstName` / `lastName` 在 `account` 组里，路径不同）。全仓库代码无 `messages.billing.firstName|lastName` 引用（仅历史 plan 文档的示例代码里出现过），属死键 → 已从这 8 个语言包删除。清理后 12 个语言包「已译键」全部 = 773、「多余」全部 = 0。
 
 **运行时验收**（`scripts/_probe-i18n-runtime.mjs`，生产 t2，各 locale 取首页楼层/底部导航键做断言）：
 
