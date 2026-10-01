@@ -148,7 +148,7 @@ describe('game 落格结算（spec §5.2）', () => {
 });
 
 describe('game 破产清算（spec §5.4）', () => {
-  it('现金不足且无地可卖 → 破产：余额归地主、现金清零、地块仍在', () => {
+  it('现金不足且有地 → 拍卖转移给竞拍者；拍卖所得清偿后不足，破产归零', () => {
     const g = createGame({ dice: fixed(1, 1) });
     dropPardon(g);
     g.state.estates[3] = { index: 3, owner: 1, level: 1, processing: false };
@@ -158,15 +158,17 @@ describe('game 破产清算（spec §5.4）', () => {
     g.rollDice();
     g.moveCurrent();
     const r = g.settleCurrent();
-    expect(r).toEqual({ kind: 'rent', index: 4, owner: 2, rent: 105, paid: 40, sold: [3], bankrupt: true });
+    /* 保守出价 = round(15×6×0.6/10)×10 = 50；起拍 30；三人并列取小 id ⇒ 玩家 2 以 50 拍得 */
+    expect(r).toEqual({ kind: 'rent', index: 4, owner: 2, rent: 105, paid: 60, sold: [3], bankrupt: true });
     expect(g.state.players[0].cash).toBe(0);
     expect(g.state.players[0].bankrupt).toBe(true);
-    expect(g.state.players[1].cash).toBe(3040);
-    expect(g.state.estates[3]).toBeUndefined();
-    expect(Object.keys(g.state.estates)).toEqual(['4']);
+    expect(g.state.players[1].cash).toBe(3010);       // 3000 − 50（中标）+ 60（受偿）
+    /* 地块不再删除，而是转移给竞拍者（楼层保持） */
+    expect(g.state.estates[3]).toEqual({ index: 3, owner: 2, level: 1, processing: false });
+    expect(Object.keys(g.state.estates)).toEqual(['3', '4']);
   });
 
-  it('卖地能抵清 → 不破产：按变卖价低者先卖，只卖到够付', () => {
+  it('拍卖筹够即停：剩余地块仍归原主，付清不破产', () => {
     const g = createGame({ dice: fixed(1, 1) });
     dropPardon(g);
     g.state.estates[1] = { index: 1, owner: 1, level: 1, processing: false };
@@ -178,13 +180,14 @@ describe('game 破产清算（spec §5.4）', () => {
     g.rollDice();
     g.moveCurrent();
     const r = g.settleCurrent();
+    /* 按变卖价升序拍（全 L1 ⇒ 小格号优先 1、3）；拍两块后现金 150 ≥ 105 即停 */
     expect(r).toEqual({ kind: 'rent', index: 4, owner: 2, rent: 105, paid: 105, sold: [1, 3], bankrupt: false });
-    expect(g.state.players[0].cash).toBe(5);
+    expect(g.state.players[0].cash).toBe(45);         // 50 + 50 + 50 − 105
     expect(g.state.players[0].bankrupt).toBe(false);
-    expect(g.state.players[1].cash).toBe(3105);
-    expect(g.state.estates[1]).toBeUndefined();
-    expect(g.state.estates[3]).toBeUndefined();
-    expect(g.state.estates[8]).toEqual({ index: 8, owner: 1, level: 1, processing: false });
+    expect(g.state.players[1].cash).toBe(3005);       // 3000 − 50 − 50 + 105
+    expect(g.state.estates[1]).toEqual({ index: 1, owner: 2, level: 1, processing: false });
+    expect(g.state.estates[3]).toEqual({ index: 3, owner: 2, level: 1, processing: false });
+    expect(g.state.estates[8]).toEqual({ index: 8, owner: 1, level: 1, processing: false });  // 停拍保住
   });
 });
 

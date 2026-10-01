@@ -15,7 +15,7 @@ import {
 } from './cards';
 import { createDice, makeRng, type Dice, type DiceRoll } from './dice';
 import {
-  assetValue, buy, buyable, canBuy, clearProcessing, discounted, ownedBy, rentAt, sellAt, upgrade,
+  assetValue, buy, buyable, canBuy, clearProcessing, discounted, ownedBy, rentAt, sellAt, transferEstate, upgrade,
   type BuyOutcome, type Estate, type Estates, type UpgradeOutcome,
 } from './estate';
 import {
@@ -27,6 +27,8 @@ import {
   nextJail, rollBonus, rollLottery, specialAt, type BonusReward,
 } from './special';
 import { abilityOfPlayer, type AbilityDef } from '../data/abilities';
+import { personaParams, type AiParams, type Persona, type Seat } from '../data/ai';
+import { aiBidFor, lotOf, resolveLot, type AuctionBid, type AuctionLot, type AuctionTrigger } from './auction';
 
 /** 回合阶段机（spec §5.1）：idle → rolled → moved → settled → (endTurn) → idle */
 export type Phase = 'idle' | 'rolled' | 'moved' | 'settled';
@@ -80,6 +82,35 @@ export type ChanceEffect =
   | { kind: 'collect'; amount: number; total: number }
   | { kind: 'grantItem'; item: ItemCardKind | null; refund: number };
 
+/** 拍卖落槌记录（spec §3.4） */
+export interface AuctionResult {
+  index: number;
+  level: number;
+  winner: number | null;
+  price: number;
+}
+
+/** 待拍态（null = 无拍卖）。`pending` 非空 ⇒ 正在等真人出价（游戏挂起） */
+export interface PendingAuction {
+  trigger: AuctionTrigger;
+  /** 资产原主（破产者）id */
+  payerId: number;
+  /** 债权人 id（null = 银行） */
+  creditorId: number | null;
+  /** 待清偿欠款 */
+  amount: number;
+  /** 后续待拍地块（升序；队首 = 当前拍品） */
+  queue: number[];
+  /** 当前拍品快照 */
+  lot: AuctionLot;
+  /** 已收到的密封报价（AI 即时算完） */
+  bids: AuctionBid[];
+  /** 仍在等出价的**真人** id（升序） */
+  pending: number[];
+  /** 已落槌记录 */
+  results: AuctionResult[];
+}
+
 export interface GameState {
   players: Player[];
   /** `players` 的下标（0 起），不是 id */
@@ -116,6 +147,10 @@ export interface GameState {
   extraRoll: boolean;
   /** 角色技能是否启用（对局开始即定，之后不再变） */
   abilitiesOn: boolean;
+  /** 席位归属（`null` = 真人，否则 AI 性格）；未传时全部视为 AI ⇒ 拍卖同步跑完 */
+  seats: (Persona | null)[];
+  /** 待拍态（null = 无拍卖） */
+  auction: PendingAuction | null;
 }
 
 export interface GameOptions {
@@ -131,6 +166,11 @@ export interface GameOptions {
    * 默认 **false** ⇒ 既有回归/单测口径逐值不变；正式对局由 `main.ts` 显式开启。
    */
   abilities?: boolean;
+  /**
+   * 席位归属（`null` = 真人）：未传 / 越界项 ⇒ 视为 AI（默认 `'conservative'`）。
+   * 默认全 AI ⇒ 拍卖同步跑完、不产生待拍态，保证既有回归口径逐值不变。
+   */
+  seats?: Seat[];
 }
 
 /** 落格结算结果（spec §5.2 / §5.4 / §5.5） */
@@ -147,13 +187,16 @@ export type SettleResult =
   | { kind: 'bank'; index: number; interest: number }
   | { kind: 'lottery'; index: number; stake: number; prize: number }
   | { kind: 'tax'; index: number; amount: number; paid: number; sold: number[]; bankrupt: boolean }
-  | { kind: 'hospital'; index: number; turns: number; waived: boolean };
+  | { kind: 'hospital'; index: number; turns: number; waived: boolean }
+  | { kind: 'auction'; index: number; payer: number; creditor: number | null; amount: number; remaining: number };
 
 /** 浮层消费的事件日志：落格细分 + 用卡 / 交易 */
 export type EventLog =
   | Exclude<SettleResult, { kind: 'start' | 'vacant' | 'own' | 'rent' }>
+  | { kind: 'auctionDone'; index: number; winner: number | null; price: number }
   | { kind: 'card'; card: ItemCardKind; target: number | null }
-  | { kind: 'trade'; code: string; shares: number };
+  | { kind: 'trade'; code: string; shares: number }
+  | { kind: 'sell'; index: number; price: number };
 
 /** 细分落格结果的具名别名（供 lastEvent 精确赋值） */
 type FateSettle = Extract<SettleResult, { kind: 'fate' }>;
@@ -169,6 +212,16 @@ type HospitalSettle = Extract<SettleResult, { kind: 'hospital' }>;
 /** 玩家动作在错误阶段调用（按钮边界），返回失败原因而不抛错 */
 export type GameBuyOutcome = BuyOutcome | { ok: false; reason: 'bad-phase' };
 export type GameUpgradeOutcome = UpgradeOutcome | { ok: false; reason: 'bad-phase' };
+
+/** 自由出售结果（spec §3.5） */
+export type SellOutcome =
+  | { ok: true; index: number; price: number; cash: number }
+  | { ok: false; reason: 'no-estate' | 'not-owner' };
+
+/** 拍卖出价结果（spec §3.4） */
+export type BidOutcome =
+  | { ok: true; amount: number }
+  | { ok: false; reason: 'no-auction' | 'bad-amount' };
 
 export type CardFail =
   | 'not-held' | 'no-target' | 'bad-phase' | 'occupied' | 'passive'
@@ -194,6 +247,12 @@ export interface Game {
   useCard(kind: ItemCardKind, target?: number): CardOutcome;
   /** 股票交易：shares > 0 买 / < 0 卖（须站在 index 19 股票交易所） */
   trade(code: string, shares: number): TradeOutcome;
+  /** 自由出售自有地块：价 = `sellAt()`（变卖价 100%）；售出地块删键回归「可购买」 */
+  sellEstate(index: number): SellOutcome;
+  /** 拍卖出价（给 `pending` 队首的真人）；amount = 0 表示放弃 */
+  bidAuction(amount: number): BidOutcome;
+  /** 把当前所有待出价的真人一次性按 AI 同源策略补全并收尾（`sim()` / e2e / 取证用） */
+  autoResolveAuction(): void;
   /** 监狱禁行时唯一的 idle 推进 */
   skipTurn(): { skipped: true; remaining: number };
   /** 关闭浮层（只清 lastEvent / lastDraw） */
@@ -259,6 +318,11 @@ export function createGame(opts: GameOptions = {}): Game {
     lastEvent: null,
     extraRoll: false,
     abilitiesOn: opts.abilities === true,
+    seats: Array.from({ length: count }, (_, i): Persona | null => {
+      const s = opts.seats?.[i];
+      return s !== undefined ? s : 'conservative';
+    }),
+    auction: null,
   };
 
   /** 某玩家的技能（未启用时返回 null，调用处按中性值处理） */
@@ -299,6 +363,176 @@ export function createGame(opts: GameOptions = {}): Game {
     return { ...mv, ...(hit !== null ? { barrier: hit } : {}) };
   };
 
+  /* —— M20.1 拍卖机器（spec §3.3 / §3.4）——
+     全部为 createGame 内闭包。`lotOpen` 标记「当前拍品是否已收齐报价」：零报价流拍也必须翻牌，
+     否则泵会反复「重开同一块」，故不能只用 `bids.length + pending.length > 0` 推断。 */
+  let lotOpen = false;
+
+  /** 某席位的 AI 参数（真人席位在补算时也按默认保守档，见 autoResolveAuction） */
+  const aiParamsOf = (id: number): AiParams => personaParams(state.seats[id - 1] ?? 'conservative');
+
+  /** 竞拍人 = 除破产者与原主外的所有玩家（`state.players` 天然升序） */
+  const biddersFor = (payerId: number): Player[] =>
+    state.players.filter((p) => !p.bankrupt && p.id !== payerId);
+
+  /** 开拍：AI 席位即时算价入 `bids`，真人席位入 `pending`（升序） */
+  const openLot = (a: PendingAuction): void => {
+    a.bids = [];
+    a.pending = [];
+    for (const b of biddersFor(a.payerId)) {
+      if (state.seats[b.id - 1] === null) a.pending.push(b.id);
+      else a.bids.push({ bidder: b.id, amount: aiBidFor(b.cash, a.lot, aiParamsOf(b.id)) });
+    }
+    lotOpen = true;
+  };
+
+  /** 落槌：成交转移 / 流拍抵债 / 银行流拍回归无主；成交价计入原主 `cash`、中标者 `cash` 扣减 */
+  const applyLot = (a: PendingAuction): void => {
+    const win = resolveLot(a.bids, a.lot.startPrice);
+    const payer = playerById(state, a.payerId);
+    if (win.winner !== null) {
+      const buyer = playerById(state, win.winner);
+      if (buyer) buyer.cash -= win.price;
+      transferEstate(state.estates, a.lot.index, win.winner);
+      if (payer) payer.cash += win.price;
+    } else if (a.creditorId !== null) {
+      transferEstate(state.estates, a.lot.index, a.creditorId);
+      if (payer) payer.cash += a.lot.startPrice;
+    } else {
+      releaseEstate(state.estates, a.lot.index);
+    }
+    a.results.push({ index: a.lot.index, level: a.lot.level, winner: win.winner, price: win.price });
+    lotOpen = false;
+  };
+
+  /** 拍卖泵：等真人报价 → 挂起（返回 true）；否则落槌并继续下一块，直到「队列空」或「已筹够」→ false */
+  const advancePump = (a: PendingAuction): boolean => {
+    const payer = playerById(state, a.payerId);
+    if (!payer) return false;
+    for (;;) {
+      if (!lotOpen) {
+        if (a.queue.length === 0) return false;
+        const lot = lotOf(state.estates, a.queue[0]);
+        if (!lot) { a.queue.shift(); continue; }
+        a.lot = lot;
+        openLot(a);
+      }
+      if (a.pending.length > 0) return true;
+      applyLot(a);
+      a.queue.shift();
+      if (payer.cash >= a.amount) return false;
+    }
+  };
+
+  /** 清算收尾（折股 → 付清 / 破产）：旧 settleDebt 尾段，一字不改 */
+  const closeDebt = (payer: Player, amount: number, receiver: Player | null): { paid: number; bankrupt: boolean } => {
+    if (payer.cash < amount) {
+      const pf = state.portfolios[payer.id - 1];
+      for (const code of Object.keys(pf)) {
+        payer.cash += pf[code].shares * (state.quotes[code] ?? 0);
+        delete (pf as Record<string, unknown>)[code];
+      }
+    }
+    const affordable = payer.cash >= amount;
+    const paid = affordable ? amount : payer.cash;
+    payer.cash = affordable ? payer.cash - amount : BANKRUPT_CASH_LINE;
+    if (receiver) receiver.cash += paid;
+    const bankrupt = !affordable && ownedBy(state.estates, payer.id).length === 0
+      && Object.keys(state.portfolios[payer.id - 1]).length === 0;
+    if (bankrupt) payer.bankrupt = true;
+    return { paid, bankrupt };
+  };
+
+  /** 拍卖收尾：清待拍态 → 折股 → 付清 / 破产；`sold` = 所有落槌地块（旧 DebtResult 口径） */
+  const finishAuction = (a: PendingAuction, emit: boolean): DebtResult => {
+    state.auction = null;
+    const payer = playerById(state, a.payerId);
+    const receiver = a.creditorId !== null ? playerById(state, a.creditorId) : null;
+    const sold = a.results.map((r) => r.index);
+    if (!payer) return { paid: 0, sold, bankrupt: false };
+    const { paid, bankrupt } = closeDebt(payer, a.amount, receiver);
+    if (emit && a.results.length > 0) {
+      const last = a.results[a.results.length - 1];
+      state.lastEvent = { kind: 'auctionDone', index: last.index, winner: last.winner, price: last.price };
+    }
+    return { paid, sold, bankrupt };
+  };
+
+  /** 开一场拍卖并跑到挂起 / 收尾；挂起时保留 `state.auction` 并返回 `'suspended'` */
+  const startAuction = (payer: Player, amount: number, receiver: Player | null): DebtResult | 'suspended' => {
+    const owned = ownedBy(state.estates, payer.id);
+    /* 升序：变卖价低者先拍（同价取小格号）——保住高价值资产 */
+    const queue = owned.slice().sort((x, y) => {
+      const d = sellAt(state.estates, x) - sellAt(state.estates, y);
+      return d !== 0 ? d : x - y;
+    });
+    const first = lotOf(state.estates, queue[0]);
+    const a: PendingAuction = {
+      trigger: 'bankrupt',
+      payerId: payer.id,
+      creditorId: receiver ? receiver.id : null,
+      amount,
+      queue,
+      lot: first ?? { index: queue[0], level: 1, startPrice: 0 },
+      bids: [],
+      pending: [],
+      results: [],
+    };
+    lotOpen = false;
+    state.auction = a;
+    if (advancePump(a)) return 'suspended';
+    return finishAuction(a, false);
+  };
+
+  /** 欠款清算（spec §3.3）：现金不足且有地产 → 拍卖；否则旧「自动变卖」路径 */
+  const settleDebt = (payer: Player, amount: number, receiver: Player | null): DebtResult | 'suspended' => {
+    if (payer.cash < amount && ownedBy(state.estates, payer.id).length > 0) {
+      return startAuction(payer, amount, receiver);
+    }
+    return settleDebtAuto(payer, amount, receiver);
+  };
+
+  /** 旧「自动贱卖」清算（供无地路径与多人分账路径复用；M20.1-D6 保持既有行为） */
+  const settleDebtAuto = (payer: Player, amount: number, receiver: Player | null): DebtResult => {
+    const sold: number[] = [];
+    while (payer.cash < amount) {
+      const owned = ownedBy(state.estates, payer.id);
+      if (owned.length > 0) {
+        let cheapest = owned[0];
+        for (const i of owned) {
+          if (sellAt(state.estates, i) < sellAt(state.estates, cheapest)) cheapest = i;
+        }
+        payer.cash += sellAt(state.estates, cheapest);
+        releaseEstate(state.estates, cheapest);
+        sold.push(cheapest);
+        continue;
+      }
+      const pf = state.portfolios[payer.id - 1];
+      const codes = Object.keys(pf);
+      if (codes.length === 0) break;
+      for (const code of codes) {
+        payer.cash += pf[code].shares * (state.quotes[code] ?? 0);
+        delete (pf as Record<string, unknown>)[code];
+      }
+    }
+    const affordable = payer.cash >= amount;
+    const paid = affordable ? amount : payer.cash;
+    payer.cash = affordable ? payer.cash - amount : BANKRUPT_CASH_LINE;
+    if (receiver) receiver.cash += paid;
+    const bankrupt = !affordable && ownedBy(state.estates, payer.id).length === 0
+      && Object.keys(state.portfolios[payer.id - 1]).length === 0;
+    if (bankrupt) payer.bankrupt = true;
+    return { paid, sold, bankrupt };
+  };
+
+  /** 挂起时对外呈现的结算结果（供 `settleCurrent` 包装） */
+  const auctionSettle = (index: number): SettleResult => {
+    const a = state.auction;
+    return a
+      ? { kind: 'auction', index, payer: a.payerId, creditor: a.creditorId, amount: a.amount, remaining: a.pending.length }
+      : { kind: 'start', index };
+  };
+
   const settleCurrent = (): SettleResult => {
     if (state.phase !== 'moved') throw new Error(`[mono] settleCurrent @phase=${state.phase}`);
     const p = currentPlayer(state);
@@ -325,12 +559,11 @@ export function createGame(opts: GameOptions = {}): Game {
           consumeCard(state.hands[i], 'pardon');
           result = { kind: 'rent', index, owner: e.owner, rent, paid: 0, sold: [], bankrupt: false, waived: true };
         } else {
-          const debt = settleDebt(state, p, rent, owner);
+          const debt = settleDebt(p, rent, owner);
           if (doubled && owner && base > 0) state.doubleRent[owner.id - 1] = false;
-          result = {
-            kind: 'rent', index, owner: e.owner, rent,
-            paid: debt.paid, sold: debt.sold, bankrupt: debt.bankrupt,
-          };
+          result = debt === 'suspended'
+            ? auctionSettle(index)
+            : { kind: 'rent', index, owner: e.owner, rent, paid: debt.paid, sold: debt.sold, bankrupt: debt.bankrupt };
         }
       }
     } else if (specialAt(index) === 'jail') {
@@ -346,17 +579,20 @@ export function createGame(opts: GameOptions = {}): Game {
     } else if (specialAt(index) === 'lottery') {
       result = resolveLottery(p, index);
     } else if (specialAt(index) === 'tax') {
-      result = resolveTax(p, index);
+      const r = resolveTax(p, index);
+      result = r === 'suspended' ? auctionSettle(index) : r;
     } else if (specialAt(index) === 'hospital') {
       result = resolveHospital(p, index);
     } else if (typeAt(index) === 'fate') {
-      result = resolveFate(p, index);
+      const r = resolveFate(p, index);
+      result = r === 'suspended' ? auctionSettle(index) : r;
     } else if (typeAt(index) === 'chance') {
       result = resolveChance(p, index);
     } else {
       result = { kind: 'start', index };
     }
     state.phase = 'settled';
+    if (result.kind === 'auction') state.lastEvent = result;
     return result;
   };
 
@@ -422,10 +658,11 @@ export function createGame(opts: GameOptions = {}): Game {
     return result;
   };
 
-  /** 税务局：按现金征收（10%，封顶 ￥500），走欠款清算（先变卖、再折股、付不起则破产） */
-  const resolveTax = (p: Player, index: number): TaxSettle => {
+  /** 税务局：按现金征收（10%，封顶 ￥500），走欠款清算（先拍卖、再折股、付不起则破产） */
+  const resolveTax = (p: Player, index: number): TaxSettle | 'suspended' => {
     const amount = Math.min(Math.round(p.cash * TAX_RATE), TAX_CAP);
-    const debt = settleDebt(state, p, amount, null);
+    const debt = settleDebt(p, amount, null);
+    if (debt === 'suspended') return 'suspended';
     const result: TaxSettle = { kind: 'tax', index, amount, paid: debt.paid, sold: debt.sold, bankrupt: debt.bankrupt };
     state.lastEvent = result;
     return result;
@@ -446,7 +683,7 @@ export function createGame(opts: GameOptions = {}): Game {
     return result;
   };
 
-  const resolveFate = (p: Player, index: number): FateSettle => {
+  const resolveFate = (p: Player, index: number): FateSettle | 'suspended' => {
     const i = p.id - 1;
     const card = drawFrom('fate') as FateCardDef;
     let effect: FateEffect;
@@ -454,7 +691,8 @@ export function createGame(opts: GameOptions = {}): Game {
       case 'fine':
       case 'tax': {
         const amount = card.amount ?? 0;
-        const debt = settleDebt(state, p, amount, null);
+        const debt = settleDebt(p, amount, null);
+        if (debt === 'suspended') return 'suspended';
         effect = { kind: card.kind, amount, paid: debt.paid, bankrupt: debt.bankrupt };
         break;
       }
@@ -494,7 +732,8 @@ export function createGame(opts: GameOptions = {}): Game {
         /* 按净资产（现金 + 地产账面投入）缴税：资产越大缴得越多，压制「囤地躺赢」 */
         const percent = card.percent ?? 0;
         const amount = Math.round(netWorth(state, p) * percent / 100);
-        const debt = settleDebt(state, p, amount, null);
+        const debt = settleDebt(p, amount, null);
+        if (debt === 'suspended') return 'suspended';
         effect = { kind: 'levy', amount, percent, paid: debt.paid, bankrupt: debt.bankrupt };
         break;
       }
@@ -504,7 +743,8 @@ export function createGame(opts: GameOptions = {}): Game {
         let count = 0;
         for (const idx of ownedBy(state.estates, p.id)) count += state.estates[idx].level;
         const total = amount * count;
-        const debt = settleDebt(state, p, total, null);
+        const debt = settleDebt(p, total, null);
+        if (debt === 'suspended') return 'suspended';
         effect = { kind: 'repair', amount, count, paid: debt.paid, bankrupt: debt.bankrupt };
         break;
       }
@@ -522,13 +762,13 @@ export function createGame(opts: GameOptions = {}): Game {
         break;
       }
       case 'tribute': {
-        /* 向每位对手支付：逐个走 settleDebt（对方收钱、付方不足则先变卖，破产口径一致） */
+        /* 多人分账（M20.1-D6）：保持既有自动变卖，本轮不改走拍卖 */
         const amount = card.amount ?? 0;
         const others = state.players.filter((o) => o.id !== p.id && !o.bankrupt);
         let paid = 0;
         let bankrupt = false;
         for (const o of others) {
-          const debt = settleDebt(state, p, amount, o);
+          const debt = settleDebtAuto(p, amount, o);
           paid += debt.paid;
           if (debt.bankrupt) bankrupt = true;
         }
@@ -539,7 +779,7 @@ export function createGame(opts: GameOptions = {}): Game {
         const amount = card.amount ?? 0;
         const others = state.players.filter((o) => o.id !== p.id && !o.bankrupt);
         let total = 0;
-        for (const o of others) total += settleDebt(state, o, amount, p).paid;
+        for (const o of others) total += settleDebtAuto(o, amount, p).paid;
         effect = { kind: 'harvest', amount, total };
         break;
       }
@@ -643,7 +883,7 @@ export function createGame(opts: GameOptions = {}): Game {
         const amount = card.amount ?? 0;
         const others = state.players.filter((o) => o.id !== p.id && !o.bankrupt);
         let total = 0;
-        for (const o of others) total += settleDebt(state, o, amount, p).paid;
+        for (const o of others) total += settleDebtAuto(o, amount, p).paid;
         effect = { kind: 'collect', amount, total };
         break;
       }
@@ -738,6 +978,49 @@ export function createGame(opts: GameOptions = {}): Game {
     return out;
   };
 
+  /** 自由出售（spec §3.5）：价 = 变卖价 100%，只作用于当前玩家；售出地块删键回归「可购买」 */
+  const sellEstate = (index: number): SellOutcome => {
+    const p = currentPlayer(state);
+    const e = state.estates[index];
+    if (!e) return { ok: false, reason: 'no-estate' };
+    if (e.owner !== p.id) return { ok: false, reason: 'not-owner' };
+    const price = sellAt(state.estates, index);
+    releaseEstate(state.estates, index);
+    p.cash += price;
+    state.lastEvent = { kind: 'sell', index, price };
+    return { ok: true, index, price, cash: p.cash };
+  };
+
+  /** 拍卖出价：给 `pending` 队首；收齐即落槌并继续（可能新开一块继续挂起） */
+  const bidAuction = (amount: number): BidOutcome => {
+    const a = state.auction;
+    if (!a || a.pending.length === 0) return { ok: false, reason: 'no-auction' };
+    if (!Number.isInteger(amount) || amount < 0) return { ok: false, reason: 'bad-amount' };
+    const bidder = a.pending[0];
+    a.pending.shift();
+    a.bids.push({ bidder, amount });
+    if (a.pending.length > 0) return { ok: true, amount };
+    if (advancePump(a)) return { ok: true, amount };
+    finishAuction(a, true);
+    return { ok: true, amount };
+  };
+
+  /** 把所有待出价真人按 AI 同源策略补全并收尾（`sim()` / e2e / 取证用） */
+  const autoResolveAuction = (): void => {
+    for (;;) {
+      const a = state.auction;
+      if (!a) return;
+      for (const id of a.pending) {
+        const player = playerById(state, id);
+        a.bids.push({ bidder: id, amount: player ? aiBidFor(player.cash, a.lot, aiParamsOf(id)) : 0 });
+      }
+      a.pending = [];
+      if (advancePump(a)) continue;   // 新开一块又有真人 ⇒ 再补全
+      finishAuction(a, true);
+      return;
+    }
+  };
+
   /** 轮末统一 tick 股价 + 清空「内幕消息」标的 */
   const onRoundBoundary = (): void => {
     const tips = state.stockTip.filter((c): c is string => c !== null);
@@ -768,6 +1051,7 @@ export function createGame(opts: GameOptions = {}): Game {
   };
 
   const endTurn = (): void => {
+    if (state.auction) return;             // 待真人出价期间禁止结束回合（spec §3.4）
     if (state.phase !== 'settled') throw new Error(`[mono] endTurn @phase=${state.phase}`);
     if (state.over) return;
     advanceToNext();
@@ -790,7 +1074,7 @@ export function createGame(opts: GameOptions = {}): Game {
 
   return {
     state, rollDice, moveCurrent, settleCurrent, buyCurrent, upgradeCurrent, endTurn,
-    useCard, trade, skipTurn, clearEvent,
+    useCard, trade, skipTurn, clearEvent, sellEstate, bidAuction, autoResolveAuction,
   };
 }
 
@@ -833,45 +1117,6 @@ function upgradableOf(state: GameState, owner: number): number[] {
   return ownedBy(state.estates, owner).filter((i) => canUpgrade(state.estates[i].level));
 }
 
-/**
- * 欠租 / 罚款结算（spec §5.4）：
- * ① 现金不足先变卖抵债（变卖价低者先卖，只卖到够付为止，保住高价值资产）；
- * ② 地产卖光仍不足 → 按当前价折算持股入现金（持股非抵押物，但清算时折现，避免「一堆股却判破产」）；
- * ③ 付得起付清；付不起则把手里的现金全给对方，自己落到破产线；
- * ④ 破产条件 = 付不起 且 已无可变卖地产与股票。
- */
-function settleDebt(state: GameState, payer: Player, amount: number, receiver: Player | null): DebtResult {
-  const sold: number[] = [];
-  while (payer.cash < amount) {
-    const owned = ownedBy(state.estates, payer.id);
-    if (owned.length > 0) {
-      let cheapest = owned[0];
-      for (const i of owned) {
-        if (sellAt(state.estates, i) < sellAt(state.estates, cheapest)) cheapest = i;
-      }
-      payer.cash += sellAt(state.estates, cheapest);
-      releaseEstate(state.estates, cheapest);
-      sold.push(cheapest);
-      continue;
-    }
-    const pf = state.portfolios[payer.id - 1];
-    const codes = Object.keys(pf);
-    if (codes.length === 0) break;
-    for (const code of codes) {
-      payer.cash += pf[code].shares * (state.quotes[code] ?? 0);
-      delete (pf as Record<string, unknown>)[code];
-    }
-  }
-  const affordable = payer.cash >= amount;
-  const paid = affordable ? amount : payer.cash;
-  payer.cash = affordable ? payer.cash - amount : BANKRUPT_CASH_LINE;
-  if (receiver) receiver.cash += paid;
-  const bankrupt = !affordable && ownedBy(state.estates, payer.id).length === 0
-    && Object.keys(state.portfolios[payer.id - 1]).length === 0;
-  if (bankrupt) payer.bankrupt = true;
-  return { paid, sold, bankrupt };
-}
-
 /** 变卖 / 破产后地块回归无主：删键（`Estates` 用「有无键」表达有无主，不写 0 值占位） */
 function releaseEstate(estates: Estates, index: number): void {
   delete (estates as Record<number, Estate | undefined>)[index];
@@ -889,6 +1134,7 @@ export function autoTurn(g: Game): void {
   g.rollDice();
   g.moveCurrent();
   const r = g.settleCurrent();
+  if (g.state.auction) g.autoResolveAuction();
   const p = currentPlayer(g.state);
   const discount = buyDiscountOf(g.state, p.id);
   const cost = discounted(buyPrice(1), discount);
@@ -908,6 +1154,7 @@ export function autoPlay(g: Game, maxTurns: number = ROUND_LIMIT * g.state.playe
   if (!g.state.over && g.state.phase !== 'idle') {
     if (g.state.phase === 'rolled') g.moveCurrent();
     if (g.state.phase === 'moved') g.settleCurrent();
+    if (g.state.auction) g.autoResolveAuction();
     if (g.state.phase === 'settled') g.endTurn();
   }
   let guard = maxTurns;
