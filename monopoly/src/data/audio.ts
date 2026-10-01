@@ -4,16 +4,16 @@
  *
  * 为什么 `SfxKind` 定义在这里而不是从 `FxKind` 派生（spec §5.1 写作 `FxKind | 'ui'`）：
  * `src/skin/types.ts` 需要 `SfxKind` / `SfxVoice` / `BgmVoice`，而 `FxKind` 在 `src/render/fx.ts`
- * —— `skin → render` 既反向又成环（`fx.ts` 已 import `../skin/types`）。故自带 10 元联合，
- * 由 `test/data/audio.spec.ts` 锁住「9 个 FxKind + ui 全覆盖」。
+ * —— `skin → render` 既反向又成环（`fx.ts` 已 import `../skin/types`）。故自带 11 元联合，
+ * 由 `test/data/audio.spec.ts` 锁住「FxKind 各时刻 + ui 全覆盖」。
  */
 
-/** 演出 cue 集合（spec §5.1）：9 个既有演出时刻 + 1 个「无 fx 的 UI 动作」 */
+/** 演出 cue 集合（spec §5.1）：FxKind 各时刻 + 1 个「无 fx 的 UI 动作」 */
 export type SfxKind =
-  | 'dice' | 'hop' | 'buy' | 'upgrade' | 'rent' | 'card' | 'deck' | 'stock' | 'end' | 'ui';
+  | 'dice' | 'hop' | 'buy' | 'upgrade' | 'rent' | 'card' | 'deck' | 'stock' | 'end' | 'land' | 'ui';
 
 export const SFX_KINDS: SfxKind[] = [
-  'dice', 'hop', 'buy', 'upgrade', 'rent', 'card', 'deck', 'stock', 'end', 'ui',
+  'dice', 'hop', 'buy', 'upgrade', 'rent', 'card', 'deck', 'stock', 'end', 'land', 'ui',
 ];
 
 /** 合成音色原型 id（spec §5.2）；skin.json 里的坏值按「缺省」处理 */
@@ -53,7 +53,7 @@ export const VOICES: Record<SfxVoice, VoiceSpec> = {
 /** cue → 默认音色（spec §5.2 表）；`ui` 只给没有 fx 的动作，避免与 dice / buy 叠音 */
 export const DEFAULT_SFX: Record<SfxKind, SfxVoice> = {
   dice: 'rattle', hop: 'hop', buy: 'thud', upgrade: 'blip', rent: 'coin',
-  card: 'sweep', deck: 'sweep', stock: 'tone', end: 'chime', ui: 'tick',
+  card: 'sweep', deck: 'sweep', stock: 'tone', end: 'chime', land: 'thud', ui: 'tick',
 };
 
 /** BGM 一小节：根音低音 + 三和弦铺底（Hz） */

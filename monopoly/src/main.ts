@@ -404,7 +404,14 @@ export async function boot(): Promise<void> {
           after: () => {
             /* ④ 落格特写（推近 → 脉冲环 → 停顿 → 回落点取景）；浮层展开（`open`）走取景禁区不推近 */
             const near = landingPose([cellAt(mv.to)], geo, CAM_VIEW, CAM_TILE_PAD);
-            if (!open) camera.landing(near, settle, FX_LAND_PUSH_MS, FX_LAND_PUNCH_MS, FX_LAND_BACK_MS);
+            if (!open) {
+              camera.landing(near, settle, FX_LAND_PUSH_MS, FX_LAND_PUNCH_MS, FX_LAND_BACK_MS);
+              /* 脉冲环与落地重音效：在 `after` 里起播才不会被随后的一帧 paint 抹掉（见 `runAction` 收尾注释）。
+                 本步的 `ctx` 是 hop，故 land 音效此处为唯一声源；落点取本次移动终点格 `mv.to`。 */
+              const at = cellXY(mv.to);
+              if (sfxOn) audio.play('land');
+              fx.play({ kind: 'land', x: at.x, y: at.y });
+            }
           },
         };
       }
@@ -607,8 +614,9 @@ export async function boot(): Promise<void> {
       return;
     }
     /* 与 `fx.play` 同刻、同判空（spec §5.3）：`buy`/`upgrade` 失败无 fx → 也不出声。
-       `land`（落格特写）不属 `SfxKind` 的 9 演出 + ui cue，无独立音效，故不发声。 */
-    if (sfxOn && ctx.kind !== 'land') audio.play(ctx.kind);
+       落格重音效 `land` 不在此处：本步的 `ctx` 是 hop（落格特写不在 `runAction` 的 ctx 里），
+       改由 `camPlanOf('move').after` 与脉冲环一并播放（见该分支，唯一声源）。 */
+    if (sfxOn) audio.play(ctx.kind);
     fxPending = true;
     cam?.before();
     paint();

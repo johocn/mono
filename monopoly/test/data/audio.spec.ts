@@ -5,15 +5,15 @@ import {
 } from '../../src/data/audio';
 import type { FxKind } from '../../src/render/fx';
 
-/** spec §5.1：cue 集合 = 既有 9 个 FxKind + 1 个 ui（锁住「不许漏、不许改名」） */
-const FX_KINDS: FxKind[] = ['dice', 'hop', 'buy', 'upgrade', 'rent', 'card', 'deck', 'stock', 'end'];
+/** spec §5.1：cue 集合 = FxKind 各时刻 + 1 个 ui（锁住「不许漏、不许改名」） */
+const FX_KINDS: FxKind[] = ['dice', 'hop', 'buy', 'upgrade', 'rent', 'card', 'deck', 'stock', 'end', 'land'];
 
 describe('data/audio：cue 与音色', () => {
-  it('SfxKind 覆盖 9 个 FxKind + ui，无遗漏', () => {
+  it('SfxKind 覆盖 FxKind 各时刻 + ui，无遗漏', () => {
     for (const k of FX_KINDS) expect(SFX_KINDS).toContain(k as SfxKind);
     expect(SFX_KINDS).toContain('ui');
     expect(new Set(SFX_KINDS).size).toBe(SFX_KINDS.length);
-    expect(SFX_KINDS.length).toBe(10);
+    expect(SFX_KINDS.length).toBe(11);
   });
 
   it('DEFAULT_SFX 与 SFX_KINDS 一一对应（键完全相同，无 undefined）', () => {
