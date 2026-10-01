@@ -24,6 +24,8 @@ export type AiStep =
   | { kind: 'trade'; code: string; shares: number }
   | { kind: 'buy' } | { kind: 'upgrade' }
   | { kind: 'roll' } | { kind: 'move' } | { kind: 'settle' }
+  | { kind: 'sell'; index: number }          /* M20.1 自由出售自有地块 */
+  | { kind: 'auctionBid'; amount: number }   /* M20.1 拍卖出价（0 = 放弃） */
   | { kind: 'close' } | { kind: 'end' };
 
 /** `AiStep` → `Game` API 的唯一纯映射（绝不抛错；合法性由 decideTurn 前置保证） */
@@ -37,6 +39,8 @@ export function applyStep(g: Game, step: AiStep): unknown {
     case 'roll': return g.rollDice();
     case 'move': return g.moveCurrent();
     case 'settle': return g.settleCurrent();
+    case 'sell': return g.sellEstate(step.index);
+    case 'auctionBid': return g.bidAuction(step.amount);
     case 'close': return g.clearEvent();
     case 'end': return g.endTurn();
   }

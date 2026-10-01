@@ -149,3 +149,22 @@ describe('ai 拆迁令决策（与炸弹同源挑选，互斥）', () => {
     expect(b).toBeUndefined();
   });
 });
+
+describe('ai 步骤映射：自由出售 / 拍卖出价（M20.1）', () => {
+  it('applyStep({kind:"sell"})：售出自有地块，返回 price/cash', () => {
+    const g = createGame({ seed: 3 });
+    const me = currentPlayer(g.state);
+    me.cash = 1000;
+    g.state.estates[3] = { index: 3, owner: me.id, level: 3, processing: false };
+    const r = applyStep(g, { kind: 'sell', index: 3 }) as { ok: boolean; price: number; cash: number };
+    expect(r.ok).toBe(true);
+    expect(r.price).toBe(330);              // sellValue(3)
+    expect(r.cash).toBe(1330);
+    expect(g.state.estates[3]).toBeUndefined();   // 售出 → 回归无主
+  });
+
+  it('applyStep({kind:"auctionBid"})：无待拍态 → { ok:false, reason:"no-auction" }', () => {
+    const g = createGame({ seed: 3 });
+    expect(applyStep(g, { kind: 'auctionBid', amount: 0 })).toEqual({ ok: false, reason: 'no-auction' });
+  });
+});
