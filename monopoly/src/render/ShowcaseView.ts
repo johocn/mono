@@ -1,7 +1,8 @@
 import {
   levelCaption, OWNER_HUE, PLAYER_NAME, RENT_BY_LEVEL, SHOWCASE_TEXT as T,
-  SLOT_BANNER, SLOT_LANTERN_CHAR, TILE_BRAND, TILE_LEVEL,
+  SLOT_BANNER, SLOT_LANTERN_CHAR, TILE_BRAND, TILE_LEVEL, type BuildLevel,
 } from '../data/board';
+import { MAX_LEVEL } from '../data/economy';
 import { PLAY_HUD_BAR_DY, PLAY_SHOP_S, PLAY_SHOWCASE_Y, STAGE_W } from '../skin/layout';
 import type { ElementSpec } from '../skin/instantiate';
 import { only, proc } from './BuildingView';
@@ -39,7 +40,7 @@ export function showcaseSpecs(input: ShowcaseInput): ElementSpec[] {
   if (input.variant === 'c') return miniSpecs(input.brandOf);
   const slot = input.slot ?? 0;
   const owner = input.owner ?? null;
-  const lv = (TILE_LEVEL[slot] || 2) as 1 | 2 | 3;
+  const lv = (TILE_LEVEL[slot] || 2) as BuildLevel;
   const brand = input.brandOf?.(slot) ?? (TILE_BRAND[slot] || T.fallbackBrand);
   const hue = OWNER_HUE[owner ?? 2] ?? OWNER_HUE[2];
   const px = W.x;
@@ -99,7 +100,7 @@ export function showcaseSpecs(input: ShowcaseInput): ElementSpec[] {
     brand,
     sub: `${T.kind} · ${T.holder} ${ownerName}`,
     line1: `${lv} ${T.floors} · ${T.rent} ￥${rent}`,
-    line2: lv === 3 ? T.maxLevel : `${T.upgradeTo} L${lv + 1} → ${T.rent} ￥${nextRent}`,
+    line2: lv >= MAX_LEVEL ? T.maxLevel : `${T.upgradeTo} L${lv + 1} → ${T.rent} ￥${nextRent}`,
   };
   if (input.play) {
     hudState.barDy = PLAY_HUD_BAR_DY;
@@ -112,40 +113,48 @@ export function showcaseSpecs(input: ShowcaseInput): ElementSpec[] {
   return out;
 }
 
-/** C 版式：三张迷你卡并排（v5 optC line 449–455 `miniShop(160, 210, lv)` ×3） */
+/** C 版式：五级对照（v5 optC line 449–455 `miniShop(160, 210, lv)` ×3 → M7 起 5 级两行 3+2） */
 function miniSpecs(brandOf?: (index: number) => string): ElementSpec[] {
-  const levels: Array<1 | 2 | 3> = [1, 2, 3];
+  /* 390 宽放不下 5 张卡一行，故 3+2 两行：第一行 L1–L3，第二行 L4–L5 居中 */
+  const rows: BuildLevel[][] = [[1, 2, 3], [4, 5]];
   const s = W.miniCardScale;
   const cw = W.miniW * s;
-  const x0 = (STAGE_W - (levels.length * cw + (levels.length - 1) * W.miniGap)) / 2;
+  const ch = W.miniH * s;
+  const vGap = W.miniGap;
+  /* 两行整体以 W.miniY 为基准上移半行高，保证第二行不溢出舞台底部 */
+  const y0 = W.miniY - (ch + vGap) / 2;
   const brand = brandOf?.(0) ?? (TILE_BRAND[0] || T.fallbackBrand);
   const out: ElementSpec[] = [];
 
-  levels.forEach((lv, i) => {
-    const card = at(x0 + i * (cw + W.miniGap), W.miniY, s);
-    out.push(sc('showcase.mini', card, {
-      level: lv,
-      state: { caption: levelCaption(lv) },
-    }));
-    /* 楼 / 店招 / 幌子共享卡内锚点：卡内水平居中 + 地平线 0.80 处 */
-    const shop = at(card.cx + cw / 2, card.cy + W.miniH * s * W.miniShopY, W.miniS * s);
-    out.push(sc('showcase.shop', shop, {
-      level: lv,
-      state: { level: lv },
-      overrides: only('showcase.shop', proc('shop', { levels: lv, hue: W.miniHue, brand })),
-    }));
-    out.push(sc('showcase.sign', shop, {
-      level: lv,
-      state: { level: lv },
-      overrides: only('showcase.sign', proc('sign', { levels: lv, brand })),
-    }));
-    if (lv >= 2) {
-      out.push(sc('showcase.banner', shop, {
+  rows.forEach((levels, row) => {
+    const cy = y0 + row * (ch + vGap);
+    const x0 = (STAGE_W - (levels.length * cw + (levels.length - 1) * W.miniGap)) / 2;
+    levels.forEach((lv, i) => {
+      const card = at(x0 + i * (cw + W.miniGap), cy, s);
+      out.push(sc('showcase.mini', card, {
+        level: lv,
+        state: { caption: levelCaption(lv) },
+      }));
+      /* 楼 / 店招 / 幌子共享卡内锚点：卡内水平居中 + 地平线 0.80 处 */
+      const shop = at(card.cx + cw / 2, card.cy + W.miniH * s * W.miniShopY, W.miniS * s);
+      out.push(sc('showcase.shop', shop, {
         level: lv,
         state: { level: lv },
-        overrides: only('showcase.banner', proc('banner', { text: T.miniBanner })),
+        overrides: only('showcase.shop', proc('shop', { levels: lv, hue: W.miniHue, brand })),
       }));
-    }
+      out.push(sc('showcase.sign', shop, {
+        level: lv,
+        state: { level: lv },
+        overrides: only('showcase.sign', proc('sign', { levels: lv, brand })),
+      }));
+      if (lv >= 2) {
+        out.push(sc('showcase.banner', shop, {
+          level: lv,
+          state: { level: lv },
+          overrides: only('showcase.banner', proc('banner', { text: T.miniBanner })),
+        }));
+      }
+    });
   });
 
   return out;

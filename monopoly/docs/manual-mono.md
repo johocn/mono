@@ -58,7 +58,7 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 
 **默认入口（2026-09-29 起）**：裸链接 `mono.html` 即交互局，HUD（资产条/手牌/骰子）首屏齐备；演示棋盘与 B/C 版式改由 `?demo=1&show=b|c` 进入（play 分支不经过 `demoView`，故橱窗版式必须显式加 `demo=1`）。此前裸入口为演示棋盘，曾导致「主页面没有玩家信息 / 没道具 / 看不见骰子」的误判，根因与修复见 `docs/superpowers/specs/2026-09-29-mono-default-entry-design.md`。
 
-**M4 结论**：`src/core` 全部单测通过（`board` / `economy` / `dice` / `board-path` / `estate` / `game` 共 53 例，`test/core` 全量 57 例）+ 端到端整局可跑（`__monoMain.sim()` 返回胜者、`round ≤ ROUND_LIMIT + 1`）；该「整局可跑」已由 **M7-4 真实点击整局**复证（973 次点击跑到 `over=true`，不经 `sim()`）。有意偏差：楼体层级仍走演示层级 `slotLevelsOf()`（实时升级动画并入 M6），地砖归属色与棋子位置已跟游戏状态联动。
+**M4 结论**：`src/core` 全部单测通过（`board` / `economy` / `dice` / `board-path` / `estate` / `game` 共 53 例，`test/core` 全量 57 例）+ 端到端整局可跑（`__monoMain.sim()` 返回胜者、`round ≤ ROUND_LIMIT + 1`）；该「整局可跑」已由 **M7-4 真实点击整局**复证（973 次点击跑到 `over=true`，不经 `sim()`）。有意偏差：楼体层级仍走演示层级 `slotLevelsOf()`（实时升级动画并入 M6），地砖归属色与棋子位置已跟游戏状态联动。**该偏差已于 M16 关闭**（`BuildingOpts.levelOf` 注入 + `main.ts` 的 `liveLevels()`：演示层级 ∪ 实时地产层级取大值，L4/L5 升级在棋盘上可见）。
 
 ### M5 卡牌 / 股票 / 特殊格
 
@@ -616,6 +616,98 @@ npm run shots:cam                # PASS · 五态截图 + 窄屏命中 round-tri
 npm run shots:p2                 # PASS · 变体四款两两不同 · step/apron/setback 开关均改变像素
 ```
 
+### M16 玩法与形象升级（对齐并超越《大富翁 5》· 西游 IP · 战报遮挡修复 · 棋子放大）2026-10-01
+
+**范围**：本轮四项用户需求 —— ① 修复「浮层展开遮挡左下战报 / 右上轮播」；② 玩法对齐并超越《大富翁 5》（角色技能 / 事件卡扩容 / 地产 3→5 级 / 特殊格补全）；③ 角色形象 IP 化（西游·取经四众，台词忠于原著并标注回目）；④ 棋子过小 → 主角化放大并给推荐尺寸。
+
+**硬约束（合规 + 商业）**：
+- **不牺牲 17 个商家格**（业主书面授权清单是产品价值所在）——新特殊格从 `TILE_LEVEL = 0` 的「命运 / 机会」腾挪，商家格索引一个不动。
+- 三国 / 西游属**公有领域**，形象与**原著原文台词**可自由使用；**影视与网络二创台词一律不收**；美术造型**不照搬任何商业游戏 / 影视剧**。
+
+#### 16.1 战报遮挡事件卡修复（需求 ①）
+
+**根因**：`#mono-slots`（左下战报 + 右上轮播）是 DOM 层，恒在 canvas 之上；浮层（事件卡 / 手牌 / 结算 / 股票盘）展开时其左下角被压住。
+
+**实现**：`SlotsHandle.setHidden(on)`（[slots.ts](file:///d:/zhao/monopoly/src/ui/slots.ts#L61-L68)）→ `layer.style.display = on ? 'none' : ''`；`paint()` 内 `slots?.setHidden(game !== null && overlayOf(game.state) !== null)`（`overlayOf` = 浮层判定唯一真源）。无浮层时 `false` ⇒ 逐像素回现状、零回归。
+
+| # | 步骤 | 期望 | 截图 |
+|---|---|---|---|
+| M16-1 | 打开 `mono.html?play=1&seed=20260928&nofx=1`，保持无浮层 | 左下战报 + 右上轮播正常显示 | `mono-m9-07-slots-idle.png` |
+| M16-2 | 置 `state.lastDraw` 后 `paint()`（或真实走到命运 / 机会格） | 浮层展开时 `#mono-slots` 整块 `display:none`，事件卡左下角无遮挡、关闭键可见 | `mono-m9-08-overlay-slots-hidden.png` |
+| M16-3 | 清空 `lastDraw` 再 `paint()` | `#mono-slots` 回到 `display:''`（无浮层零回归） | — |
+
+#### 16.2 棋子放大（需求 ④，C 档 32px 主角化）
+
+**推荐尺寸：32px（C 档）**。原 `pawnScale 0.62`（≈12px 高）在 390×844 下「看不清脸」；放大到 `1.6` 后单枚棋子屏幕高 **≈26–32px**（`getBounds().h ≥ 26` 为本轮机器闸门），金箍 / 钉耙 / 毗卢帽等轮廓均可辨；**再大（40px+）同格多人会明显压盖邻格**，故 32px 是本盘格距下的上限甜点。同格 ≥3 人改 **2×2 方阵**（前排 2 人 + 后排上移 22px），避免一排四人互压。
+
+**实现**：`main.ts` 的 `PLACEMENT = { pawnGap: 19, pawnFrontDy: 1.2, pawnRowDy: 22, pawnScale: 1.6, ... }`；`Scene.resolvePlacement` 的 `n >= 3` 分支走 2×2（后排索引更小 ⇒ 先出画 ⇒ 被前排遮住，深度方向正确）。
+
+| # | 步骤 | 期望 | 截图 |
+|---|---|---|---|
+| M16-4 | 把 4 人 `pos` 同置一格并 `paint()` | 2×2 方阵：跨度 ≈19×22px、单枚 `bounds.h ≥ 26px`（已放大），不压邻格 | `mono-m9-01-pawns-2x2.png` |
+| M16-5 | 正常开局 | 棋盘上四枚棋子清晰可辨、站姿不互压 | `mono-m9-02-pawns-board.png` |
+
+#### 16.3 角色形象 IP 化 + 原著台词（需求 ③）
+
+- **形象**：西游·取经四众（孙悟空 / 猪八戒 / 沙悟净 / 唐三藏）。[proc-pawn.ts](file:///d:/zhao/monopoly/src/render/providers/proc-pawn.ts) 的 `params.style` 四键（`wukong` / `bajie` / `wujing` / `sanzang`），由 `skins/*/skin.json` 的 `piece.p1..p4` 装配（p1 悟空 / p2 八戒 / p3 悟净 / p4 三藏）。造型依**原著文字**（「毛脸雷公嘴」「长嘴大耳朵」「披袈裟、执锡杖」），**不照搬商业游戏 / 影视剧**。
+- **台词**：[lines.ts](file:///d:/zhao/monopoly/src/data/lines.ts) 唯一真源，**只收《西游记》原著原文**（公有领域），每条带 `chapterNo` + `chapter`（回目全称）可溯源；**影视二创台词一律剔除**（如「大师兄，师父被妖怪抓走了」非原著，已剔）。取词确定性：`pickLine(role, seed)`（不用 `Math.random`，回放 / e2e 可复现）。
+- **气泡**：停留气泡显示当前席位角色的原著引文；`QUOTE_LINE_CHARS = 11` / `QUOTE_MAX_CHARS = 22`（两行排完，不溢出 100×64 气泡）。
+
+| # | 步骤 | 期望 | 截图 |
+|---|---|---|---|
+| M16-6 | 真实点击掷骰 → 前进 → 落格（**不带 `nofx`**），settle 后 ~220ms 取证 | 气泡含原著引文（本轮示例「莫胡说，为人为彻。」）且完全在舞台内、不溢出 | `mono-m9-09-bubble-quote.png` |
+
+#### 16.4 角色技能系统（需求 ②，对齐并超越《大富翁 5》特技）
+
+[abilities.ts](file:///d:/zhao/monopoly/src/data/abilities.ts) 唯一真源。四人各一技，覆盖「移动 / 置产 / 现金流 / 防守」四条**正交轴**，无重叠、无上位替代；技能全部**确定性**（无随机，不引入新随机源）：
+
+| 角色 | 技能 | 效果 | 原著依据（`source`） |
+|---|---|---|---|
+| 孙悟空 | 筋斗云 | 每回合额外前进 1 格 | 第二回：祖师传「筋斗云」，一筋斗十万八千里 |
+| 猪八戒 | 九齿钉耙 | 买地八折 | 第十九回：云栈洞「九齿钉耙」 |
+| 沙悟净 | 任劳任怨 | 经过起点额外领 ￥100 | 第二十二回：流沙河受戒，此后一路挑担 |
+| 唐三藏 | 慈悲为怀 | 应付租金减免 25% | 第十三回：「路中逢庙烧香，遇佛拜佛」 |
+
+**开关**：`GameOptions.abilities`（[game.ts](file:///d:/zhao/monopoly/src/core/game.ts#L117-L130)），**默认关** = 传统无技能基线（既有回归 / 单测逐值不变）；正式对局由 `main.ts` 显式 `abilities: true`。关闭时全部倍率退回中性值（0 / 1）。
+
+#### 16.5 事件卡扩容（需求 ②）
+
+牌堆 [cards.ts](file:///d:/zhao/monopoly/src/data/cards.ts)：`FATE_DECK` 6 → **20 张**（`FateKind` 14 种）、`CHANCE_DECK` 6 → **20 张**（`ChanceKind` 10 种），`DECK_SIZE = 20`；`ITEM_CARDS` 仍 5 张。原 6 张的 **id 与文案逐值保留**（既有用例不变），新牌在此之上按「金额档位拉开 / 走位 / 道具指定」扩列。
+
+#### 16.6 地产 3 → 5 级 + 特殊格补全（需求 ②）
+
+- **地产 5 级**（[board.ts](file:///d:/zhao/monopoly/src/data/board.ts#L139-L156)）：`RENT_BY_LEVEL = [0, 15, 45, 105, 220, 420]`、`PRICE_BY_LEVEL = [0, 60, 180, 420, 860, 1600]`。`building.s*.l{1..5}` 元素 id 已在 `registry-ids.json` 注册（L4 / L5 为新楼体）。
+- **特殊格**：`TILE_TYPES` 新增 `bank` / `lottery` / `tax` / `hospital`（对齐《大富翁 5》的银行 · 乐透 · 税金 · 医院），落在 index **9 鹿乡银行 / 21 乐透彩 / 23 税务局 / 25 医院**——四格原为 `TILE_LEVEL = 0` 的「命运 / 机会」，**17 个商家格一个不动**；命运 / 机会各留 3 格（2 / 17 / 29 与 5 / 14 / 31），配 20 张牌堆足够。
+  - 银行 `BANK_RATE 0.1` / 封顶 ￥300；税金 `TAX_RATE 0.1` / 封顶 ￥500；乐透 `LOTTERY_STAKE ￥100` 按权重表开奖；医院 `HOSPITAL_TURNS 1`（停 1 回合）。实现见 [special.ts](file:///d:/zhao/monopoly/src/core/special.ts)。
+
+| # | 步骤 | 期望 | 截图 |
+|---|---|---|---|
+| M16-7 | 定位 index 9 / 21 / 23 / 25 并 crop | 四格地砖配色各异、功能名可辨（鹿乡银行 / 乐透彩 / 税务局 / 医院） | `mono-m9-05-special-{bank-9,lottery-21,tax-23,hospital-25}.png` + `mono-m9-06-special-board.png` |
+
+#### 16.7 楼体实时层级（让 5 级地产在棋盘上看得见）
+
+**关闭 M4 的「有意偏差」**：此前 `buildingSpecs` / `drawLabels` 的层级恒走静态 `slotLevelsOf()` ⇒ 买地 / 升级到 L4 / L5 在棋盘上**不可见**。本轮新增 `BuildingOpts.levelOf` 注入（[BuildingView.ts](file:///d:/zhao/monopoly/src/render/BuildingView.ts#L19-L27)）+ `main.ts` 的 `liveLevels()`——口径为「**演示层级 ∪ 实时地产层级取大值**」：未售地块与 v5 样张**逐像素一致**（零回归），买下不会把装饰高楼缩回 L1，升级 L4 / L5 则逐级长高。三处**同源**（楼体 `buildingSpecs` / 楼顶名牌 `drawLabels` / 贴墙挂件抬升 `instantiateDeps.slotLevels`），避免灯笼招牌落在旧高度。
+
+| # | 步骤 | 期望 | 截图 |
+|---|---|---|---|
+| M16-8 | 置 `estates[6] = {level:5}`、`estates[8] = {level:4}` 并 `paint()` | L5 明显高于 L4，楼体 id `building.s6.l5` / `building.s8.l4` 与层级同步 | `mono-m9-03-l4-l5.png` |
+| M16-9 | 看全盘 | L4 / L5 高楼与楼顶名牌层次正确、不遮后排地块；未动地块仍 18 栋演示楼 | `mono-m9-04-l4-l5-board.png` |
+
+#### 16.8 回归口径（本轮实测）
+
+```powershell
+npx tsc --noEmit                 # 退出码 0
+npm run check                    # lint 0 错 / lint:skin OK / vitest 58 文件 571 例全绿
+npm run build                    # check-hardcoded clean
+node local/mono-shots-m9.mjs     # [m9-shots] PASS · 14 项 gate 全 true、errors: []
+npm run deploy                   # 本地构建 → scp → 服务器解压 + 备份（20261001-205809）
+npm run check:prod               # 线上闸门全 true、errors: []
+```
+
+**截图清单（12 张，均 390×844 @dpr2 手机视口，入 `docs/verify/`）**：`mono-m9-01-pawns-2x2` / `02-pawns-board` / `03-l4-l5` / `04-l4-l5-board` / `05-special-bank-9` / `05-special-lottery-21` / `05-special-tax-23` / `05-special-hospital-25` / `06-special-board` / `07-slots-idle` / `08-overlay-slots-hidden` / `09-bubble-quote`。
+
+**取证脚本**：[local/mono-shots-m9.mjs](file:///d:/zhao/monopoly/local/mono-shots-m9.mjs)（`MONO_ORIGIN` 默认本地 dev `http://127.0.0.1:52301`，可覆盖为线上）。关键口径：格子 → 舞台像素用**页面内动态 `import('/src/render/*.ts')`** 复用 `boardCells` / `ipos`，与渲染层同源、避免坐标手算漂移；棋子落位量 `layers.pieces` 的 `getBounds()`（proc 画在绝对舞台坐标上、pass 容器恒不动）。
+
 ### 最终验收（对照 spec §11 硬性标准）
 
 | # | spec §11 条目 | 证据 |
@@ -635,6 +727,7 @@ npm run shots:p2                 # PASS · 变体四款两两不同 · step/apro
 | 13 | **M15 P0 解耦与相机基座（本任务新增，超出 spec §11）** | `npx tsc --noEmit` 退出码 0；`npm run check` 55 文件 / 513 例全绿（新增 `test/core/framing.spec.ts` 17 例）；`npm run build` check-hardcoded clean（29 文件）；线上 `mono-prod-check.mjs` **V1–V17 共 39 项 gate 全 true、errors: []**（新增 V15 分辨率未降 / V16 UI 解耦 / V17 宽屏几何）；**2 张截图**（`mono-prod-10-p0-mobile` 390×844 @dpr2 / `mono-prod-11-p0-desktop` 1440×900）；该部分**无可见变化**，相机本体留待 P1 接线（详见 M15 节 §15.1–15.2） |
 | 14 | **M15 P1 相机取景编排（本任务新增，超出 spec §11）** | `npx tsc --noEmit` 退出码 0；`npm run check` 55 文件 / 517 例全绿；`npm run build` check-hardcoded clean（29 文件，`camera.ts`/`framing.ts` 无裸倍率·裸时长）；线上 `mono-prod-check.mjs` **V1–V20 全 true、errors: []**（新增 V18 静止态烘焙 N/A / V19 取景 `world.scale.x ∈[1.6,4]` + 归位 1±0.01 + `?cam=0`·`?nofx=1` 恒 1 / V20 `?perf=1` 300 帧已按降级兜底）；`mono-e2e-playthrough.mjs` PASS（973 次点击、含 `cam_nofx_idle`/`cam_framing`/`cam_reset`）；`npm run shots:cam` PASS，**五态截图**（`mono-cam-01-idle`/`02-lead`/`03-follow`/`04-settle`/`05-reset`，390×844 @dpr2）+ **360×640 窄屏命中 round-trip 一致**（详见 M15 节 §15.3–15.5） |
 | 15 | **M15 P2 近景建筑增强（本任务新增，超出 spec §11）** | `npx tsc --noEmit` 退出码 0；`npm run check` 55 文件 / 517 例全绿；`npm run build` check-hardcoded clean（29 文件，新增几何全走取值器）；线上 `mono-prod-check.mjs` **V1–V20 全 true、errors: []**；`mono-e2e-playthrough.mjs` PASS（973 次点击）；`npm run shots:cam` PASS（五态复拍）；**`npm run shots:p2` PASS** —— 体型变体 4 款（`plain`/`veranda`/`dormer`/`annex`，按 `state.slot % 4` 轮换，`?debug` 与橱窗消费者零回归）、轮廓阶梯 B 加法檐带（A 结构退台预留开关默认关）、台阶铺装，**10 张 390×844 @dpr2 受控对照截图** + 像素哈希 gate（四款两两不同、开关均改变像素）（详见 M15 节 §15.6–15.8） |
+| 16 | **M16 玩法与形象升级（本任务新增，超出 spec §11）** | `npx tsc --noEmit` 退出码 0；`npm run check` 58 文件 / 571 例全绿；`npm run build` check-hardcoded clean；`node local/mono-shots-m9.mjs` **PASS**（14 项 gate 全 true、`errors: []`）；**12 张 390×844 @dpr2 手机视口截图**（`mono-m9-01..09`）；四项需求：① 浮层展开时 `#mono-slots` 整块让位（`setHidden` + `overlayOf`，无浮层零回归）② 角色技能 / 事件卡 6→20 / 地产 3→5 级 / 特殊格补全（银行·乐透·税金·医院，17 商家格不动）③ 西游·取经四众形象 + 原著台词（逐条标回目、剔影视二创）④ 棋子放大 C 档 32px（`pawnScale 1.6`、同格 2×2）——另关闭 M4 楼体层级「有意偏差」（详见 M16 节） |
 
 **§11.5 性能实测**（两种成本分开测；`node local/mono-perf.mjs` 桌面代理 + `npm run perf:android` CDP 节流代理；受本机负载影响会抖动，同机连测 3 次的区间如下）：
 - 首屏可交互：桌面 default 235–255 ms / photo 1739–1784 ms；4× 节流代理 1.27–1.36 s（门槛 <3000 ✅）
@@ -733,7 +826,7 @@ npm run shots:p2                 # PASS · 变体四款两两不同 · step/apro
 
 ### 4.2 命运 / 机会牌堆
 
-牌堆数据在 `src/data/cards.ts`：`FATE_DECK` 6 张、`CHANCE_DECK` 6 张、`ITEM_CARDS` 5 张（`DECK_SIZE = 6`）。**牌堆各 6 张与棋盘 `fate` 5 格 / `chance` 5 格解耦**（见 `cards.ts` 顶部注释；棋盘上 `fate` = 2 / 9 / 17 / 23 / 29、`chance` = 5 / 14 / 21 / 25 / 31，各 5 格）——改**商家名单不必动牌堆**，只有改**牌面文案 / 金额**才动 `cards.ts`。
+牌堆数据在 `src/data/cards.ts`：`FATE_DECK` **20 张**（`FateKind` 14 种）、`CHANCE_DECK` **20 张**（`ChanceKind` 10 种）、`ITEM_CARDS` 5 张（`DECK_SIZE = 20`）。**牌堆张数与棋盘格数解耦**（见 `cards.ts` 顶部注释；M16 起棋盘上 `fate` = 2 / 17 / 29、`chance` = 5 / 14 / 31，各 3 格——腾出的 4 格改为 `bank` / `lottery` / `tax` / `hospital`）——改**商家名单不必动牌堆**，只有改**牌面文案 / 金额**才动 `cards.ts`。
 
 ### 4.3 改店名 / 店招会牵动哪些元素 ID 与 `skin.json`
 

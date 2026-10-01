@@ -2,6 +2,7 @@ import type { Graphics } from 'pixi.js';
 import { up, win, type Pt } from '../iso';
 import { ptsToPoly } from '../paint';
 import { BUILDING_HEIGHTS } from '../../skin/registry';
+import type { BuildLevel } from '../../data/board';
 import { hsl } from './proc-building';
 import { arr, c, fb } from './proc-base';
 import type { ProcCtx } from './proc';
@@ -118,7 +119,7 @@ interface Frame { cx: number; cy: number; y0: number; w: number; d: number; h: n
  */
 function frame(ctx: ProcCtx): Frame {
   const s = ctx.s;
-  const level = (typeof ctx.state.level === 'number' ? ctx.state.level : 1) as 1 | 2 | 3;
+  const level = (typeof ctx.state.level === 'number' ? ctx.state.level : 1) as BuildLevel;
   return {
     cx: ctx.cx,
     cy: ctx.cy,

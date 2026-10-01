@@ -23,10 +23,10 @@ const ctx = (params: Record<string, unknown>, state: Record<string, unknown>) =>
   params, state,
 }) as never;
 
-describe('proc preset: pawn（Q 版小朋友，spec §6.6）', () => {
-  it('含人形五官：椭圆（影/眼/腮红/刘海）与圆（手/耳/头/铃铛）各 ≥4，且已注册进 PROC_PRESETS', () => {
+describe('proc preset: pawn（西游·取经四众，spec §6.6）', () => {
+  it('含人形五官：椭圆（影/眼/腮红/耳）与圆（手/耳/头/顶饰）各 ≥4，且已注册进 PROC_PRESETS', () => {
     const { g, names } = recorder();
-    pawn(g, ctx({ style: 'short' }, { owner: 1, mood: 'calm' }));
+    pawn(g, ctx({ style: 'wukong' }, { owner: 1, mood: 'calm' }));
     expect(names.filter((c) => c === 'ellipse').length).toBeGreaterThanOrEqual(4);
     expect(names.filter((c) => c === 'circle').length).toBeGreaterThanOrEqual(4);
     expect(PROC_PRESETS.pawn).toBe(pawn);
@@ -35,34 +35,48 @@ describe('proc preset: pawn（Q 版小朋友，spec §6.6）', () => {
   it('三表情几何互不相同', () => {
     const sig = (mood: string): string => {
       const { g, args } = recorder();
-      pawn(g, ctx({ style: 'short' }, { owner: 1, mood }));
+      pawn(g, ctx({ style: 'wukong' }, { owner: 1, mood }));
       return args.join('|');
     };
     expect(new Set([sig('calm'), sig('happy'), sig('sad')]).size).toBe(3);
   });
 
-  it('四 style 均不抛错，且造型图元互不相同', () => {
+  it('四角色（悟空/八戒/悟净/三藏）均不抛错，且造型图元互不相同', () => {
     const sig = (style: string): string => {
       const { g, args } = recorder();
       expect(() => pawn(g, ctx({ style }, { owner: 2, mood: 'calm' }))).not.toThrow();
       return args.join('|');
     };
-    expect(new Set(['short', 'cap', 'twintail', 'bun'].map(sig)).size).toBe(4);
+    expect(new Set(['wukong', 'bajie', 'wujing', 'sanzang'].map(sig)).size).toBe(4);
   });
 
-  it('归属色只染围巾与头饰：衣服统一米白、围巾取 ownerColors 令牌', () => {
+  it('归属色只染腰带与披肩：衣服按角色固定色、披肩取 ownerColors 令牌', () => {
     const { g, args } = recorder();
-    pawn(g, ctx({ style: 'short' }, { owner: 2, mood: 'calm', ownerColors: { 2: '#f0a039' } }));
+    pawn(g, ctx({ style: 'wukong' }, { owner: 2, mood: 'calm', ownerColors: { 2: '#f0a039' } }));
     const joined = args.join('|');
-    expect(joined).toContain('#fdf6e8');   // 衣服米白（legL/legR/body/armL/armR）
-    expect(joined).toContain('#f0a039');   // owner2 橙 → 围巾 + 头饰
+    expect(joined).toContain('#fdf6e8');   // 悟空僧袍米白（legL/legR/body/armL/armR）
+    expect(joined).toContain('#f0a039');   // owner2 橙 → 腰带 + 披肩
     expect(joined).not.toContain('#3fbf7f');
+  });
+
+  it('角色定色可辨：悟空猴毛 + 金箍、八戒拱嘴、悟净络腮胡、三藏红袈裟 + 毗卢帽', () => {
+    const shot = (style: string): string => {
+      const { g, args } = recorder();
+      pawn(g, ctx({ style }, { owner: 1, mood: 'calm' }));
+      return args.join('|');
+    };
+    expect(shot('wukong')).toContain('#d8a463');   // 悟空猴毛肤色
+    expect(shot('wukong')).toContain('#f0c04a');   // 金箍
+    expect(shot('bajie')).toContain('#eda88f');    // 八戒拱嘴
+    expect(shot('wujing')).toContain('#2f2a26');   // 悟净络腮胡 / 蓬松卷发
+    expect(shot('sanzang')).toContain('#c8402f');  // 三藏红袈裟
+    expect(shot('sanzang')).toContain('#e0a92e');  // 毗卢帽
   });
 
   it('五官必备件齐备：瞳孔白高光 ≥2（睁眼两态）+ 头发 + 腮红（三态恒有）', () => {
     for (const mood of ['calm', 'happy', 'sad']) {
       const { g, args } = recorder();
-      pawn(g, ctx({ style: 'short' }, { owner: 1, mood }));
+      pawn(g, ctx({ style: 'wukong' }, { owner: 1, mood }));
       const joined = args.join('|');
       expect(joined).toContain('#3b2b22');   // 头发
       expect(joined).toContain('#f0938f');   // 腮红
@@ -71,15 +85,15 @@ describe('proc preset: pawn（Q 版小朋友，spec §6.6）', () => {
     }
   });
 
-  it('缺 ownerColors 时围巾回落内建兜底色；当前玩家亮光晕、非当前玩家不亮', () => {
+  it('缺 ownerColors 时披肩回落内建兜底色；当前玩家亮光晕、非当前玩家不亮', () => {
     const plain = recorder();
-    pawn(plain.g, ctx({ style: 'short' }, { owner: 1, mood: 'calm' }));
+    pawn(plain.g, ctx({ style: 'wukong' }, { owner: 1, mood: 'calm' }));
     expect(plain.args.join('|')).toContain('#3fbf7f');
 
     const off = recorder();
-    pawn(off.g, ctx({ style: 'short' }, { owner: 1, mood: 'calm' }));
+    pawn(off.g, ctx({ style: 'wukong' }, { owner: 1, mood: 'calm' }));
     const on = recorder();
-    pawn(on.g, ctx({ style: 'short' }, { owner: 1, mood: 'calm', active: true }));
+    pawn(on.g, ctx({ style: 'wukong' }, { owner: 1, mood: 'calm', active: true }));
     expect(on.names.filter((c) => c === 'ellipse').length).toBe(
       off.names.filter((c) => c === 'ellipse').length + 1,
     );

@@ -35,13 +35,15 @@ describe('registry', () => {
     }
   });
 
-  it('三级建筑齐备、墙高表齐备', () => {
+  it('五级建筑齐备、墙高表齐备', () => {
     for (let s = 0; s <= 31; s++) {
       expect(getEntry(`building.s${s}.l1`)).toBeTruthy();
       expect(getEntry(`building.s${s}.l2`)).toBeTruthy();
       expect(getEntry(`building.s${s}.l3`)).toBeTruthy();
+      expect(getEntry(`building.s${s}.l4`)).toBeTruthy();
+      expect(getEntry(`building.s${s}.l5`)).toBeTruthy();
     }
-    expect(BUILDING_HEIGHTS).toEqual({ 1: 26, 2: 46, 3: 72 });
+    expect(BUILDING_HEIGHTS).toEqual({ 1: 26, 2: 46, 3: 72, 4: 88, 5: 104 });
   });
 
   it('托管 host 必须解析得到（或为 slot:<n> 形态）', () => {

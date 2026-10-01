@@ -61,7 +61,7 @@ export interface RegistryEntry {
 }
 
 export interface ElementState {
-  level?: 1 | 2 | 3;
+  level?: number;
   owner?: number | null;
   selected?: boolean;
   processing?: boolean;

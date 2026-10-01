@@ -2,6 +2,7 @@ import type { Graphics } from 'pixi.js';
 import { dia, up, win, type Geo, type Pt } from '../iso';
 import { ptsToPoly } from '../paint';
 import { BUILDING_HEIGHTS } from '../../skin/registry';
+import type { BuildLevel } from '../../data/board';
 import { arr, c, fb } from './proc-base';
 import type { ProcCtx } from './proc';
 
@@ -54,7 +55,7 @@ const D = fb({
   /* L2+ 女儿墙 */
   parapet: 'rgba(255,255,255,.14)', parapetW: 1.2,
   /* L3 玻璃幕墙（去青：暖白玻璃，v5 的 #9fd8ff 青幕墙已废） */
-  l3Rows: 3, l3V1: 0.34, l3RowStep: 0.2, l3WinH: 0.16,
+  l3Rows: 3, l3V1: 0.34, l3VLast: 0.74, l3RowStep: 0.2, l3WinH: 0.16, l3WinFit: 0.7,
   l3Cols: 4, l3U1: 0.1, l3UStep: 0.23, l3WinW: 0.18, l3Win: '#ffd79a', l3WinAlpha: 0.9,
   /* L3 顶部小阁楼（避免大平顶显得秃） */
   l3AtticW: 0.28, l3AtticD: 0.3, l3AtticH: 9,
@@ -62,7 +63,7 @@ const D = fb({
   warm: 'rgba(255,205,130,.4)', warmU1L: 0.18, warmU2L: 0.9,
   warmU1R: 0.12, warmU2R: 0.88, warmV1: 0.13, warmV2: 0.32,
   /* 店招灯箱 */
-  signLevel: 1, signV: [0, 0.68, 0.86, 0.84], signH: [0, 0.22, 0.12, 0.08],
+  signLevel: 1, signV: [0, 0.68, 0.86, 0.84, 0.86, 0.88], signH: [0, 0.22, 0.12, 0.08, 0.065, 0.055],
   signU1: 0.04, signU2: 0.96, signEdgeH: 45, signEdgeS: 80, signEdgeL: 58, signEdgeW: 0.8,
   signInU1: 0.05, signInU2: 0.95, signInV1: 0.14, signInV2: 0.86,
   signInSat: 58, signInLit: 30, signInAlpha: 0.55,
@@ -206,7 +207,7 @@ function cornice(g: Graphics, ctx: ProcCtx, p: P, F: Pt, R: Pt, L: Pt, h: number
  * 轮廓阶梯 A · 结构退台（P2 预留开关，默认关）：在屋顶上退进一层更小的体块，
  * 形成真正的进退台。`setback` 关时不绘制（零回归），开启后按 sbW/sbD/sbH 退进。
  */
-function setbackBox(g: Graphics, ctx: ProcCtx, p: P, h: number, levels: 1 | 2 | 3,
+function setbackBox(g: Graphics, ctx: ProcCtx, p: P, h: number, levels: BuildLevel,
                     wallL: string, wallR: string, roofC: string, edge: string): void {
   if (!b1(p, 'setback') || levels === 1) return;
   const s = ctx.s;
@@ -229,7 +230,7 @@ function setbackBox(g: Graphics, ctx: ProcCtx, p: P, h: number, levels: 1 | 2 | 
  * 体型变体（P2）：按 `state.slot % variant.length` 从名册里选一款加法件。
  * 名册与尺寸全走 params 键（skin.json 给），无 slot 的消费者落第 0 款（plain）。
  */
-function variantAdd(g: Graphics, ctx: ProcCtx, p: P, F: Pt, R: Pt, L: Pt, h: number, levels: 1 | 2 | 3,
+function variantAdd(g: Graphics, ctx: ProcCtx, p: P, F: Pt, R: Pt, L: Pt, h: number, levels: BuildLevel,
                     wallL: string, wallR: string, roofC: string, winC: string): void {
   const list = sv(p, 'variant');
   if (list.length === 0) return;
@@ -304,9 +305,9 @@ export function shop(g: Graphics, ctx: ProcCtx): void {
   const A = (k: string): number[] => a1(p, k);
 
   const s = ctx.s;
-  const levels = (typeof state.level === 'number' ? state.level : G('levels')) as 1 | 2 | 3;
-  /* L3 由 market3 承担（去青幕墙 + 去霓虹）；skin.json 若仍把 l3 指到 shop，这里兜住 */
-  if (levels === 3) { market3(g, ctx); return; }
+  const levels = (typeof state.level === 'number' ? state.level : G('levels')) as BuildLevel;
+  /* L3 及以上由 market3 承担（去青幕墙 + 去霓虹）；skin.json 若仍把 l3 指到 shop，这里兜住 */
+  if (levels >= 3) { market3(g, ctx); return; }
 
   const hue = G('hue');
   const dk = state.dim === true ? G('dim') : 1;
@@ -399,7 +400,7 @@ export function shop(g: Graphics, ctx: ProcCtx): void {
   }
 }
 
-/* ============ market3 三层市集楼（v5 的 L3 分支；已删霓虹描边与青幕墙） ============ */
+/* ============ market3 市集楼（L3 三层 / L4 四层 / L5 五层；M7 起按层级加高加层） ============ */
 export function market3(g: Graphics, ctx: ProcCtx): void {
   const { cx, cy, geo, state, params } = ctx;
   const p = params as P;
@@ -409,7 +410,9 @@ export function market3(g: Graphics, ctx: ProcCtx): void {
   const s = ctx.s;
   const hue = G('hue');
   const dk = state.dim === true ? G('dim') : 1;
-  const h = BUILDING_HEIGHTS[3] * s;
+  /* 层级由 state.level / params.levels 给；缺省落 L3（店招等旧消费者零变化） */
+  const levels = (typeof state.level === 'number' ? state.level : (G('levels') || 3)) as BuildLevel;
+  const h = BUILDING_HEIGHTS[Math.max(3, levels)] * s;
   const { F, R, B, L, L2, w, d } = quad(cx, cy, geo, s, h);
 
   const wallL = c(p, 'wallL', hsl(hue, G('satL'), G('litL3') * dk));
@@ -450,14 +453,19 @@ export function market3(g: Graphics, ctx: ProcCtx): void {
   fill(g, win(L, F, h, G('doorU1'), G('doorU2'), 0, G('warmV2')), S('door'));
   fill(g, win(L, F, h, G('stoneU1'), G('stoneU2'), 0, G('stoneV2')), S('stone'));
 
-  /* ⑤ 成排暖窗：3 层 × 4 列，逐扇点亮 */
-  for (let r = 0; r < G('l3Rows'); r++) {
-    const v1 = G('l3V1') + r * G('l3RowStep');
+  /* ⑤ 成排暖窗：L3 三排，L4/L5 各加一排（排距与窗高按层级自适应，避免重叠） */
+  const rows = G('l3Rows') + Math.max(0, levels - 3);
+  const vFirst = G('l3V1');
+  const vLast = G('l3VLast');
+  const rowStep = rows > 1 ? (vLast - vFirst) / (rows - 1) : 0;
+  const winH = Math.min(G('l3WinH'), rowStep * G('l3WinFit'));
+  for (let r = 0; r < rows; r++) {
+    const v1 = vFirst + r * rowStep;
     for (let i = 0; i < G('l3Cols'); i++) {
       const u = G('l3U1') + i * G('l3UStep');
-      g.poly(ptsToPoly(win(L, F, h, u, u + G('l3WinW'), v1, v1 + G('l3WinH'))))
+      g.poly(ptsToPoly(win(L, F, h, u, u + G('l3WinW'), v1, v1 + winH)))
         .fill({ color: winC, alpha: winA });
-      g.poly(ptsToPoly(win(F, R, h, u, u + G('l3WinW'), v1, v1 + G('l3WinH'))))
+      g.poly(ptsToPoly(win(F, R, h, u, u + G('l3WinW'), v1, v1 + winH)))
         .fill({ color: winC, alpha: winA });
     }
   }
@@ -578,8 +586,8 @@ export function onsenHouse(g: Graphics, ctx: ProcCtx): void {
   const s = ctx.s;
   const hue = G('hue');
   const dk = state.dim === true ? G('dim') : 1;
-  const levels = (typeof state.level === 'number' ? state.level : 2) as 1 | 2 | 3;
-  const h = BUILDING_HEIGHTS[levels === 3 ? 2 : levels] * s;
+  const levels = (typeof state.level === 'number' ? state.level : 2) as BuildLevel;
+  const h = BUILDING_HEIGHTS[levels >= 3 ? 2 : levels] * s;
   const { F, R, B, L, R2, L2, w, d } = quad(cx, cy, geo, s, h);
 
   const wallL = c(p, 'wallL', hsl(hue, G('satL'), G('litL12') * dk));
@@ -837,7 +845,7 @@ export function sign(g: Graphics, ctx: ProcCtx): void {
   const LV = (k: string): number[] => a1(p, k);
 
   const s = ctx.s;
-  const levels = (typeof state.level === 'number' ? state.level : G('signLevel')) as 1 | 2 | 3;
+  const levels = (typeof state.level === 'number' ? state.level : G('signLevel')) as BuildLevel;
   const w = geo.hw * s;
   const d = geo.hh * s;
   const h = BUILDING_HEIGHTS[levels] * s;

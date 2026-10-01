@@ -1,6 +1,7 @@
 import {
   BOARD_COLS, BOARD_ROWS, DEMO_OWNER,
   SLOT_BANNER, SLOT_LANTERN_CHAR, TILE_BRAND, TILE_LEVEL, ringPath,
+  type BuildLevel,
 } from '../data/board';
 import type { ElementSpec } from '../skin/instantiate';
 import type { ProviderSpec } from '../skin/types';
@@ -20,6 +21,9 @@ export interface BuildingOpts {
   ownerOf?: (index: number) => number | null;
   /** 店招文字（不传则用 TILE_BRAND[index]） */
   brandOf?: (index: number) => string;
+  /** 层级查询（不传则用演示层级 `slotLevelsOf()`）：返回 0/undefined = 该格无楼。
+   *  play 版式传「演示层级 ∪ 实时地产层级」，使买地/升级在棋盘上看得见。 */
+  levelOf?: (index: number) => BuildLevel | 0 | undefined;
 }
 
 export function proc(preset: string, params: Record<string, unknown>): ProviderSpec {
@@ -31,9 +35,9 @@ export function only(id: string, p: ProviderSpec): Record<string, ProviderSpec> 
   return { [id]: p };
 }
 
-/** 地块序号 → 建筑层级（只收 lv>0 的 18 格；未列入者无楼，其地砖回到 level 1） */
-export function slotLevelsOf(): Record<number, 1 | 2 | 3> {
-  const out: Record<number, 1 | 2 | 3> = {};
+/** 地块序号 → 建筑层级（只收 lv>0 的格；未列入者无楼，其地砖回到 level 1） */
+export function slotLevelsOf(): Record<number, BuildLevel> {
+  const out: Record<number, BuildLevel> = {};
   TILE_LEVEL.forEach((lv, index) => {
     if (lv === 0) return;
     out[index] = lv;
@@ -50,7 +54,7 @@ function propSpec(
   slot: number,
   c: number,
   r: number,
-  level: 1 | 2 | 3,
+  level: BuildLevel,
   state: Record<string, unknown>,
   override?: ProviderSpec,
 ): ElementSpec {
@@ -64,12 +68,13 @@ function propSpec(
 export function buildingSpecs(opts: BuildingOpts = {}): ElementSpec[] {
   const ownerOf = opts.ownerOf ?? ((index: number) => DEMO_OWNER[index] ?? null);
   const brandOf = opts.brandOf ?? ((index: number) => TILE_BRAND[index]);
-  const levels = slotLevelsOf();
+  const demo = opts.levelOf ? null : slotLevelsOf();
+  const levelAt = opts.levelOf ?? ((index: number) => demo?.[index]);
   const out: ElementSpec[] = [];
 
   ringPath(BOARD_COLS, BOARD_ROWS).forEach(([c, r], index) => {
-    const lv = levels[index];
-    if (lv === undefined) return;
+    const lv = levelAt(index);
+    if (lv === undefined || lv === 0) return;
 
     const brand = brandOf(index);
     const wallId = `building.s${index}.l${lv}`;
@@ -98,8 +103,8 @@ export function buildingSpecs(opts: BuildingOpts = {}): ElementSpec[] {
       out.push(propSpec('prop.awning', index, c, r, lv, { level: lv }));
     }
 
-    /* 招牌塔（自带桅杆 + 红灯，v5 line 226–229）：L3 */
-    if (lv === 3) out.push(propSpec('prop.signTower', index, c, r, lv, { level: lv }));
+    /* 招牌塔（自带桅杆 + 红灯，v5 line 226–229）：L3 及以上 */
+    if (lv >= 3) out.push(propSpec('prop.signTower', index, c, r, lv, { level: lv }));
 
     /* 红灯笼 ×2：门口 + 右侧（v5 line 249–250） */
     const char = SLOT_LANTERN_CHAR[index] ?? '';

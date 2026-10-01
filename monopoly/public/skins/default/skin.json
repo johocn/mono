@@ -37,6 +37,10 @@
     "board.tile.bonus": { "kind": "proc", "preset": "tile", "params": { "fill": "#245037", "edge": "#34c759", "inner": "#000000", "selectedEdge": "#f5c451", "edgeW": 0.9, "edgeWSel": 1.8 } },
     "board.tile.jail": { "kind": "proc", "preset": "tile", "params": { "fill": "#542c25", "edge": "#e5573f", "inner": "#000000", "selectedEdge": "#f5c451", "edgeW": 0.9, "edgeWSel": 1.8 } },
     "board.tile.stock": { "kind": "proc", "preset": "tile", "params": { "fill": "#22465a", "edge": "#29a9e0", "inner": "#000000", "selectedEdge": "#f5c451", "edgeW": 0.9, "edgeWSel": 1.8 } },
+    "board.tile.bank": { "kind": "proc", "preset": "tile", "params": { "fill": "#4a4423", "edge": "#d9b038", "inner": "#000000", "selectedEdge": "#f5c451", "edgeW": 0.9, "edgeWSel": 1.8 } },
+    "board.tile.lottery": { "kind": "proc", "preset": "tile", "params": { "fill": "#4a2352", "edge": "#d264e0", "inner": "#000000", "selectedEdge": "#f5c451", "edgeW": 0.9, "edgeWSel": 1.8 } },
+    "board.tile.tax": { "kind": "proc", "preset": "tile", "params": { "fill": "#3a4050", "edge": "#8a94ad", "inner": "#000000", "selectedEdge": "#f5c451", "edgeW": 0.9, "edgeWSel": 1.8 } },
+    "board.tile.hospital": { "kind": "proc", "preset": "tile", "params": { "fill": "#234a45", "edge": "#3fc9b0", "inner": "#000000", "selectedEdge": "#f5c451", "edgeW": 0.9, "edgeWSel": 1.8 } },
 
     "board.tile.core.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#f5c451" } },
     "board.tile.shop.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#5b7b6a" } },
@@ -45,6 +49,10 @@
     "board.tile.bonus.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#34c759" } },
     "board.tile.jail.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#e5573f" } },
     "board.tile.stock.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#29a9e0" } },
+    "board.tile.bank.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#d9b038" } },
+    "board.tile.lottery.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#d264e0" } },
+    "board.tile.tax.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#8a94ad" } },
+    "board.tile.hospital.edge": { "kind": "proc", "preset": "tileEdge", "params": { "edge": "#3fc9b0" } },
 
     "board.inner.deco": { "kind": "proc", "preset": "tile", "params": { "fill": "#26382c", "edge": "#2c3a33", "edgeW": 0.6 } },
 
@@ -76,14 +84,16 @@
       }
     },
 
-    "piece.p1": { "kind": "proc", "preset": "pawn", "params": { "style": "short" } },
-    "piece.p2": { "kind": "proc", "preset": "pawn", "params": { "style": "twintail" } },
-    "piece.p3": { "kind": "proc", "preset": "pawn", "params": { "style": "cap" } },
-    "piece.p4": { "kind": "proc", "preset": "pawn", "params": { "style": "bun" } },
+    "piece.p1": { "kind": "proc", "preset": "pawn", "params": { "style": "wukong" } },
+    "piece.p2": { "kind": "proc", "preset": "pawn", "params": { "style": "bajie" } },
+    "piece.p3": { "kind": "proc", "preset": "pawn", "params": { "style": "wujing" } },
+    "piece.p4": { "kind": "proc", "preset": "pawn", "params": { "style": "sanzang" } },
 
     "building.*.l1": { "kind": "proc", "preset": "shop", "params": { "levels": 1, "hue": 32, "brand": "鹿特产", "variant": ["plain", "veranda", "dormer", "annex"], "step": true, "apron": true } },
     "building.*.l2": { "kind": "proc", "preset": "shop", "params": { "levels": 2, "hue": 30, "variant": ["plain", "veranda", "dormer", "annex"], "step": true, "apron": true } },
     "building.*.l3": { "kind": "proc", "preset": "market3", "params": { "levels": 3, "hue": 200, "step": true, "apron": true } },
+    "building.*.l4": { "kind": "proc", "preset": "market3", "params": { "levels": 4, "hue": 205, "step": true, "apron": true } },
+    "building.*.l5": { "kind": "proc", "preset": "market3", "params": { "levels": 5, "hue": 210, "step": true, "apron": true } },
     "building.*.sign": { "kind": "proc", "preset": "sign", "params": { "levels": 2, "brand": "门店" } },
 
     "prop.awning": { "kind": "proc", "preset": "awning", "params": {} },

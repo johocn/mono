@@ -41,6 +41,14 @@ describe('停留事件气泡 · 四态文案（spec §6.7）', () => {
       .toEqual({ title: '长峰特产', amount: '买地 ￥180', tone: 'buy' });
   });
 
+  it('原著引文（第三段）：随入参挂上；不传则不挂（退回两行旧观感）', () => {
+    expect(bubbleOfStep({ kind: 'buy' }, { ok: true, cost: 180 }, '长峰特产', null, '老孙便是！'))
+      .toEqual({ title: '长峰特产', amount: '买地 ￥180', tone: 'buy', quote: '老孙便是！' });
+    expect(bubbleOfStep({ kind: 'move' }, { steps: 3 }, '长峰特产', null, '')).toEqual(
+      { title: '前进 3 步', amount: '落在 长峰特产', tone: 'move', quote: undefined },
+    );
+  });
+
   it('买地失败 / 无关动作：不出气泡', () => {
     expect(bubbleOfStep({ kind: 'buy' }, { ok: false, reason: 'not-enough-cash' }, '长峰特产', null)).toBeNull();
     expect(bubbleOfStep({ kind: 'roll' }, { d1: 3, d2: 4 }, '长峰特产', null)).toBeNull();
@@ -71,20 +79,20 @@ describe('停留事件气泡 · 台位与分遍', () => {
   const pawns = [{ index: 1, c: 5, r: 9, active: true }, { index: 3, c: 5, r: 9 }];
 
   it('锚在当前行动棋子头顶上方 BUBBLE_GAP，水平随棋子同格错开', () => {
-    const out = bubbleSpecs(pawns, { title: '长峰特产', amount: '买地 ￥180', tone: 'buy' }, GEO, PLACEMENT);
+    const out = bubbleSpecs(pawns, { title: '长峰特产', amount: '买地 ￥180', tone: 'buy', quote: '老孙便是！' }, GEO, PLACEMENT);
     expect(out.length).toBe(1);
     const spec = out[0];
     expect(spec.id).toBe('ui.bubble');
     expect(spec.pass).toBe(4);                       // 覆盖层：压在棋子与楼体之上
-    /* 当前行动棋子是该格第一位（pawnIndex = 0）：与棋子同款横向错开 */
+    /* 当前行动棋子是该格第一位（pawnIndex = 0）：与棋子同款横向错开（同格 2 人 → 单排 ±gap/2） */
     const at = resolvePlacement(
-      { id: 'piece.p2', c: 5, r: 9, slot: null, lift: 0, box: PAWN_BOX, mount: 'ground', pawnIndex: 0 },
+      { id: 'piece.p2', c: 5, r: 9, slot: null, lift: 0, box: PAWN_BOX, mount: 'ground', pawnIndex: 0, pawnCount: 2 },
       GEO, PLACEMENT,
     );
     expect(spec.fixed!.cx).toBeCloseTo(at.cx, 6);
     expect(spec.fixed!.cy).toBeCloseTo(at.cy - PAWN_BOX.h * at.s - BUBBLE_GAP, 6);
     expect(spec.fixed!.cy).toBeLessThan(at.cy - PAWN_BOX.h * at.s);   // 恒在头顶之上
-    expect(spec.state).toEqual({ title: '长峰特产', amount: '买地 ￥180', tone: 'buy' });
+    expect(spec.state).toEqual({ title: '长峰特产', amount: '买地 ￥180', tone: 'buy', quote: '老孙便是！' });
   });
 
   it('无内容 / 无当前行动棋子：不出气泡', () => {
@@ -135,5 +143,39 @@ describe('停留事件气泡 · preset', () => {
     }
     expect(four[3].texts[1].fill).toBe('#c0392b');
     expect(four[0].texts[1].fill).toBe('#2f8f5e');
+  });
+
+  it('原著引文：折行画出（每行 ≤ quoteChars）+ 气泡随行数向上长高', () => {
+    const texts: Array<Record<string, unknown>> = [];
+    const { g } = recorder();
+    /* 18 字 ⇒ 11 + 7 两行 */
+    bubble(g, ctx({ title: '监狱', amount: '停留 1 回合', tone: 'jail', quote: '徒弟，前面高山，有路无路，是必小心！' }, texts));
+    expect(texts.map((t) => t.text)).toEqual([
+      '监狱', '停留 1 回合', '徒弟，前面高山，有路无', '路，是必小心！',
+    ]);
+    expect(texts[2].fill).toBe('#6b5a45');
+    expect(texts[2].size).toBe(8);
+    expect(texts[3].y as number).toBeGreaterThan(texts[2].y as number);
+
+    /* 高度：带引文（2 行）= 内建 44 + 2×10；无引文时恰好 44（退回两行旧观感） */
+    const bodyH = (quote: string): number => {
+      const rec = recorder();
+      bubble(rec.g, ctx({ title: '监狱', amount: '停留 1 回合', tone: 'jail', quote }));
+      const i = rec.names.indexOf('roundRect');
+      return JSON.parse(rec.args[i])[3] as number;
+    };
+    expect(bodyH('')).toBe(44);
+    expect(bodyH('甲乙丙丁戊己庚辛壬癸子丑寅卯辰巳')).toBe(64);
+    expect(bodyH('老孙便是！')).toBe(54);
+  });
+
+  it('超长引文：末行截断并补省略号（不超过 quoteLines 行）', () => {
+    const texts: Array<Record<string, unknown>> = [];
+    const { g } = recorder();
+    bubble(g, ctx({ title: '监狱', amount: '停留 1 回合', tone: 'jail', quote: '一二三四五六七八九十一二三四五六七八九十一二三四五' }, texts));
+    expect(texts).toHaveLength(4);                       // 标题 + 金额 + 引文 2 行
+    const last = String(texts[3].text);
+    expect(last.endsWith('…')).toBe(true);                // 超出行数上限 → 末行截断补省略号
+    expect(last.length).toBeLessThanOrEqual(11);
   });
 });

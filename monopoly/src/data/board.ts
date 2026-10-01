@@ -10,7 +10,12 @@
 export const BOARD_COLS = 11;
 export const BOARD_ROWS = 7;
 
-export type TileType = 'core' | 'shop' | 'chance' | 'fate' | 'bonus' | 'jail' | 'stock';
+export type TileType =
+  | 'core' | 'shop' | 'chance' | 'fate' | 'bonus' | 'jail' | 'stock'
+  | 'bank' | 'lottery' | 'tax' | 'hospital';
+
+/** 建筑层级（M7 起 3 级 → 5 级，对齐《大富翁 5》并做超越）：1 摊位 → 5 产业园区 */
+export type BuildLevel = 1 | 2 | 3 | 4 | 5;
 
 export interface TileDef {
   index: number;
@@ -18,44 +23,50 @@ export interface TileDef {
   short: string;
   brand: string;
   type: TileType;
-  level: 0 | 1 | 2 | 3;   // 演示初始层级（0 = 无楼）
+  level: 0 | BuildLevel;   // 演示初始层级（0 = 无楼）
 }
 
+/**
+ * 外圈 32 格类型。M7 特殊格补全：把 9 / 21 / 23 / 25 四格从「命运卡 / 机会卡」
+ * 改为 **银行 / 乐透 / 税务局 / 医院**（对齐《大富翁 5》的银行·乐透·税金·医院），
+ * 商家格 17 个**一个不动**（业主授权清单是产品价值所在，不因玩法改格而牺牲）。
+ * 命运 / 机会各留 3 格（2/17/29 与 5/14/31），配 20 张牌堆足够。
+ */
 export const TILE_TYPES: TileType[] = [
   'core', 'shop', 'fate', 'shop', 'shop', 'chance', 'shop', 'bonus',
-  'shop', 'fate', 'shop', 'shop', 'jail', 'shop', 'chance', 'shop',
-  'shop', 'fate', 'shop', 'stock', 'shop', 'chance', 'shop', 'fate',
-  'shop', 'chance', 'shop', 'bonus', 'shop', 'fate', 'shop', 'chance',
+  'shop', 'bank', 'shop', 'shop', 'jail', 'shop', 'chance', 'shop',
+  'shop', 'fate', 'shop', 'stock', 'shop', 'lottery', 'shop', 'tax',
+  'shop', 'hospital', 'shop', 'bonus', 'shop', 'fate', 'shop', 'chance',
 ];
 
 /** 商家**全名**（候选真名；见文件头授权告警与手册 §4 对照表） */
 export const TILE_NAMES = [
   '鹿乡特色小镇', '金鹿源参茸经销处', '命运卡', '长峰土特产品商店', '国信南山温泉酒店', '机会卡',
-  '御龙温泉度假村', '福利中心', '吉吉土特产品商店', '命运卡', '国玉庄园', '王连申鹿膏',
+  '御龙温泉度假村', '福利中心', '吉吉土特产品商店', '鹿乡银行', '国玉庄园', '王连申鹿膏',
   '监狱', '鹿产品一条街', '机会卡', '刘氏鹿茸炮制技艺', '守鏊仁煎饼', '命运卡',
-  '双阳鹿茸交易市场', '股票交易所', '梅花鹿博物馆', '机会卡', '广生村农产品', '命运卡',
-  '黑鱼葡萄采摘园', '机会卡', '东龙度假村', '福利中心', '绿色巨农采摘园', '命运卡',
+  '双阳鹿茸交易市场', '股票交易所', '梅花鹿博物馆', '乐透彩', '广生村农产品', '税务局',
+  '黑鱼葡萄采摘园', '医院', '东龙度假村', '福利中心', '绿色巨农采摘园', '命运卡',
   '神鹿峰旅游度假区', '机会卡',
 ];
 
 /** 棋盘 32 格地名字牌（≤5 字，保证 390 宽下不压邻格；非商家格为功能名） */
 export const TILE_SHORT = [
   '鹿乡小镇', '金鹿源', '命运卡', '长峰特产', '国信温泉', '机会卡', '御龙温泉', '福利中心',
-  '吉吉特产', '命运卡', '国玉庄园', '王氏鹿膏', '监狱', '鹿品街', '机会卡', '刘氏鹿茸',
-  '守鏊仁', '命运卡', '鹿茸市场', '股票所', '鹿博物馆', '机会卡', '广生农产', '命运卡',
-  '黑鱼葡萄', '机会卡', '东龙度假', '福利中心', '巨农采摘', '命运卡', '神鹿峰', '机会卡',
+  '吉吉特产', '鹿乡银行', '国玉庄园', '王氏鹿膏', '监狱', '鹿品街', '机会卡', '刘氏鹿茸',
+  '守鏊仁', '命运卡', '鹿茸市场', '股票所', '鹿博物馆', '乐透彩', '广生农产', '税务局',
+  '黑鱼葡萄', '医院', '东龙度假', '福利中心', '巨农采摘', '命运卡', '神鹿峰', '机会卡',
 ];
 
 /** 店招 / 楼体 / 橱窗信息条文字（短名） */
 export const TILE_BRAND = [
-  '鹿乡', '金鹿源', '命运', '长峰特产', '国信温泉', '机会', '御龙温泉', '福利', '吉吉特产', '命运',
+  '鹿乡', '金鹿源', '命运', '长峰特产', '国信温泉', '机会', '御龙温泉', '福利', '吉吉特产', '银行',
   '国玉庄园', '王氏鹿膏', '监狱', '鹿品街', '机会', '刘氏鹿茸', '守鏊仁', '命运', '鹿茸市场', '股票所',
-  '鹿博物馆', '机会', '广生农产', '命运', '黑鱼葡萄', '机会', '东龙度假', '福利', '巨农采摘', '命运',
+  '鹿博物馆', '乐透', '广生农产', '税务', '黑鱼葡萄', '医院', '东龙度假', '福利', '巨农采摘', '命运',
   '神鹿峰', '机会',
 ];
 
 /** 演示层级（v5 样张 LV；0 = 无楼，仅空地砖） */
-export const TILE_LEVEL: Array<0 | 1 | 2 | 3> = [
+export const TILE_LEVEL: Array<0 | BuildLevel> = [
   3, 1, 0, 1, 2, 0, 2, 0, 1, 0, 2, 1, 0, 2, 0, 1, 1, 0, 3, 0, 2, 0, 1, 0, 1, 0, 2, 0, 1, 0, 3, 0,
 ];
 
@@ -120,11 +131,15 @@ export const SLOT_LANTERN_CHAR: Record<number, string> = {
   4: '汤', 6: '泉', 18: '鹿', 26: '龙',
 };
 
-/** 路过租金按楼层（v5 样张 line 62：`RENT = [0, 15, 45, 105]`） */
-export const RENT_BY_LEVEL = [0, 15, 45, 105];
+/**
+ * 路过租金按楼层（v5 样张 line 62：`RENT = [0, 15, 45, 105]`）。
+ * M7 对齐《大富翁 5》并做超越：3 级 → **5 级**；L1–L3 沿用 v5 数值（既有平衡与回归逐值不变），
+ * L4/L5 为新增档位（L1–L3 每级约 ×2.3，L4/L5 延续同斜率略放缓，给终局留追赶空间）。
+ */
+export const RENT_BY_LEVEL = [0, 15, 45, 105, 220, 420];
 
-/** 演示玩家名（v5 样张 line 59 `ONM`） */
-export const PLAYER_NAME = ['你', '老王', '丽丽', '小赵'];
+/** 演示玩家名（v5 样张 line 59 `ONM` → ④ 角色 IP 化：西游·取经四众，与 `piece.p1..p4` 的 style 一一对应） */
+export const PLAYER_NAME = ['孙悟空', '猪八戒', '沙悟净', '唐三藏'];
 
 /** 橱窗演示文案（v5 optB line 444–447；M4 接入 i18n 字典后改由字典取，本任务先集中在此便于一处替换） */
 export const SHOWCASE_TEXT = {
@@ -134,11 +149,11 @@ export const SHOWCASE_TEXT = {
   miniBanner: '市集',
 };
 
-/** 三级建筑名（v5 optC line 450–452 标签：L1 摊位 / L2 门店 / L3 商超楼） */
-export const LEVEL_NAME = ['', '摊位', '门店', '商超楼'];
+/** 五级建筑名（L1 摊位 / L2 门店 / L3 商超楼 / L4 商贸城 / L5 产业园区；L1–L3 沿用 v5 optC line 450–452） */
+export const LEVEL_NAME = ['', '摊位', '门店', '商超楼', '商贸城', '产业园区'];
 
-/** 三级建造价（v5 optC line 450–452 标签：￥60 / ￥180 / ￥420） */
-export const PRICE_BY_LEVEL = [0, 60, 180, 420];
+/** 五级建造价（L1–L3 沿用 v5 optC line 450–452 的 ￥60 / ￥180 / ￥420；L4/L5 为 M7 新增档位） */
+export const PRICE_BY_LEVEL = [0, 60, 180, 420, 860, 1600];
 
 /**
  * ⚠️ 建议分级价目（**待平衡** · 仅为提案，**未接入** economy）
@@ -170,7 +185,7 @@ export const PROPOSED_TILE_TIER: Record<number, 'core' | 'tourism' | 'town'> = {
   24: 'town', 26: 'tourism', 28: 'town', 30: 'tourism',
 };
 
-/** 三级对照卡标签：`L{lv} {名} · ￥{价}`（v5 optC line 450–452；M4 接 i18n 后由字典取） */
+/** 五级对照卡标签：`L{lv} {名} · ￥{价}`（v5 optC line 450–452；M4 接 i18n 后由字典取） */
 export function levelCaption(lv: number): string {
   return `L${lv} ${LEVEL_NAME[lv] ?? ''} · ￥${PRICE_BY_LEVEL[lv] ?? 0}`;
 }

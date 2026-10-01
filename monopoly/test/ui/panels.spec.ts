@@ -111,7 +111,7 @@ describe('panels：结算面板', () => {
     const worths = sp.rows.map((r) => r.worth);
     expect([...worths].sort((a, b) => b - a)).toEqual(worths);
     expect(sp.rows[0].winner).toBe(true);
-    expect(sp.rows[0].name).toBe('你');
+    expect(sp.rows[0].name).toBe('孙悟空');
   });
 });
 

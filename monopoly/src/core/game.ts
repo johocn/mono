@@ -15,14 +15,18 @@ import {
 } from './cards';
 import { createDice, makeRng, type Dice, type DiceRoll } from './dice';
 import {
-  assetValue, buy, buyable, canBuy, clearProcessing, ownedBy, rentAt, sellAt, upgrade,
+  assetValue, buy, buyable, canBuy, clearProcessing, discounted, ownedBy, rentAt, sellAt, upgrade,
   type BuyOutcome, type Estate, type Estates, type UpgradeOutcome,
 } from './estate';
 import {
   buyShares, createMarket, marketValue, sellShares,
   type Market, type Portfolio, type Quotes, type TradeOutcome as CoreTradeOutcome,
 } from './stocks';
-import { JAIL_TURNS, nextJail, rollBonus, specialAt, type BonusReward } from './special';
+import {
+  BANK_CAP, BANK_RATE, HOSPITAL_TURNS, JAIL_TURNS, LOTTERY_STAKE, TAX_CAP, TAX_RATE,
+  nextJail, rollBonus, rollLottery, specialAt, type BonusReward,
+} from './special';
+import { abilityOfPlayer, type AbilityDef } from '../data/abilities';
 
 /** 回合阶段机（spec §5.1）：idle → rolled → moved → settled → (endTurn) → idle */
 export type Phase = 'idle' | 'rolled' | 'moved' | 'settled';
@@ -51,7 +55,16 @@ export type FateEffect =
   | { kind: 'back'; from: number; to: number }
   | { kind: 'weather'; turns: number }
   | { kind: 'lockup'; turns: number }
-  | { kind: 'swap'; with: number };
+  | { kind: 'swap'; with: number }
+  /* —— 扩容牌（cards.ts 20 张）—— */
+  | { kind: 'advance'; from: number; to: number; steps: number }
+  | { kind: 'gift'; amount: number }
+  | { kind: 'levy'; amount: number; percent: number; paid: number; bankrupt: boolean }
+  | { kind: 'demote'; index: number | null; level: number }
+  | { kind: 'tribute'; amount: number; total: number; paid: number; bankrupt: boolean }
+  | { kind: 'harvest'; amount: number; total: number }
+  | { kind: 'toStart'; from: number }
+  | { kind: 'repair'; amount: number; count: number; paid: number; bankrupt: boolean };
 
 /** 机会牌结算结果（供 UI 回放；可断言） */
 export type ChanceEffect =
@@ -60,7 +73,12 @@ export type ChanceEffect =
   | { kind: 'freeUpgrade'; index: number | null; refund: number }
   | { kind: 'rollAgain' }
   | { kind: 'drawItem'; item: ItemCardKind | null; refund: number }
-  | { kind: 'stockTip'; code: string };
+  | { kind: 'stockTip'; code: string }
+  /* —— 扩容牌（cards.ts 20 张）—— */
+  | { kind: 'advance'; from: number; to: number; steps: number }
+  | { kind: 'toStart'; from: number }
+  | { kind: 'collect'; amount: number; total: number }
+  | { kind: 'grantItem'; item: ItemCardKind | null; refund: number };
 
 export interface GameState {
   players: Player[];
@@ -96,6 +114,8 @@ export interface GameState {
   lastEvent: EventLog | null;
   /** 本回合是否还有额外一掷（机会卡 `c-rollAgain`） */
   extraRoll: boolean;
+  /** 角色技能是否启用（对局开始即定，之后不再变） */
+  abilitiesOn: boolean;
 }
 
 export interface GameOptions {
@@ -106,6 +126,11 @@ export interface GameOptions {
   playerCount?: number;
   /** 测试注入口：固定牌堆顺序（不洗牌），用于逐张复现指定卡面 */
   decks?: { fate?: FateCardDef[]; chance?: ChanceCardDef[] };
+  /**
+   * 角色技能开关（`data/abilities.ts`）：true = 启用四众专属能力，false = 传统无技能基线。
+   * 默认 **false** ⇒ 既有回归/单测口径逐值不变；正式对局由 `main.ts` 显式开启。
+   */
+  abilities?: boolean;
 }
 
 /** 落格结算结果（spec §5.2 / §5.4 / §5.5） */
@@ -118,7 +143,11 @@ export type SettleResult =
   | { kind: 'chance'; index: number; cardId: string; effect: ChanceEffect }
   | { kind: 'jail'; index: number; turns: number; waived: boolean }
   | { kind: 'bonus'; index: number; reward: BonusReward }
-  | { kind: 'stock'; index: number };
+  | { kind: 'stock'; index: number }
+  | { kind: 'bank'; index: number; interest: number }
+  | { kind: 'lottery'; index: number; stake: number; prize: number }
+  | { kind: 'tax'; index: number; amount: number; paid: number; sold: number[]; bankrupt: boolean }
+  | { kind: 'hospital'; index: number; turns: number; waived: boolean };
 
 /** 浮层消费的事件日志：落格细分 + 用卡 / 交易 */
 export type EventLog =
@@ -132,6 +161,10 @@ type ChanceSettle = Extract<SettleResult, { kind: 'chance' }>;
 type JailSettle = Extract<SettleResult, { kind: 'jail' }>;
 type BonusSettle = Extract<SettleResult, { kind: 'bonus' }>;
 type StockSettle = Extract<SettleResult, { kind: 'stock' }>;
+type BankSettle = Extract<SettleResult, { kind: 'bank' }>;
+type LotterySettle = Extract<SettleResult, { kind: 'lottery' }>;
+type TaxSettle = Extract<SettleResult, { kind: 'tax' }>;
+type HospitalSettle = Extract<SettleResult, { kind: 'hospital' }>;
 
 /** 玩家动作在错误阶段调用（按钮边界），返回失败原因而不抛错 */
 export type GameBuyOutcome = BuyOutcome | { ok: false; reason: 'bad-phase' };
@@ -176,6 +209,16 @@ interface DebtResult {
 /** 自动决策保留现金：低于此数不买地 / 不升级，保证付得起常见租金 */
 const AUTO_RESERVE = 200;
 
+/** 该玩家买地实付折扣（技能未启用 → 1）；模块级口径，供 `autoTurn` 与 AI 决策共用 */
+export function buyDiscountOf(state: GameState, id: number): number {
+  return state.abilitiesOn ? abilityOfPlayer(id).buyDiscount : 1;
+}
+
+/** 该玩家应付租金减免比例（技能未启用 → 0） */
+export function rentReliefOf(state: GameState, id: number): number {
+  return state.abilitiesOn ? abilityOfPlayer(id).rentRelief : 0;
+}
+
 export function createGame(opts: GameOptions = {}): Game {
   const count = opts.playerCount ?? 4;
   const seed = opts.seed ?? (Date.now() & 0xffffffff);
@@ -215,7 +258,11 @@ export function createGame(opts: GameOptions = {}): Game {
     lastDraw: null,
     lastEvent: null,
     extraRoll: false,
+    abilitiesOn: opts.abilities === true,
   };
+
+  /** 某玩家的技能（未启用时返回 null，调用处按中性值处理） */
+  const skill = (id: number): AbilityDef | null => (state.abilitiesOn ? abilityOfPlayer(id) : null);
 
   const rollDice = (): DiceRoll => {
     if (state.over) throw new Error('[mono] rollDice @over');
@@ -234,16 +281,19 @@ export function createGame(opts: GameOptions = {}): Game {
     const d = state.dice;
     if (!d) throw new Error('[mono] moveCurrent @no-dice');
     const p = currentPlayer(state);
+    /* 技能「筋斗云」：本回合额外前进若干格（并同步纳入路障扫描范围） */
+    const steps0 = d.total + (skill(p.id)?.stepBonus ?? 0);
     /* 路障截断：从起点往前的第 1 个路障处停下，路障消耗 */
-    let steps = d.total;
+    let steps = steps0;
     let hit: number | null = null;
-    for (let k = 1; k <= d.total; k++) {
+    for (let k = 1; k <= steps0; k++) {
       const idx = ((p.pos + k) % RING_SIZE + RING_SIZE) % RING_SIZE;
       if (barrierAt(state.barriers, idx)) { steps = k; hit = idx; break; }
     }
     const mv = advance(p.pos, steps);
     p.pos = mv.to;
-    if (mv.passedStart) p.cash += PASS_START_BONUS;
+    /* 技能「任劳任怨」：经过起点的额外津贴 */
+    if (mv.passedStart) p.cash += PASS_START_BONUS + (skill(p.id)?.passStartBonus ?? 0);
     if (hit !== null) clearBarrier(state.barriers, hit);
     state.phase = 'moved';
     return { ...mv, ...(hit !== null ? { barrier: hit } : {}) };
@@ -266,7 +316,10 @@ export function createGame(opts: GameOptions = {}): Game {
         const owner = playerById(state, e.owner);
         const base = rentAt(state.estates, index);
         const doubled = owner !== null && state.doubleRent[owner.id - 1];
-        const rent = doubled ? base * 2 : base;
+        /* 技能「慈悲为怀」：应付租金按比例减免（未启用 → 比例 0，逐值回旧口径） */
+        const relief = rentReliefOf(state, p.id);
+        const gross = doubled ? base * 2 : base;
+        const rent = relief > 0 ? Math.round(gross * (1 - relief)) : gross;
         const i = p.id - 1;
         if (has(state.hands[i], 'pardon')) {
           consumeCard(state.hands[i], 'pardon');
@@ -288,6 +341,14 @@ export function createGame(opts: GameOptions = {}): Game {
       const stock: StockSettle = { kind: 'stock', index };
       result = stock;
       state.lastEvent = stock;
+    } else if (specialAt(index) === 'bank') {
+      result = resolveBank(p, index);
+    } else if (specialAt(index) === 'lottery') {
+      result = resolveLottery(p, index);
+    } else if (specialAt(index) === 'tax') {
+      result = resolveTax(p, index);
+    } else if (specialAt(index) === 'hospital') {
+      result = resolveHospital(p, index);
     } else if (typeAt(index) === 'fate') {
       result = resolveFate(p, index);
     } else if (typeAt(index) === 'chance') {
@@ -333,10 +394,54 @@ export function createGame(opts: GameOptions = {}): Game {
       } else {
         const pick = up[Math.floor(cardRng() * up.length)];
         const e = state.estates[pick];
-        e.level = (e.level + 1) as 1 | 2 | 3;
+        e.level = (e.level + 1) as 2 | 3 | 4 | 5;
       }
     }
     const result: BonusSettle = { kind: 'bonus', index, reward };
+    state.lastEvent = result;
+    return result;
+  };
+
+  /** 鹿乡银行：按现金计息（10%，封顶 ￥300），直接入账、不参与欠款清算 */
+  const resolveBank = (p: Player, index: number): BankSettle => {
+    const interest = Math.min(Math.round(p.cash * BANK_RATE), BANK_CAP);
+    p.cash += interest;
+    const result: BankSettle = { kind: 'bank', index, interest };
+    state.lastEvent = result;
+    return result;
+  };
+
+  /** 乐透彩：先扣入场费（现金不足按现有现金扣，不会因此破产），再按权重开奖 */
+  const resolveLottery = (p: Player, index: number): LotterySettle => {
+    const stake = Math.min(p.cash, LOTTERY_STAKE);
+    p.cash -= stake;
+    const prize = rollLottery(cardRng);
+    p.cash += prize;
+    const result: LotterySettle = { kind: 'lottery', index, stake, prize };
+    state.lastEvent = result;
+    return result;
+  };
+
+  /** 税务局：按现金征收（10%，封顶 ￥500），走欠款清算（先变卖、再折股、付不起则破产） */
+  const resolveTax = (p: Player, index: number): TaxSettle => {
+    const amount = Math.min(Math.round(p.cash * TAX_RATE), TAX_CAP);
+    const debt = settleDebt(state, p, amount, null);
+    const result: TaxSettle = { kind: 'tax', index, amount, paid: debt.paid, sold: debt.sold, bankrupt: debt.bankrupt };
+    state.lastEvent = result;
+    return result;
+  };
+
+  /** 医院：住院 1 回合（复用禁行计时 `state.jail`，免罚卡可抵消） */
+  const resolveHospital = (p: Player, index: number): HospitalSettle => {
+    const i = p.id - 1;
+    if (has(state.hands[i], 'pardon')) {
+      consumeCard(state.hands[i], 'pardon');
+      const result: HospitalSettle = { kind: 'hospital', index, turns: 0, waived: true };
+      state.lastEvent = result;
+      return result;
+    }
+    state.jail[i] = HOSPITAL_TURNS;
+    const result: HospitalSettle = { kind: 'hospital', index, turns: HOSPITAL_TURNS, waived: false };
     state.lastEvent = result;
     return result;
   };
@@ -363,6 +468,79 @@ export function createGame(opts: GameOptions = {}): Game {
       case 'weather': {
         state.jail[i] = 1;
         effect = { kind: 'weather', turns: 1 };
+        break;
+      }
+      case 'advance': {
+        /* 前进 N 格（与掷骰同一套回绕 / 过起点津贴口径；落格不再二次结算，同 `back`） */
+        const steps = card.steps ?? 0;
+        const mv = advance(p.pos, steps);
+        p.pos = mv.to;
+        if (mv.passedStart) p.cash += PASS_START_BONUS + (skill(p.id)?.passStartBonus ?? 0);
+        effect = { kind: 'advance', from: mv.from, to: mv.to, steps: mv.steps };
+        break;
+      }
+      case 'toStart': {
+        const from = p.pos;
+        p.pos = 0;
+        p.cash += PASS_START_BONUS + (skill(p.id)?.passStartBonus ?? 0);
+        effect = { kind: 'toStart', from };
+        break;
+      }
+      case 'gift':
+        p.cash += card.amount ?? 0;
+        effect = { kind: 'gift', amount: card.amount ?? 0 };
+        break;
+      case 'levy': {
+        /* 按净资产（现金 + 地产账面投入）缴税：资产越大缴得越多，压制「囤地躺赢」 */
+        const percent = card.percent ?? 0;
+        const amount = Math.round(netWorth(state, p) * percent / 100);
+        const debt = settleDebt(state, p, amount, null);
+        effect = { kind: 'levy', amount, percent, paid: debt.paid, bankrupt: debt.bankrupt };
+        break;
+      }
+      case 'repair': {
+        /* 按「地块级数总和」计费：楼越高维护越贵 */
+        const amount = card.amount ?? 0;
+        let count = 0;
+        for (const idx of ownedBy(state.estates, p.id)) count += state.estates[idx].level;
+        const total = amount * count;
+        const debt = settleDebt(state, p, total, null);
+        effect = { kind: 'repair', amount, count, paid: debt.paid, bankrupt: debt.bankrupt };
+        break;
+      }
+      case 'demote': {
+        /* 自有最高级地块降 1 级（L1 不参与，避免直接炸回无主） */
+        const owned = ownedBy(state.estates, p.id).filter((idx) => state.estates[idx].level > 1);
+        if (owned.length === 0) {
+          effect = { kind: 'demote', index: null, level: 0 };
+        } else {
+          const pick = owned[Math.floor(cardRng() * owned.length)];
+          const e = state.estates[pick];
+          e.level = (e.level - 1) as 1 | 2 | 3 | 4;
+          effect = { kind: 'demote', index: pick, level: e.level };
+        }
+        break;
+      }
+      case 'tribute': {
+        /* 向每位对手支付：逐个走 settleDebt（对方收钱、付方不足则先变卖，破产口径一致） */
+        const amount = card.amount ?? 0;
+        const others = state.players.filter((o) => o.id !== p.id && !o.bankrupt);
+        let paid = 0;
+        let bankrupt = false;
+        for (const o of others) {
+          const debt = settleDebt(state, p, amount, o);
+          paid += debt.paid;
+          if (debt.bankrupt) bankrupt = true;
+        }
+        effect = { kind: 'tribute', amount, total: amount * others.length, paid, bankrupt };
+        break;
+      }
+      case 'harvest': {
+        const amount = card.amount ?? 0;
+        const others = state.players.filter((o) => o.id !== p.id && !o.bankrupt);
+        let total = 0;
+        for (const o of others) total += settleDebt(state, o, amount, p).paid;
+        effect = { kind: 'harvest', amount, total };
         break;
       }
       case 'lockup': {
@@ -416,7 +594,7 @@ export function createGame(opts: GameOptions = {}): Game {
         } else {
           const pick = up[Math.floor(cardRng() * up.length)];
           const e = state.estates[pick];
-          e.level = (e.level + 1) as 1 | 2 | 3;
+          e.level = (e.level + 1) as 2 | 3 | 4 | 5;
           effect = { kind: 'freeUpgrade', index: pick, refund: 0 };
         }
         break;
@@ -435,6 +613,40 @@ export function createGame(opts: GameOptions = {}): Game {
         }
         break;
       }
+      case 'grantItem': {
+        /* 指定道具（卡面写死，不随机）；已持有同类 → 折现（与 drawItem 同口径） */
+        const item = card.item ?? ITEM_CARDS[Math.floor(cardRng() * ITEM_CARDS.length)].kind;
+        if (grant(state.hands[i], item)) {
+          effect = { kind: 'grantItem', item, refund: 0 };
+        } else {
+          p.cash += PARDON_REFUND;
+          effect = { kind: 'grantItem', item: null, refund: PARDON_REFUND };
+        }
+        break;
+      }
+      case 'advance': {
+        const steps = card.steps ?? 0;
+        const mv = advance(p.pos, steps);
+        p.pos = mv.to;
+        if (mv.passedStart) p.cash += PASS_START_BONUS + (skill(p.id)?.passStartBonus ?? 0);
+        effect = { kind: 'advance', from: mv.from, to: mv.to, steps: mv.steps };
+        break;
+      }
+      case 'toStart': {
+        const from = p.pos;
+        p.pos = 0;
+        p.cash += PASS_START_BONUS + (skill(p.id)?.passStartBonus ?? 0);
+        effect = { kind: 'toStart', from };
+        break;
+      }
+      case 'collect': {
+        const amount = card.amount ?? 0;
+        const others = state.players.filter((o) => o.id !== p.id && !o.bankrupt);
+        let total = 0;
+        for (const o of others) total += settleDebt(state, o, amount, p).paid;
+        effect = { kind: 'collect', amount, total };
+        break;
+      }
       default: {
         const code = STOCKS[Math.floor(cardRng() * STOCKS.length)].code;
         state.stockTip[i] = code;
@@ -450,7 +662,7 @@ export function createGame(opts: GameOptions = {}): Game {
   const buyCurrent = (): GameBuyOutcome => {
     if (state.phase !== 'settled') return { ok: false, reason: 'bad-phase' };
     const p = currentPlayer(state);
-    const out = buy(state.estates, p.pos, p.id, p.cash);
+    const out = buy(state.estates, p.pos, p.id, p.cash, buyDiscountOf(state, p.id));
     if (out.ok) p.cash = out.cash;
     return out;
   };
@@ -670,7 +882,9 @@ export function autoTurn(g: Game): void {
   g.moveCurrent();
   const r = g.settleCurrent();
   const p = currentPlayer(g.state);
-  if (r.kind === 'vacant' && canBuy(g.state.estates, r.index, p.cash) && p.cash - r.price >= AUTO_RESERVE) {
+  const discount = buyDiscountOf(g.state, p.id);
+  const cost = discounted(buyPrice(1), discount);
+  if (r.kind === 'vacant' && canBuy(g.state.estates, r.index, p.cash, discount) && p.cash - cost >= AUTO_RESERVE) {
     g.buyCurrent();
   } else if (r.kind === 'own') {
     const e = g.state.estates[r.index];

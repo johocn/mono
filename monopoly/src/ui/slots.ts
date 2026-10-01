@@ -61,6 +61,9 @@ export function parseSlotConfig(raw: unknown): SlotConfig {
 export interface SlotsHandle {
   /** 推一条战报（与顶部状态条同文案）；重复文案不重复入列 */
   update(callout: string | null): void;
+  /** 浮层（事件卡 / 手牌 / 结算 / 股票盘…）展开时整块隐藏：
+   *  本层 DOM 恒在画布之上，不隐藏必然压住事件卡左下角。无浮层时 `false` = 逐像素回现状。 */
+  setHidden(on: boolean): void;
   destroy(): void;
 }
 
@@ -137,6 +140,7 @@ export function mountSlots(root: HTMLElement, cfg: SlotConfig = SLOT_DEFAULTS): 
   /* 战报：最新在上，超出 KEEP 条自然滚出 */
   const lines: string[] = [];
   let last = '';
+  let hidden = false;
   const paintLog = (): void => {
     logBody.textContent = '';
     for (const line of lines) {
@@ -154,6 +158,12 @@ export function mountSlots(root: HTMLElement, cfg: SlotConfig = SLOT_DEFAULTS): 
       lines.unshift(callout);
       if (lines.length > BOARD_SLOT_LOG_KEEP) lines.length = BOARD_SLOT_LOG_KEEP;
       paintLog();
+    },
+    setHidden(on: boolean): void {
+      if (on === hidden) return;
+      hidden = on;
+      /* 整块隐藏：本层是 DOM，恒在画布之上，只藏单个角仍会压住卡面 */
+      layer.style.display = on ? 'none' : '';
     },
     destroy(): void {
       if (timer !== null) clearTimeout(timer);

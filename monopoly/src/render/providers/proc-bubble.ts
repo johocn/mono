@@ -26,6 +26,13 @@ const D = fb({
   titleDy: 17,
   amountSize: 10,
   amountDy: 31,
+  /* 第三段：原著引文（`state.quote`）——定宽折行，每行 `quoteChars` 个汉字，最多 `quoteLines` 行 */
+  quoteSize: 8,
+  quoteChars: 11,
+  quoteLines: 2,
+  quoteLineH: 10,
+  quotePadTop: 3,
+  quoteColor: '#6b5a45',
   /* 五态主色（spec §6.7 表 + 前进播报；比主色盘更深一档，保证在暖白底上的可读性） */
   tonebuy: '#2f8f5e',
   tonerent: '#a8761c',
@@ -34,7 +41,7 @@ const D = fb({
   tonemove: '#2f6fbf',
 });
 
-/** 头顶事件气泡：暖白圆角底 + 指向三角 + 两行文字（标题 / 金额） */
+/** 头顶事件气泡：暖白圆角底 + 指向三角 + 标题 / 金额 / 原著引文（引文缺省则退回两行旧观感） */
 export function bubble(g: Graphics, ctx: ProcCtx): void {
   const p = ctx.params as P;
   const st = ctx.state as P;
@@ -43,7 +50,20 @@ export function bubble(g: Graphics, ctx: ProcCtx): void {
 
   const s = ctx.s;
   const w = n('w') * s;
-  const h = n('h') * s;
+  /* 引文按 `quoteChars` 个汉字定宽折行（汉字等宽，无需量字宽），最多 `quoteLines` 行，超出末行补省略号 */
+  const raw = typeof st.quote === 'string' ? st.quote : '';
+  const perLine = n('quoteChars');
+  const lineMax = n('quoteLines');
+  const qLines: string[] = [];
+  for (let i = 0; i < raw.length && qLines.length < lineMax; i += perLine) {
+    qLines.push(raw.slice(i, i + perLine));
+  }
+  if (raw.length > perLine * lineMax && qLines.length === lineMax) {
+    const last = qLines[lineMax - 1];
+    qLines[lineMax - 1] = `${last.slice(0, Math.max(1, perLine - 1))}…`;
+  }
+  /* 气泡随引文行数向上长高：三角尖端不动，只把顶边抬高 */
+  const h = (n('h') + qLines.length * n('quoteLineH')) * s;
   const tipY = ctx.cy;                          // 箭头尖端 = 定格台位
   const bodyBottom = tipY - n('triH') * s;
   const left = ctx.cx - w / 2;
@@ -66,4 +86,13 @@ export function bubble(g: Graphics, ctx: ProcCtx): void {
 
   ctx.text?.({ text: String(st.title ?? ''), x: ctx.cx, y: top + n('titleDy') * s, size: n('titleSize') * s, fill: col('titleColor') });
   ctx.text?.({ text: String(st.amount ?? ''), x: ctx.cx, y: top + n('amountDy') * s, size: n('amountSize') * s, fill: toneColor });
+  qLines.forEach((line, i) => {
+    ctx.text?.({
+      text: line,
+      x: ctx.cx,
+      y: top + (n('amountDy') + n('quotePadTop') + (i + 1) * n('quoteLineH')) * s,
+      size: n('quoteSize') * s,
+      fill: col('quoteColor'),
+    });
+  });
 }

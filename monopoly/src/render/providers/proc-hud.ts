@@ -26,6 +26,9 @@ export const HUD_D = fb({
   barSwatchW: 6, barSwatchR: 3, barPadX: 6, barBankruptAlpha: 0.35,
   barNameFs: 10, barCashFs: 11, barNameDy: -8, barCashDy: 8,
   barNameFill: '#d8e4dc', barCashFill: '#ffe9b0',
+  /* 资产条角上的角色技能徽标（`state.skill` 为空则不画） */
+  barSkillW: 40, barSkillH: 13, barSkillGy: 3, barSkillR: 6, barSkillPadX: 6,
+  barSkillFs: 8, barSkillFill: '#3a2f14', barSkillAlpha: 0.86, barSkillText: '#f5c451',
   /* 按钮 */
   btnR: 9, btnFill: '#f5c451', btnFillDisabled: '#3a4a42',
   btnEdge: '#c9a03f', btnEdgeW: 1, btnFs: 15, btnLabelDy: 0,
@@ -87,6 +90,17 @@ export const uiPlayerBar: ProcPreset = (g, ctx) => {
   const tx = x0 + G(params, 'barPadX') * 2 + swatch;
   text({ text: typeof state.name === 'string' ? state.name : '', x: tx, y: cy + G(params, 'barNameDy'), size: G(params, 'barNameFs'), fill: S(params, 'barNameFill'), align: 'left' });
   text({ text: typeof state.cash === 'number' ? `￥${state.cash}` : '', x: tx, y: cy + G(params, 'barCashDy'), size: G(params, 'barCashFs'), fill: S(params, 'barCashFill'), align: 'left' });
+  /* 角色技能徽标：挂在资产条右上角（`state.skill` 为空 = 非技能局，逐像素回旧观感） */
+  const skill = typeof state.skill === 'string' ? state.skill : '';
+  if (skill.length > 0) {
+    const tw = G(params, 'barSkillW') * s;
+    const th = G(params, 'barSkillH') * s;
+    const sx = x0 + w - G(params, 'barSkillPadX') * s - tw;
+    const sy = y0 + G(params, 'barSkillGy') * s;
+    g.roundRect(sx, sy, tw, th, G(params, 'barSkillR'))
+      .fill({ color: S(params, 'barSkillFill'), alpha: G(params, 'barSkillAlpha') });
+    text({ text: skill, x: sx + tw / 2, y: sy + th / 2, size: G(params, 'barSkillFs'), fill: S(params, 'barSkillText') });
+  }
 };
 
 /* —— 按钮：圆角底 + 居中标签（state.enabled 决定配色） —— */

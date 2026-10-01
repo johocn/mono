@@ -47,6 +47,8 @@ export interface PlacementInput {
   lift: number;
   box: { w: number; d: number; h: number };
   pawnIndex?: number;
+  /** 同格棋子总数（≥3 走 2×2 方阵） */
+  pawnCount?: number;
   /** 来自 Instance.mount：贴墙/贴屋顶的挂件必须跟随宿主楼的缩放与抬升 */
   mount?: 'ground' | 'wall' | 'roof';
   /** 来自注册表的定格缩放（缺省 1）：非建筑网格元素的基准 s（如内环装饰楼 0.5） */
@@ -55,7 +57,9 @@ export interface PlacementInput {
 export interface PlacementOpts {
   pawnGap: number;
   pawnFrontDy: number;
-  /** 棋子整体缩放（v5 样张 line 319：`isoPawn(..., 0.62, ...)`） */
+  /** 2×2 方阵的后排上移量（px）；缺省 0 = 与前排同高 */
+  pawnRowDy?: number;
+  /** 棋子整体缩放（v5 样张 line 319：`isoPawn(..., 0.62, ...)`；主角化后放大） */
   pawnScale?: number;
   buildingScale?: number;
   buildingYOffset?: number;
@@ -70,9 +74,19 @@ export function resolvePlacement(
 ): Placement {
   const [x, y] = ipos(it.c, it.r, geo);
   if (it.id.startsWith('piece.')) {
+    const s = opts.pawnScale ?? 1;
     const i = it.pawnIndex ?? 0;
-    const cx = x + (i - (4 - 1) / 2) * opts.pawnGap;
-    return { cx, cy: y + geo.hh * opts.pawnFrontDy, s: opts.pawnScale ?? 1 };
+    const n = it.pawnCount ?? 1;
+    const front = y + geo.hh * opts.pawnFrontDy;
+    /* ≥3 人：2×2 方阵（放大到主角尺寸后，一排四人必然互相压盖）。
+       后排索引更小 ⇒ 先出画 ⇒ 被前排遮住，深度方向正确。 */
+    if (n >= 3) {
+      const back = i < 2;
+      const cx = x + ((i % 2) - 0.5) * opts.pawnGap;
+      return { cx, cy: front + (back ? (opts.pawnRowDy ?? 0) : 0), s };
+    }
+    const cx = x + (n === 2 ? i - 0.5 : 0) * opts.pawnGap;
+    return { cx, cy: front, s };
   }
   if (it.id.startsWith('building.')) {
     const s = opts.buildingScale ?? 1;
@@ -182,7 +196,8 @@ export class Scene {
       : resolvePlacement(
           {
             id: inst.id, c: inst.c, r: inst.r, slot: inst.slot, lift: inst.lift,
-            box: inst.box, mount: inst.mount, scale: inst.scale, pawnIndex: spec.pawnIndex ?? 0,
+            box: inst.box, mount: inst.mount, scale: inst.scale,
+            pawnIndex: spec.pawnIndex ?? 0, pawnCount: spec.pawnCount,
           },
           this.deps.geo,
           this.deps.placement,

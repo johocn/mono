@@ -4,12 +4,16 @@ import {
 } from './layout';
 import type { RegistryEntry } from './types';
 
-export const BUILDING_HEIGHTS: Record<number, number> = { 1: 26, 2: 46, 3: 72 };
+/* 建筑高度（屏幕像素，随层级递增；L4/L5 为 M7 新增档位——增幅放缓以免高层遮住后排格子） */
+export const BUILDING_HEIGHTS: Record<number, number> = { 1: 26, 2: 46, 3: 72, 4: 88, 5: 104 };
 
 // 等距地砖：全宽 = 2×hw、全深 = 2×hh（hw/hh 见 skins/default/skin.json 的 geo）
 const TILE: { w: number; d: number; h: number } = { w: 42, d: 21, h: 2 };
 
-export const TILE_TYPES = ['core', 'shop', 'chance', 'fate', 'bonus', 'jail', 'stock'] as const;
+export const TILE_TYPES = [
+  'core', 'shop', 'chance', 'fate', 'bonus', 'jail', 'stock',
+  'bank', 'lottery', 'tax', 'hospital',
+] as const;
 export type TileType = (typeof TILE_TYPES)[number];
 
 export const INNER_DECOS = ['d1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8'] as const;
@@ -69,9 +73,9 @@ reg['board.center.fountain'] = {
   anchor: [0.5, 0.5], baseline: 0, mount: 'ground', providerKinds: ['proc', 'image', 'frames'],
 };
 
-// —— 32 格三级建筑 + 店招 ——
+// —— 32 格五级建筑 + 店招 ——
 for (let s = 0; s <= 31; s++) {
-  for (const lv of [1, 2, 3] as const) {
+  for (const lv of [1, 2, 3, 4, 5] as const) {
     reg[`building.s${s}.l${lv}`] = {
       id: `building.s${s}.l${lv}`,
       box: { w: 42, d: 21, h: BUILDING_HEIGHTS[lv] },

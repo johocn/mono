@@ -1,4 +1,7 @@
+import type { BuildLevel } from '../data/board';
+
 export interface Geo { hw: number; hh: number; ox: number; oy: number }
+
 export type Pt = [number, number];
 
 /** 棋盘 (c,r) → 舞台像素（v5 样张 line 48） */
@@ -41,6 +44,6 @@ export function compareDepth(a: { c: number; r: number }, b: { c: number; r: num
 }
 
 /** 层级 → 墙高（高度表由注册表/皮肤传入） */
-export function hostHeight(level: 1 | 2 | 3, heights: Record<number, number>): number {
+export function hostHeight(level: BuildLevel, heights: Record<number, number>): number {
   return heights[level];
 }

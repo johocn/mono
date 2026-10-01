@@ -9,6 +9,7 @@ import { innerSpecs, fountainSpec } from './render/InnerView';
 import { atmosphereSpecs } from './render/AtmosphereView';
 import { PAWN_COUNT, pawnSpecs, type PawnMood, type PawnState } from './render/PieceView';
 import { bubbleOfStep, bubbleSpecs, type BubbleContent } from './render/BubbleView';
+import { pickLineForSeat, QUOTE_MAX_CHARS } from './data/lines';
 import { buildingSpecs, slotLevelsOf, streetPropSpecs } from './render/BuildingView';
 import { showcaseSpecs } from './render/ShowcaseView';
 import { drawLabels } from './render/LabelView';
@@ -32,7 +33,7 @@ import {
 } from './ui/share';
 import { SHARE_VERSION } from './data/share';
 import { FATE_DECK, type ItemCardKind } from './data/cards';
-import { DEMO_OWNER, PLAYER_NAME } from './data/board';
+import { DEMO_OWNER, PLAYER_NAME, type BuildLevel } from './data/board';
 import { STOCK_TILE_INDEX } from './data/stocks';
 import { BUILDING_SCALE, BUILDING_Y_OFFSET, BUBBLE_HOLD_MS, BUBBLE_MOVE_HOLD_MS, CAM_AI_SCALE, CAM_BACK_MS, CAM_FALLBACK_MAX_ZOOM, CAM_FOLLOW_ZOOM, CAM_IDLE_ZOOM, CAM_MAX_ZOOM, CAM_MIN_ZOOM, CAM_PUSH_MS, CAM_SETTLE_MS, CAM_TILE_PAD, CAM_VIEW_CX, CAM_VIEW_CY, CAM_VIEW_H, CAM_VIEW_W, DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED, LABEL_GROUND, STAGE_H, STAGE_W, UI_BREAK_W } from './skin/layout';
 import { SHOP_DEFAULTS, parseShopConfig, type ShopConfig } from './skin/shop-config';
@@ -251,9 +252,12 @@ export async function boot(): Promise<void> {
   const camMax = { zoom: CAM_MAX_ZOOM };
   /* 地块序号 → 建筑层级（与楼体、楼顶名牌同源一份） */
   const slotLevels = slotLevelsOf();
-  /* 台位（唯一一份）：Scene 构造与「气泡锚在棋子头顶」共用同一组参数 */
+  /* 台位（唯一一份）：Scene 构造与「气泡锚在棋子头顶」共用同一组参数。
+     主角化：棋子由 0.62（静帧高 12.4px）放大到 1.6（静帧高 32px，与「主角」可辨口径一致），
+     同格四人改 2×2 方阵（`pawnRowDy` 为后排上移量）；角色 IP 化后人物变宽（约 20px），
+     单排间距同步放宽到 19，两人并肩刚好相接、不压邻格。 */
   const PLACEMENT: PlacementOpts = {
-    pawnGap: 9.6, pawnFrontDy: 1.45, pawnScale: 0.62,
+    pawnGap: 19, pawnFrontDy: 1.2, pawnRowDy: 22, pawnScale: 1.6,
     buildingScale: BUILDING_SCALE, buildingYOffset: BUILDING_Y_OFFSET,
   };
   /* 主题补丁挂在一个**可变对象**上：`?debug=1` 的风格控制台就地改写 `theme` 字段即可实时预览（spec §9） */
@@ -288,7 +292,9 @@ export async function boot(): Promise<void> {
   /* —— 棋子三表情（spec §6.6）：动作类型 → mood；`fx` 结束回落 calm（只读状态，不改动画） —— */
   const MOOD_BY_FX: Partial<Record<FxKind, PawnMood>> = { buy: 'happy', upgrade: 'happy', rent: 'sad', end: 'sad' };
   /** 无动效的动作（如进监狱）也能出表情：由落库事件兜底 */
-  const MOOD_BY_EVENT = (e: { kind: string } | null | undefined): PawnMood => (e?.kind === 'jail' ? 'sad' : 'calm');
+  const MOOD_BY_EVENT = (e: { kind: string } | null | undefined): PawnMood => (
+    e?.kind === 'jail' || e?.kind === 'hospital' ? 'sad' : 'calm'
+  );
   let mood: PawnMood = 'calm';
   /** 停留事件气泡（spec §6.7）：一次性出现、`fx` 结束时消失（与 mood 同一生命周期） */
   let bubble: BubbleContent | null = null;
@@ -458,7 +464,29 @@ export async function boot(): Promise<void> {
   /** 顶部状态条 + 左下战报的同一份文案：「谁 · 做了什么」（无气泡时为 null，两处各自回退默认显示） */
   const calloutOf = (g: Game | null): string | null =>
     g && bubble ? `${PLAYER_NAME[currentPlayer(g.state).id - 1]} ${bubble.title} · ${bubble.amount}` : null;
-  const playView = (g: Game): ElementSpec[] => {
+  /**
+   * 棋盘楼体层级（**演示层级 ∪ 实时地产层级**，取大值）：
+   *   · 未售地块 → 演示层级 `slotLevelsOf()`，首屏与 v5 样张逐像素一致（零回归）；
+   *   · 已售地块 → 取「演示层级」与「地产层级」的大者：买下**不会**把装饰高楼缩回
+   *     L1 摊位（视觉降级），而升级 L4/L5 会让楼体逐级长高（此前楼体恒走演示层级，
+   *     5 级地产在棋盘上看不见 —— 见 `docs/manual-mono.md` M4 结论的「有意偏差」）。
+   * 同一份表同时供 `buildingSpecs`（楼体/店招/挂件层级）、`drawLabels`（楼顶名牌）与
+   * `instantiateDeps.slotLevels`（贴墙挂件的抬升高度 `hostHeightOf`）——三处必须同源，
+   * 否则长高后的楼会把灯笼/招牌落在旧高度上。
+   */
+  const liveLevels = (): Record<number, BuildLevel> => {
+    const out: Record<number, BuildLevel> = { ...slotLevels };
+    const es = game?.state.estates;
+    if (!es) return out;
+    for (const key of Object.keys(es)) {
+      const i = Number(key);
+      const lv = es[i]?.level;
+      if (typeof lv === 'number' && lv > (out[i] ?? 0)) out[i] = lv;
+    }
+    return out;
+  };
+
+  const playView = (g: Game, lv: Record<number, BuildLevel>): ElementSpec[] => {
     const alive = g.state.players.filter((p) => !p.bankrupt);
     const curId = currentPlayer(g.state).id;
     const pawnStates: PawnState[] = alive.map((p) => ({
@@ -472,7 +500,7 @@ export async function boot(): Promise<void> {
       ...boardTileSpecs(currentPlayer(g.state).pos, ownedOf),
       ...innerSpecs(),
       fountainSpec(),
-      ...buildingSpecs({ ownerOf: ownedOf, brandOf: shops.brandAt }),
+      ...buildingSpecs({ ownerOf: ownedOf, brandOf: shops.brandAt, levelOf: (i) => lv[i] }),
       ...streetPropSpecs(),
       ...pawnSpecs(pawnStates),
       /* 停留事件气泡（spec §6.7）：当前玩家棋子头顶，跟 pawnSpecs 同一分组口径 */
@@ -494,10 +522,13 @@ export async function boot(): Promise<void> {
   /** 唯一出画口：清 spec → 组视图 → 渲染 → 标签 → HUD / 浮层命中层 */
   const paint = (): void => {
     if (game?.state.over) audio.stopBgm();   // spec §6.2：结算即停 BGM（幂等，重复调用无副作用）
+    /* 楼体层级表（唯一一份）：先落回 instantiateDeps，贴墙挂件的抬升才算得对 */
+    const lv = liveLevels();
+    instantiateDeps.slotLevels = lv;
     scene.reset();
     /* 环境层（夜空/星/月/远山/街市/街灯/灯笼串）：静态底遍，插在最前 ⇒ 压在所有棋盘元素之下 */
     scene.addMany(atmosphereSpecs());
-    if (game) scene.addMany(playView(game));
+    if (game) scene.addMany(playView(game, lv));
     else if (!opts.play) scene.addMany(demoView());
     scene.render();
     drawLabels(stage.layers.labels, geo, {
@@ -506,8 +537,8 @@ export async function boot(): Promise<void> {
       ownedText: tokens.labelOwnedText ?? '#ffffff',
       ownerOf: ownedOf,
       textOf: shops.shortAt,
-      /* 楼顶名牌（spec §6.2）：有楼浮上楼顶，无楼回落到地面字牌 */
-      levelOf: (i) => slotLevels[i],
+      /* 楼顶名牌（spec §6.2）：有楼浮上楼顶，无楼回落到地面字牌（层级与楼体同源一份） */
+      levelOf: (i) => lv[i],
       /* 当前格三重标记（spec §6.3）：放大 1.25× + 金描边 + 指示三角 */
       currentSlot: game ? currentPlayer(game.state).pos : undefined,
     }, LABEL_GROUND);
@@ -515,6 +546,9 @@ export async function boot(): Promise<void> {
     panels?.update();
     share?.update();
     slots?.update(calloutOf(game));
+    /* 遮挡修复：`#mono-slots`（右上轮播 + 左下战报）是 DOM，恒在画布之上 ⇒ 任何浮层展开时
+       整块隐藏，否则必然压住事件卡（canvas 的 `ui.card`）左下角。无浮层时 `false` = 逐像素回现状。 */
+    slots?.setHidden(game !== null && overlayOf(game.state) !== null);
   };
 
   /**
@@ -583,6 +617,11 @@ export async function boot(): Promise<void> {
       }
       case 'stock':
         return { kind: 'stock', x: at.x, y: at.y };
+      case 'lottery':
+        return {
+          kind: 'card', title: '乐透开奖',
+          text: r.prize > 0 ? `恭喜中奖 ￥${r.prize}！` : '谢谢参与，下次再来。',
+        };
       default:
         return null;
     }
@@ -627,8 +666,17 @@ export async function boot(): Promise<void> {
       () => applyStep(g, step),
       (r: never) => ctxOfStep(step, r as unknown),
       withFx,
-      /* 气泡四态（spec §6.7）：文案取「动作落库后」的所在格短名 + 本次抽卡名 */
-      (r: unknown) => bubbleOfStep(step, r, shops.shortAt(currentPlayer(g.state).pos), g.state.lastDraw?.title ?? null),
+      /* 气泡四态（spec §6.7）：文案取「动作落库后」的所在格短名 + 本次抽卡名；
+         第三段挂当前行动席位的**原著引文**（`data/lines.ts`，逐条标注回目），
+         seed 用「轮次 ×32 + 所在格」⇒ 同一局面重放取词一致，e2e 可复现 */
+      (r: unknown) => bubbleOfStep(
+        step, r, shops.shortAt(currentPlayer(g.state).pos), g.state.lastDraw?.title ?? null,
+        pickLineForSeat(
+          currentPlayer(g.state).id - 1,
+          g.state.round * 32 + currentPlayer(g.state).pos,
+          QUOTE_MAX_CHARS,
+        ).text,
+      ),
       (r: unknown) => camPlanOf(step, r),
     );
   };
@@ -656,7 +704,7 @@ export async function boot(): Promise<void> {
   /** 席位确定后开局（spec §6：选完再 createGame）：建 game → 挂 HUD/浮层/驱动器 → 按需弹引导 → 重画 */
   const startGame = (plan: SeatPlan): void => {
     seats = plan;
-    const g = createGame({ seed: opts.seed, playerCount: 4 });
+    const g = createGame({ seed: opts.seed, playerCount: 4, abilities: true });
     game = g;
     hud = mountHud(fitRoot, g, (a: HudActionId) => {
       /* 静音键（spec §7.4）：翻转 → 落库 → 立即重画图标；不跳动画、不推进状态 */

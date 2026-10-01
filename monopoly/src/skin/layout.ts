@@ -205,10 +205,10 @@ export const FX_DICE_MS = 560;
 export const FX_DICE_SPIN = 360;                 // 旋转总角度（度）
 export const FX_DICE_HOP = 46;                   // 弹跳高度（px）
 export const FX_DICE_S = 2.4;                    // 骰体动效缩放
-/* 移动：逐格跳跃 + 落尘（棋子放大 2.2 倍，原棋盘棋子 0.62 缩放太小于静帧不可辨） */
+/* 移动：逐格跳跃 + 落尘（`FX_HOP_S` 是**绝对台位缩放**，非叠加：静帧 1.6 → 起跳 2.0 = 1.25× 弹跳） */
 export const FX_HOP_MS = 320;
 export const FX_HOP_ARC = 52;                    // 腾空弧高（px）
-export const FX_HOP_S = 2.2;                     // 棋子动效缩放
+export const FX_HOP_S = 2.0;                     // 棋子动效缩放（起跳放大）
 export const FX_HOP_KICK_MS = 110;               // 起跳段时长
 export const FX_DUST_COUNT = 6;
 export const FX_DUST_MS = 320;

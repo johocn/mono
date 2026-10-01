@@ -314,9 +314,9 @@ const shot = async (p, name, opts = {}) => {
       document.body.appendChild(d);
     };
     const S = 1.7;
-    /* 一、四造型（两男两女：短发 / 双马尾 / 小帽 / 丸子头），各染一条归属围巾 */
-    head('Q 版人物 · 四造型（短发 / 双马尾 / 小帽 / 丸子头）', 22);
-    const styles = ['短发 P1', '双马尾 P2', '小帽 P3', '丸子头 P4'];
+    /* 一、四角色（西游·取经四众：悟空 / 八戒 / 悟净 / 三藏），各染一条归属色腰带 */
+    head('Q 版人物 · 取经四众（孙悟空 / 猪八戒 / 沙悟净 / 唐三藏）', 22);
+    const styles = ['孙悟空 P1', '猪八戒 P2', '沙悟净 P3', '唐三藏 P4'];
     const row1 = styles.map((name, i) => {
       const cx = 58 + i * 90;
       const ok = put({ id: `piece.p${i + 1}`, c: 0, r: 0, pass: 3, fixed: { cx, cy: 118, s: S }, state: { owner: i + 1, mood: 'calm' } });

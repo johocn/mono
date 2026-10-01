@@ -2,13 +2,6 @@ import type { ElementSpec } from '../skin/instantiate';
 
 export const PAWN_COUNT = 4;
 
-/** 四枚棋子沿格前沿一排（v5 样张 line 319：x + (i-1.5)×gap） */
-export function pawnSlots(centerX: number, _hw: number, p: { gap: number }): number[] {
-  const out: number[] = [];
-  for (let i = 0; i < PAWN_COUNT; i++) out.push(centerX + (i - (PAWN_COUNT - 1) / 2) * p.gap);
-  return out;
-}
-
 /** 棋子表情（spec §6.6）：由动作落库写入（`main.ts` runAction），fx 结束回落 calm */
 export type PawnMood = 'calm' | 'happy' | 'sad';
 
@@ -29,11 +22,13 @@ export interface PawnPlace {
   c: number;
   r: number;
   pawnIndex: number;
+  /** 同格人数：Scene 用它决定「居中 / 单排 / 2×2 方阵」 */
+  pawnCount: number;
 }
 
 /**
- * 按格分组 → 组内序号。棋子的横向错开由 Scene 按 `pawnIndex` 算，
- * 视图侧只负责「谁和谁同格、谁排第几」。
+ * 按格分组 → 组内序号 + 组大小。棋子的错开由 Scene 按 `pawnIndex` / `pawnCount` 算，
+ * 视图侧只负责「谁和谁同格、谁排第几、同格几个人」。
  */
 export function pawnPlaces(pawns: PawnState[]): PawnPlace[] {
   const byCell = new Map<string, PawnState[]>();
@@ -44,19 +39,20 @@ export function pawnPlaces(pawns: PawnState[]): PawnPlace[] {
   const out: PawnPlace[] = [];
   for (const [, group] of byCell) {
     const { c, r } = group[0];
-    group.forEach((pw, pawnIndex) => out.push({ pw, c, r, pawnIndex }));
+    const count = group.length;
+    group.forEach((pw, pawnIndex) => out.push({ pw, c, r, pawnIndex, pawnCount: count }));
   }
   return out;
 }
 
 /**
- * 生成棋子 spec（第三遍）：同格四人靠 spec.pawnIndex 让 Scene 横向错开，
+ * 生成棋子 spec（第三遍）：同格多人靠 spec.pawnIndex / pawnCount 让 Scene 错开，
  * 自己不算坐标（spec §3.7.1「渲染层禁止直接画」）。
- * 造型（`params.style`）按 pid 写在 skin.json（p1 短发 / p2 双马尾 / p3 小帽 / p4 丸子头）。
+ * 造型（`params.style`）按 pid 写在 skin.json（p1 悟空 / p2 八戒 / p3 悟净 / p4 三藏）。
  */
 export function pawnSpecs(pawns: PawnState[]): ElementSpec[] {
-  return pawnPlaces(pawns).map(({ pw, c, r, pawnIndex }) => ({
-    id: `piece.p${pw.index + 1}`, slot: null, c, r, pawnIndex,
+  return pawnPlaces(pawns).map(({ pw, c, r, pawnIndex, pawnCount }) => ({
+    id: `piece.p${pw.index + 1}`, slot: null, c, r, pawnIndex, pawnCount,
     state: { owner: pw.index + 1, mood: pw.mood ?? 'calm', active: pw.active === true },
   }));
 }

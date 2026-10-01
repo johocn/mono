@@ -26,10 +26,15 @@ describe('board 数据（spec §4）', () => {
     expect(shortAt(0)).toBe('鹿乡小镇');
   });
 
-  it('命运卡 5 格 / 机会卡 5 格（与 v5 样张 TYPES 分布一致）', () => {
+  it('命运 / 机会各 3 格，商家 17 格不动，四个新特殊格各 1 格（M7 补全）', () => {
     const types = TILES.map((t) => t.type);
-    expect(types.filter((t) => t === 'fate').length).toBe(5);
-    expect(types.filter((t) => t === 'chance').length).toBe(5);
+    expect(types.filter((t) => t === 'fate').length).toBe(3);
+    expect(types.filter((t) => t === 'chance').length).toBe(3);
+    expect(types.filter((t) => t === 'shop').length).toBe(17);
+    expect(typeAt(9)).toBe('bank');
+    expect(typeAt(21)).toBe('lottery');
+    expect(typeAt(23)).toBe('tax');
+    expect(typeAt(25)).toBe('hospital');
   });
 
   it('ringPath(11,7) 边长为 10 / 6（倾斜长方形），环长仍 32', () => {

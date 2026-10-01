@@ -2,6 +2,7 @@ import { BUILDING_HEIGHTS, getEntry } from './registry';
 import { resolve, type Resolved } from './resolve';
 import { isElementId } from './ids';
 import type { ThemePatch } from './theme';
+import type { BuildLevel } from '../data/board';
 import type { Box, ElementState, Mount, ProviderKind, ProviderSpec, SkinPack } from './types';
 
 export interface ElementSpec {
@@ -9,12 +10,14 @@ export interface ElementSpec {
   slot?: number | null;
   c: number;
   r: number;
-  level?: 1 | 2 | 3;
+  level?: BuildLevel;
   state?: ElementState;
   mount?: Mount;
   overrides?: Record<string, ProviderSpec> | null;
   /** 棋子同格错开用（`piece.*` 第三遍）：第 i 枚 → Scene 交给 resolvePlacement 算 cx */
   pawnIndex?: number;
+  /** 同格棋子总数：≥3 走 2×2 方阵（非 2×2 时 Scene 退化为「单排 / 居中」） */
+  pawnCount?: number;
   /** 绘制遍覆盖（1 地面 / 2 标签 / 3 棋子 / 4 覆盖层 fx）；缺省由 Scene.passOf(id) 决定 */
   pass?: 1 | 2 | 3 | 4;
   /** 舞台定格台位（地块橱窗）：跳过 resolvePlacement，直接用绝对屏幕坐标与缩放 */
@@ -30,7 +33,7 @@ export interface InstantiateDeps {
    * L1（商家实拍 / 渲染层显式覆盖）命中时**不合并**——商家素材永远赢（spec §4）。
    */
   theme?: Record<string, ThemePatch> | null;
-  slotLevels?: Record<number, 1 | 2 | 3>;
+  slotLevels?: Record<number, BuildLevel>;
   onDraw?: (inst: Instance, params: Record<string, unknown>) => void;
 }
 
@@ -40,7 +43,7 @@ export interface Instance {
   skin: string;
   providerKind: ProviderKind;
   provider: ProviderSpec;
-  level: 1 | 2 | 3 | 4;
+  level: BuildLevel;
   mount: Mount;
   box: Box;
   depth: number;
@@ -54,12 +57,12 @@ export interface Instance {
   draw: (g: unknown, params: Record<string, unknown>) => void;
 }
 
-export function hostHeightOf(slot: number | null, slotLevels: Record<number, 1 | 2 | 3>): number {
+export function hostHeightOf(slot: number | null, slotLevels: Record<number, BuildLevel>): number {
   const lv = slot === null ? 1 : slugLevel(slot, slotLevels);
   return BUILDING_HEIGHTS[lv];
 }
 
-function slugLevel(slot: number, slotLevels: Record<number, 1 | 2 | 3>): 1 | 2 | 3 {
+function slugLevel(slot: number, slotLevels: Record<number, BuildLevel>): BuildLevel {
   return slotLevels[slot] ?? 1;
 }
 

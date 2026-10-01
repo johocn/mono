@@ -7,22 +7,27 @@ import { pawnPlaces, type PawnState } from './PieceView';
 /** 五态主色键（spec §6.7 + 前进播报）：买地 / 收租 / 抽卡 / 进监狱 / 前进 —— 具体色值在 `proc-bubble.ts` 的 L4 兜底里 */
 export type BubbleTone = 'buy' | 'rent' | 'card' | 'jail' | 'move';
 
-/** 头顶气泡内容（标题 + 金额/说明 + 主色键） */
+/** 头顶气泡内容（标题 + 金额/说明 + 主色键 + 原著引文） */
 export interface BubbleContent {
   title: string;
   amount: string;
   tone: BubbleTone;
+  /** 角色原著引文（来自 `data/lines.ts`，逐条可溯源回目）；缺省不画第三段 */
+  quote?: string;
 }
 
 /**
  * 动作 → 气泡内容（纯函数）：认「前进 / 买地 / 收租 / 抽卡 / 进监狱」五态，其余返回 null（不出气泡）。
  * `result` = `applyStep` 的返回值：前进取 `steps`/`barrier`、买地取 `cost`、收租取 `rent`、进监狱取 `turns`/`waived`；
  * 买地失败（`ok !== true`）不出气泡；文案与 fx 同源（标题 = 落格短名，卡名取 `state.lastDraw`）。
+ * `quote` = 当前行动席位的原著引文（`pickLineForSeat` 已经按两行宽度挑过短句），挂到气泡第三段。
  */
 export function bubbleOfStep(
   step: { kind: string }, result: unknown, tileName: string, cardTitle: string | null,
+  quote: string | null = null,
 ): BubbleContent | null {
   const r = (result ?? {}) as Record<string, unknown>;
+  const q = quote && quote.length > 0 ? quote : undefined;
   /* 前进播报（「谁前进几步」）：落地即报，随后由 settle/end 覆盖；
      被路障截停时步数为实际移动格数，副行点明截停原因 */
   if (step.kind === 'move') {
@@ -31,23 +36,44 @@ export function bubbleOfStep(
       title: `前进 ${r.steps} 步`,
       amount: r.barrier === true ? '被路障截停' : `落在 ${tileName}`,
       tone: 'move',
+      quote: q,
     };
   }
   if (step.kind === 'buy') {
     return r.ok === true && typeof r.cost === 'number'
-      ? { title: tileName, amount: `买地 ￥${r.cost}`, tone: 'buy' }
+      ? { title: tileName, amount: `买地 ￥${r.cost}`, tone: 'buy', quote: q }
       : null;
   }
   if (step.kind !== 'settle') return null;
   if (r.kind === 'rent' && typeof r.rent === 'number') {
-    return { title: tileName, amount: `租金 -￥${r.rent}`, tone: 'rent' };
+    return { title: tileName, amount: `租金 -￥${r.rent}`, tone: 'rent', quote: q };
   }
   if (r.kind === 'jail') {
     const turns = typeof r.turns === 'number' ? r.turns : 0;
-    return { title: tileName, amount: r.waived === true ? '免罚抵过' : `停留 ${turns} 回合`, tone: 'jail' };
+    return {
+      title: tileName, amount: r.waived === true ? '免罚抵过' : `停留 ${turns} 回合`, tone: 'jail', quote: q,
+    };
   }
   if (r.kind === 'fate' || r.kind === 'chance') {
-    return { title: tileName, amount: `抽到「${cardTitle ?? ''}」`, tone: 'card' };
+    return { title: tileName, amount: `抽到「${cardTitle ?? ''}」`, tone: 'card', quote: q };
+  }
+  if (r.kind === 'bank' && typeof r.interest === 'number') {
+    return { title: tileName, amount: `利息 +￥${r.interest}`, tone: 'buy', quote: q };
+  }
+  if (r.kind === 'lottery' && typeof r.prize === 'number') {
+    const stake = typeof r.stake === 'number' ? r.stake : 0;
+    return r.prize > 0
+      ? { title: tileName, amount: `中奖 +￥${r.prize}`, tone: 'buy', quote: q }
+      : { title: tileName, amount: `未中奖 -￥${stake}`, tone: 'rent', quote: q };
+  }
+  if (r.kind === 'tax' && typeof r.amount === 'number') {
+    return { title: tileName, amount: `缴税 -￥${r.amount}`, tone: 'jail', quote: q };
+  }
+  if (r.kind === 'hospital') {
+    const turns = typeof r.turns === 'number' ? r.turns : 0;
+    return {
+      title: tileName, amount: r.waived === true ? '免罚抵过' : `住院 ${turns} 回合`, tone: 'jail', quote: q,
+    };
   }
   return null;
 }
@@ -69,7 +95,8 @@ export function bubbleSpecs(
   const at = resolvePlacement(
     {
       id: 'piece.p1', c: active.c, r: active.r, slot: null, lift: 0,
-      box: PAWN_BOX, mount: 'ground', pawnIndex: active.pawnIndex,
+      box: PAWN_BOX, mount: 'ground',
+      pawnIndex: active.pawnIndex, pawnCount: active.pawnCount,
     },
     geo,
     placement,
@@ -82,6 +109,6 @@ export function bubbleSpecs(
   return [{
     id: 'ui.bubble', slot: null, c: 0, r: BUBBLE_DEPTH, pass: 4,
     fixed: { cx, cy: at.cy - PAWN_BOX.h * at.s - BUBBLE_GAP, s: 1 },
-    state: { title: content.title, amount: content.amount, tone: content.tone },
+    state: { title: content.title, amount: content.amount, tone: content.tone, quote: content.quote ?? '' },
   }];
 }

@@ -1,4 +1,4 @@
-import { RING_SIZE, typeAt } from '../data/board';
+import { RING_SIZE, typeAt, type BuildLevel } from '../data/board';
 import { buyPrice, canUpgrade, nextLevel, rentOf, sellValue } from '../data/economy';
 
 /** 一块已成交的地产 */
@@ -6,8 +6,8 @@ export interface Estate {
   index: number;
   /** 持有者 1..4（与 `piece.p1..p4` / `tokens.owner1..owner4` 对齐） */
   owner: number;
-  /** 建成的层级 1..3（无主地块在 Estates 里没有键） */
-  level: 1 | 2 | 3;
+  /** 建成的层级 1..5（无主地块在 Estates 里没有键） */
+  level: BuildLevel;
   /** 施工中：升级后置 true，该玩家下个回合开始时解除（1 回合不可收租，spec §5.2） */
   processing: boolean;
 }
@@ -26,7 +26,7 @@ export type BuyOutcome =
   | { ok: false; reason: BuyFail };
 
 export type UpgradeOutcome =
-  | { ok: true; cost: number; cash: number; level: 2 | 3 }
+  | { ok: true; cost: number; cash: number; level: 2 | 3 | 4 | 5 }
   | { ok: false; reason: UpgradeFail };
 
 /** 只有 shop 类型可买卖（起点 core / 命运 / 机会 / 监狱 / 股票 / 福利一律不可，spec §4 规则约定） */
@@ -34,22 +34,27 @@ export function buyable(index: number): boolean {
   return index >= 0 && index < RING_SIZE && typeAt(index) === 'shop';
 }
 
-/** 能否购买：shop 类型 + 无主 + 现金够 */
-export function canBuy(estates: Estates, index: number, cash: number): boolean {
-  return buyable(index) && !estates[index] && cash >= buyPrice(1);
+/** 能否购买：shop 类型 + 无主 + 现金够（`discount` 走技能折扣，默认原价） */
+export function canBuy(estates: Estates, index: number, cash: number, discount = 1): boolean {
+  return buyable(index) && !estates[index] && cash >= discounted(buyPrice(1), discount);
+}
+
+/** 技能折扣后的实付价（四舍五入到元；`discount` = 1 时原样返回） */
+export function discounted(price: number, discount: number): number {
+  return discount === 1 ? price : Math.round(price * discount);
 }
 
 /** 买地：成功则原地写入 estates（1 级成楼），返回花费与剩余现金 */
-export function buy(estates: Estates, index: number, owner: number, cash: number): BuyOutcome {
+export function buy(estates: Estates, index: number, owner: number, cash: number, discount = 1): BuyOutcome {
   if (!buyable(index)) return { ok: false, reason: 'not-buyable' };
   if (estates[index]) return { ok: false, reason: 'owned' };
-  const cost = buyPrice(1);
+  const cost = discounted(buyPrice(1), discount);
   if (cash < cost) return { ok: false, reason: 'not-enough-cash' };
   estates[index] = { index, owner, level: 1, processing: false };
   return { ok: true, cost, cash: cash - cost };
 }
 
-/** 升级 L1→L2→L3：逐级、不可跳级；升级当回合起挂施工中 */
+/** 升级 L1→L2→…→L5：逐级、不可跳级；升级当回合起挂施工中 */
 export function upgrade(estates: Estates, index: number, owner: number, cash: number): UpgradeOutcome {
   const e = estates[index];
   if (!e) return { ok: false, reason: 'no-owner' };
@@ -58,7 +63,7 @@ export function upgrade(estates: Estates, index: number, owner: number, cash: nu
   if (!canUpgrade(e.level)) return { ok: false, reason: 'max-level' };
   const cost = buyPrice(nextLevel(e.level));
   if (cash < cost) return { ok: false, reason: 'not-enough-cash' };
-  e.level = nextLevel(e.level) as 2 | 3;
+  e.level = nextLevel(e.level) as 2 | 3 | 4 | 5;
   e.processing = true;
   return { ok: true, cost, cash: cash - cost, level: e.level };
 }

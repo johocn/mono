@@ -10,7 +10,7 @@ import type { ElementSpec } from '../../src/skin/instantiate';
 const byId = (specs: ElementSpec[], id: string) => specs.filter((s) => s.id === id);
 const byPrefix = (specs: ElementSpec[], p: string) => specs.filter((s) => s.id.startsWith(p));
 const endsWith = (specs: ElementSpec[], tail: string) => specs.filter((s) => s.id.endsWith(tail));
-const isWall = (id: string) => /\.l[123]$/.test(id);
+const isWall = (id: string) => /\.l[1-5]$/.test(id);
 
 describe('BuildingView · 层级表', () => {
   it('slotLevelsOf 只收 lv>0 的 18 格，值为 1/2/3', () => {
@@ -21,6 +21,20 @@ describe('BuildingView · 层级表', () => {
     expect(lv[18]).toBe(3);
     expect(lv[30]).toBe(3);
     expect(lv[2]).toBeUndefined();
+  });
+});
+
+describe('BuildingView · 实时层级（play 版式：演示层级 ∪ 地产层级）', () => {
+  it('传 levelOf 时只按该表出楼：L5 楼体 id 与层级同步，其余格无楼', () => {
+    const specs = buildingSpecs({ levelOf: (i) => (i === 4 ? 5 : undefined) });
+    expect(byPrefix(specs, 'building.').filter((s) => isWall(s.id)).map((s) => s.id))
+      .toEqual(['building.s4.l5']);
+    expect(specs.find((s) => s.id === 'building.s4.l5')?.level).toBe(5);
+  });
+
+  it('levelOf 返回 0 视同无楼（地砖回到 level 1），不抛 unregistered', () => {
+    const specs = buildingSpecs({ levelOf: () => 0 });
+    expect(byPrefix(specs, 'building.')).toHaveLength(0);
   });
 });
 

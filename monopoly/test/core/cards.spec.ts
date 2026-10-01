@@ -8,17 +8,18 @@ import { FATE_DECK, ITEM_CARDS, type ItemCardKind } from '../../src/data/cards';
 import type { Estates } from '../../src/core/estate';
 
 describe('core.cards 牌堆（seed 定序 / 抽空洗牌）', () => {
-  it('同 seed → 同序；连续抽 6 张互不重复；第 7 张触发洗牌（remaining 先降后回升）', () => {
+  it('同 seed → 同序；连抽整堆互不重复；再抽一张触发洗牌（remaining 先降后回升）', () => {
     const a = createDeck(FATE_DECK, makeRng(7));
     const b = createDeck(FATE_DECK, makeRng(7));
-    const first = Array.from({ length: 6 }, () => a.draw().id);
-    const second = Array.from({ length: 6 }, () => b.draw().id);
+    const n = FATE_DECK.length;
+    const first = Array.from({ length: n }, () => a.draw().id);
+    const second = Array.from({ length: n }, () => b.draw().id);
     expect(first).toEqual(second);
-    expect(new Set(first).size).toBe(6);
+    expect(new Set(first).size).toBe(n);
     expect(a.remaining()).toBe(0);
-    /* 抽第 7 张 → 整堆洗牌重来，remaining 回到 5 */
+    /* 抽空后再抽 1 张 → 整堆洗牌重来，remaining 回到 n-1 */
     a.draw();
-    expect(a.remaining()).toBe(5);
+    expect(a.remaining()).toBe(n - 1);
   });
 
   it('异 seed → 抽序不同（且不调用 Math.random）', () => {

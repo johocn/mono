@@ -1,9 +1,10 @@
 import { getEntry } from './registry';
 import type { ProviderSpec, SkinPack } from './types';
+import type { BuildLevel } from '../data/board';
 
 export interface Resolved {
   elementId: string;
-  level: 1 | 2 | 3 | 4;
+  level: BuildLevel;
   provider: ProviderSpec;
 }
 

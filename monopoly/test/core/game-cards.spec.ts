@@ -4,7 +4,7 @@ import { has, handIndexOf } from '../../src/core/cards';
 import {
   CHANCE_DECK, FATE_DECK, ITEM_CARDS, PARDON_REFUND,
 } from '../../src/data/cards';
-import { ROUND_LIMIT, START_CASH } from '../../src/data/economy';
+import { PASS_START_BONUS, ROUND_LIMIT, START_CASH } from '../../src/data/economy';
 import type { Dice } from '../../src/core/dice';
 
 /** 固定点数骰（走位完全可预期） */
@@ -353,5 +353,176 @@ describe('game-cards 整局自动（M5 收敛）', () => {
     expect(w).toBeGreaterThanOrEqual(1);
     expect(w).toBeLessThanOrEqual(4);
     expect(g.state.round).toBeLessThanOrEqual(ROUND_LIMIT + 1);
+  });
+});
+
+/* ————————————————————————————————————————————————————————————
+   扩容牌（cards.ts 各 20 张）：命运 8 种新机制 + 机会 4 种新机制。
+   落点固定为 2（命运格）/ 5（机会格），牌堆注入单张 ⇒ 逐张可复现。
+   ———————————————————————————————————————————————————————————— */
+
+describe('game-cards 命运扩容（spec §5.3）', () => {
+  /** 落到命运格 2 并抽指定牌 */
+  const drawFate = (id: string): Game => {
+    const g = createGame({ dice: fixed(1, 1), decks: { fate: [fateOf(id)] } });
+    g.rollDice();
+    g.moveCurrent();
+    return g;
+  };
+
+  it('f-advance-3：前进 3 格（2 → 5，落格不再二次结算）', () => {
+    const g = drawFate('f-advance-3');
+    expect(g.settleCurrent()).toEqual({
+      kind: 'fate', index: 2, cardId: 'f-advance-3',
+      effect: { kind: 'advance', from: 2, to: 5, steps: 3 },
+    });
+    expect(g.state.players[0].pos).toBe(5);
+  });
+
+  it('f-advance-6：越过起点回绕并按掷骰同口径领取过路津贴', () => {
+    const g = createGame({ dice: fixed(1, 1), decks: { fate: [fateOf('f-advance-6')] } });
+    g.state.players[0].pos = 27;
+    g.rollDice();
+    g.moveCurrent();                                   // 27 + 2 = 29（命运格）
+    expect(g.settleCurrent()).toEqual({
+      kind: 'fate', index: 29, cardId: 'f-advance-6',
+      effect: { kind: 'advance', from: 29, to: 3, steps: 6 },
+    });
+    expect(g.state.players[0].cash).toBe(START_CASH + PASS_START_BONUS);
+  });
+
+  it('f-toStart：回到起点 0 并领取过路津贴', () => {
+    const g = drawFate('f-toStart');
+    expect(g.settleCurrent()).toEqual({
+      kind: 'fate', index: 2, cardId: 'f-toStart', effect: { kind: 'toStart', from: 2 },
+    });
+    expect(g.state.players[0].pos).toBe(0);
+    expect(g.state.players[0].cash).toBe(START_CASH + PASS_START_BONUS);
+  });
+
+  it('f-gift：直接入账 ￥250', () => {
+    const g = drawFate('f-gift');
+    expect(g.settleCurrent()).toEqual({
+      kind: 'fate', index: 2, cardId: 'f-gift', effect: { kind: 'gift', amount: 250 },
+    });
+    expect(g.state.players[0].cash).toBe(START_CASH + 250);
+  });
+
+  it('f-levy：按净资产 10% 缴税（开局 ￥3000 → ￥300）', () => {
+    const g = drawFate('f-levy');
+    expect(g.settleCurrent()).toEqual({
+      kind: 'fate', index: 2, cardId: 'f-levy',
+      effect: { kind: 'levy', amount: 300, percent: 10, paid: 300, bankrupt: false },
+    });
+    expect(g.state.players[0].cash).toBe(START_CASH - 300);
+  });
+
+  it('f-repair：按地块级数总和计费（L2 + L3 = 5 级 → ￥200）', () => {
+    const g = drawFate('f-repair');
+    g.state.estates[4] = { index: 4, owner: 1, level: 2, processing: false };
+    g.state.estates[6] = { index: 6, owner: 1, level: 3, processing: false };
+    expect(g.settleCurrent()).toEqual({
+      kind: 'fate', index: 2, cardId: 'f-repair',
+      effect: { kind: 'repair', amount: 40, count: 5, paid: 200, bankrupt: false },
+    });
+    expect(g.state.players[0].cash).toBe(START_CASH - 200);
+  });
+
+  it('f-demote：自有最高级地块降 1 级；只有 L1 时无地可降', () => {
+    const g = drawFate('f-demote');
+    g.state.estates[4] = { index: 4, owner: 1, level: 2, processing: false };
+    g.state.estates[6] = { index: 6, owner: 1, level: 3, processing: false };
+    const r = g.settleCurrent();
+    expect(r.kind).toBe('fate');
+    if (r.kind === 'fate' && r.effect.kind === 'demote') {
+      expect([4, 6]).toContain(r.effect.index);
+      expect(r.effect.level).toBeGreaterThanOrEqual(1);
+    }
+    /* 两级各降 1 级：总和 5 → 4；L1 地块不被降回无主 */
+    expect(g.state.estates[4].level + g.state.estates[6].level).toBe(4);
+    expect(g.state.estates[4].owner).toBe(1);
+    expect(g.state.estates[6].owner).toBe(1);
+
+    const g2 = drawFate('f-demote');
+    g2.state.estates[4] = { index: 4, owner: 1, level: 1, processing: false };
+    expect(g2.settleCurrent()).toEqual({
+      kind: 'fate', index: 2, cardId: 'f-demote', effect: { kind: 'demote', index: null, level: 0 },
+    });
+    expect(g2.state.estates[4].level).toBe(1);
+  });
+
+  it('f-harvest：向每位对手收 ￥80（3 人 → 共 ￥240）', () => {
+    const g = drawFate('f-harvest');
+    expect(g.settleCurrent()).toEqual({
+      kind: 'fate', index: 2, cardId: 'f-harvest', effect: { kind: 'harvest', amount: 80, total: 240 },
+    });
+    expect(g.state.players[0].cash).toBe(START_CASH + 240);
+    expect(g.state.players.slice(1).every((p) => p.cash === START_CASH - 80)).toBe(true);
+  });
+
+  it('f-tribute：向每位对手付 ￥60（3 人 → 共 ￥180，对手各自入账）', () => {
+    const g = drawFate('f-tribute');
+    expect(g.settleCurrent()).toEqual({
+      kind: 'fate', index: 2, cardId: 'f-tribute',
+      effect: { kind: 'tribute', amount: 60, total: 180, paid: 180, bankrupt: false },
+    });
+    expect(g.state.players[0].cash).toBe(START_CASH - 180);
+    expect(g.state.players.slice(1).every((p) => p.cash === START_CASH + 60)).toBe(true);
+  });
+});
+
+describe('game-cards 机会扩容（spec §5.3）', () => {
+  /** 落到机会格 5 并抽指定牌 */
+  const drawChance = (id: string): Game => {
+    const g = createGame({ dice: fixed(1, 1), decks: { chance: [chanceOf(id)] } });
+    g.state.players[0].pos = 3;
+    g.rollDice();
+    g.moveCurrent();
+    return g;
+  };
+
+  it('c-advance-5：前进 5 格（5 → 10）', () => {
+    const g = drawChance('c-advance-5');
+    expect(g.settleCurrent()).toEqual({
+      kind: 'chance', index: 5, cardId: 'c-advance-5',
+      effect: { kind: 'advance', from: 5, to: 10, steps: 5 },
+    });
+    expect(g.state.players[0].pos).toBe(10);
+  });
+
+  it('c-toStart：回到起点并领取过路津贴', () => {
+    const g = drawChance('c-toStart');
+    expect(g.settleCurrent()).toEqual({
+      kind: 'chance', index: 5, cardId: 'c-toStart', effect: { kind: 'toStart', from: 5 },
+    });
+    expect(g.state.players[0].pos).toBe(0);
+    expect(g.state.players[0].cash).toBe(START_CASH + PASS_START_BONUS);
+  });
+
+  it('c-collect：向每位对手收 ￥50（3 人 → 共 ￥150）', () => {
+    const g = drawChance('c-collect');
+    expect(g.settleCurrent()).toEqual({
+      kind: 'chance', index: 5, cardId: 'c-collect', effect: { kind: 'collect', amount: 50, total: 150 },
+    });
+    expect(g.state.players[0].cash).toBe(START_CASH + 150);
+    expect(g.state.players.slice(1).every((p) => p.cash === START_CASH - 50)).toBe(true);
+  });
+
+  it('c-grant-*：指定道具入袋；已持同类则折现 ￥100', () => {
+    const g = drawChance('c-grant-bomb');
+    g.state.hands[0] = g.state.hands[0].filter((k) => k !== 'bomb');
+    expect(g.settleCurrent()).toEqual({
+      kind: 'chance', index: 5, cardId: 'c-grant-bomb',
+      effect: { kind: 'grantItem', item: 'bomb', refund: 0 },
+    });
+    expect(has(g.state.hands[0], 'bomb')).toBe(true);
+
+    /* 开局手牌本就含炸弹（5 种齐全）→ 抽到同类即折现 */
+    const g2 = drawChance('c-grant-bomb');
+    expect(g2.settleCurrent()).toEqual({
+      kind: 'chance', index: 5, cardId: 'c-grant-bomb',
+      effect: { kind: 'grantItem', item: null, refund: PARDON_REFUND },
+    });
+    expect(g2.state.players[0].cash).toBe(START_CASH + PARDON_REFUND);
   });
 });

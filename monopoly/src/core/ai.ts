@@ -3,8 +3,8 @@
  * 只产出「要做什么」（`AiStep[]`，对既有 Game API 的调用意图）；
  * 「什么时候做、做多久」全部由 `src/ui/aiDriver.ts` 决定。
  */
-import { currentPlayer, netWorth, type Game, type GameState, type Phase } from './game';
-import { buyable, canBuy, ownedBy } from './estate';
+import { currentPlayer, buyDiscountOf, netWorth, type Game, type GameState, type Phase } from './game';
+import { buyable, canBuy, discounted, ownedBy } from './estate';
 import { buyPrice, canUpgrade, nextLevel } from '../data/economy';
 import type { ItemCardKind } from '../data/cards';
 import { RING_SIZE } from '../data/board';
@@ -154,10 +154,11 @@ function settledPlan(state: GameState, persona: Persona, P: AiParams): AiStep[] 
   const pos = me.pos;
   const e = state.estates[pos];
 
-  /* ① 买地：可买 + 无主 + 不超 buyMax + 买后仍 >= reserve */
+  /* ① 买地：可买 + 无主 + 不超 buyMax + 买后仍 >= reserve（按技能折扣后的实付价评估） */
   if (buyable(pos) && !e) {
-    const cost = buyPrice(1);
-    if (cost <= P.buyMax && canBuy(state.estates, pos, me.cash) && me.cash - cost >= P.reserve) post.push({ kind: 'buy' });
+    const discount = buyDiscountOf(state, me.id);
+    const cost = discounted(buyPrice(1), discount);
+    if (cost <= P.buyMax && canBuy(state.estates, pos, me.cash, discount) && me.cash - cost >= P.reserve) post.push({ kind: 'buy' });
   }
 
   /* ② 升级：自有 + 可升级 + upgradeEager + 不在施工 + 现金门（投机另需已持同级 >=2 块） */

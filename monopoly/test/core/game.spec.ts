@@ -4,6 +4,7 @@ import {
   type Game,
 } from '../../src/core/game';
 import { PASS_START_BONUS, ROUND_LIMIT, START_CASH } from '../../src/data/economy';
+import { CHANCE_DECK } from '../../src/data/cards';
 import type { Dice } from '../../src/core/dice';
 
 /** 固定点数骰：让每一局走位完全可预期（验收截图与断言都靠它复现） */
@@ -93,7 +94,9 @@ describe('game 落格结算（spec §5.2）', () => {
   });
 
   it('非 shop 地块买不了：返回 not-buyable，不改现金', () => {
-    const g = createGame({ dice: fixed(1, 1), seed: 8 });
+    /* 牌堆注入中性牌 `c-stockTip`（只记内幕消息、不动现金），避免 20 张牌堆里的收益牌干扰断言 */
+    const stockTip = CHANCE_DECK.find((c) => c.id === 'c-stockTip')!;
+    const g = createGame({ dice: fixed(1, 1), seed: 8, decks: { chance: [stockTip] } });
     g.state.players[0].pos = 3;
     g.rollDice();
     g.moveCurrent();

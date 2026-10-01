@@ -1,7 +1,8 @@
 import { brandAt, PLAYER_NAME } from '../data/board';
 import { buyPrice, canUpgrade, nextLevel } from '../data/economy';
-import { buyable } from '../core/estate';
-import { currentPlayer, netWorth, type Game, type GameState } from '../core/game';
+import { buyable, discounted } from '../core/estate';
+import { buyDiscountOf, currentPlayer, netWorth, type Game, type GameState } from '../core/game';
+import { abilityOfPlayer } from '../data/abilities';
 /** AI 席位（`null` = 真人）；从 `src/data/ai` 取，避免 ui → ui 横向依赖 */
 import { PERSONA_LABEL, type Persona, type Seat } from '../data/ai';
 import type { ElementSpec } from '../skin/instantiate';
@@ -71,12 +72,12 @@ export function primaryLabel(state: GameState, fxBusy = false, aiPersona: Person
   return a ? PRIMARY_LABEL[a] : '本局结束';
 }
 
-/** 当前玩家的买地报价；不在 settled / 非 shop / 已有主 → null */
+/** 当前玩家的买地报价（技能折扣后的实付价）；不在 settled / 非 shop / 已有主 → null */
 export function buyOffer(state: GameState): { price: number; enabled: boolean } | null {
   if (state.over || state.phase !== 'settled') return null;
   const p = currentPlayer(state);
   if (!buyable(p.pos) || state.estates[p.pos]) return null;
-  const price = buyPrice(1);
+  const price = discounted(buyPrice(1), buyDiscountOf(state, p.id));
   return { price, enabled: p.cash >= price };
 }
 
@@ -155,6 +156,8 @@ export function hudSpecs(
     bar('ui.playerBar', 2 + i, barCx(i), cy, {
       owner: p.id, name: PLAYER_NAME[p.id - 1], cash: p.cash,
       active: i === state.current, bankrupt: p.bankrupt,
+      /* 角色技能（`data/abilities.ts`）：技能局在该席位资产条角上挂技能名徽标；未启用 → 空串不画 */
+      skill: state.abilitiesOn ? abilityOfPlayer(p.id).name : '',
     });
     const seat = seats[i] ?? null;
     if (seat) bar('ui.personaTag', 2 + i, barCx(i) + HUD_PERSONA_DX, cy + HUD_PERSONA_DY, { text: PERSONA_LABEL[seat] });

@@ -118,6 +118,6 @@ export function bombDown(estates: Estates, index: number, actor: number): BombOu
     delete (estates as Record<number, Estate | undefined>)[index];
     return { ok: true, index, owner, level: 0 };
   }
-  e.level = (e.level - 1) as 1 | 2 | 3;
+  e.level = (e.level - 1) as 1 | 2 | 3 | 4;
   return { ok: true, index, owner, level: e.level };
 }

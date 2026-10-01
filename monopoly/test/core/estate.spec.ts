@@ -66,12 +66,12 @@ describe('estate 升级（L1→L2→L3 逐级、互斥、施工中；spec §5.2�
     expect(rentAt(es, 1)).toBe(105);
   });
 
-  it('无主 → no-owner；他人地块 → not-owner；3 级封顶 → max-level', () => {
+  it('无主 → no-owner；他人地块 → not-owner；5 级封顶 → max-level', () => {
     const es = fresh();
     expect(upgrade(es, 1, 2, 3000)).toEqual({ ok: false, reason: 'no-owner' });
     buy(es, 1, 2, 3000);
     expect(upgrade(es, 1, 3, 3000)).toEqual({ ok: false, reason: 'not-owner' });
-    es[1].level = 3;
+    es[1].level = 5;
     expect(upgrade(es, 1, 2, 3000)).toEqual({ ok: false, reason: 'max-level' });
   });
 

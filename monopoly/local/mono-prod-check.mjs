@@ -580,7 +580,7 @@ facts.v13 = {
   moods: [...new Set(facts.v6.pawns.map((p) => p.mood))],
   active: facts.v6.pawns.filter((p) => p.active).length,
 };
-gate.v13 = facts.v13.styles.join(',') === 'bun,cap,short,twintail'
+gate.v13 = facts.v13.styles.join(',') === 'bajie,sanzang,wujing,wukong'
   && facts.v13.owners.join(',') === '1,2,3,4';
 
 /* V9：1 条 4 段资产条 —— 渲染层实测 4 段等宽等距、无缝相接；且与 DOM 命中层零交叠（资产条不吞点击） */

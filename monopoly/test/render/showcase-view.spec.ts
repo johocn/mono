@@ -4,7 +4,7 @@ import { SHOWCASE_L as W } from '../../src/render/providers/proc-showcase';
 import {
   LEVEL_NAME, PLAYER_NAME, PRICE_BY_LEVEL, RENT_BY_LEVEL, SLOT_BANNER, TILE_BRAND, TILE_LEVEL,
 } from '../../src/data/board';
-import { STAGE_W } from '../../src/skin/layout';
+import { STAGE_H, STAGE_W } from '../../src/skin/layout';
 import type { ElementSpec } from '../../src/skin/instantiate';
 
 const by = (specs: ElementSpec[], id: string) => specs.filter((s) => s.id === id);
@@ -62,10 +62,11 @@ describe('ShowcaseView · 无主 / 无幌子地块', () => {
     expect(ov.params.levels).toBe(TILE_LEVEL[8]);
   });
 
-  it('L3 地块（slot 18）第二行信息退化为「已是最高」，不出现 undefined', () => {
+  it('L3 地块（slot 18）第二行信息指向 L4 与 L4 租金，不出现 undefined', () => {
     const st = showcaseSpecs({ slot: 18, owner: 2 }).find((s) => s.id === 'showcase.hud')!.state!;
     expect(String(st.line2)).not.toContain('undefined');
-    expect(String(st.line2)).not.toContain('L4');
+    expect(String(st.line2)).toContain('L4');
+    expect(String(st.line2)).toContain(`￥${RENT_BY_LEVEL[4]}`);
   });
 });
 
@@ -90,44 +91,49 @@ describe('ShowcaseView · 商家配置文案注入（brandOf）', () => {
   });
 });
 
-describe('ShowcaseView · C 版式（三级对照，v5 optC line 449–455）', () => {
+describe('ShowcaseView · C 版式（五级对照，v5 optC line 449–455 三级 → M7 五级 3+2）', () => {
   const specs = showcaseSpecs({ variant: 'c' });
 
-  it('三张卡各（底板 + 楼 + 店招）+ L2/L3 各一面幌子 = 11 条', () => {
-    expect(specs.length).toBe(11);
-    expect(by(specs, 'showcase.mini').length).toBe(3);
-    expect(by(specs, 'showcase.shop').length).toBe(3);
-    expect(by(specs, 'showcase.sign').length).toBe(3);
-    expect(by(specs, 'showcase.banner').length).toBe(2);
+  it('五张卡各（底板 + 楼 + 店招）+ L2..L5 四面幌子 = 19 条', () => {
+    expect(specs.length).toBe(19);
+    expect(by(specs, 'showcase.mini').length).toBe(5);
+    expect(by(specs, 'showcase.shop').length).toBe(5);
+    expect(by(specs, 'showcase.sign').length).toBe(5);
+    expect(by(specs, 'showcase.banner').length).toBe(4);
   });
 
-  it('三级并排：同一条地平线、同缩放、等间距，三张卡整体水平居中', () => {
+  it('两行 3+2：行内同地平线、同缩放、等间距、整行水平居中；第二行不溢出舞台', () => {
     const cards = by(specs, 'showcase.mini');
-    expect(cards.map((c) => c.fixed!.s)).toEqual([W.miniCardScale, W.miniCardScale, W.miniCardScale]);
-    expect(cards.map((c) => c.fixed!.cy)).toEqual([W.miniY, W.miniY, W.miniY]);
-    const step = W.miniW * W.miniCardScale + W.miniGap;
-    const [x0c, x1c, x2c] = cards.map((c) => c.fixed!.cx);
-    expect(x1c - x0c).toBeCloseTo(step, 5);
-    expect(x2c - x1c).toBeCloseTo(step, 5);
-    expect(x0c).toBeCloseTo((STAGE_W - (3 * step - W.miniGap)) / 2, 5);
+    expect(cards.map((c) => c.fixed!.s)).toEqual(Array.from({ length: 5 }, () => W.miniCardScale));
+    const cw = W.miniW * W.miniCardScale;
+    const step = cw + W.miniGap;
+    const rowGap = W.miniH * W.miniCardScale + W.miniGap;
+    const y0 = W.miniY - rowGap / 2;
+    expect(cards.map((c) => c.fixed!.cy)).toEqual([y0, y0, y0, y0 + rowGap, y0 + rowGap]);
+    const cx = cards.map((c) => c.fixed!.cx);
+    expect(cx[1] - cx[0]).toBeCloseTo(step, 5);
+    expect(cx[2] - cx[1]).toBeCloseTo(step, 5);
+    expect(cx[4] - cx[3]).toBeCloseTo(step, 5);
+    expect(cx[0]).toBeCloseTo((STAGE_W - (3 * step - W.miniGap)) / 2, 5);
+    expect(cx[3]).toBeCloseTo((STAGE_W - (2 * step - W.miniGap)) / 2, 5);
+    const bottom = y0 + rowGap + W.miniH * W.miniCardScale + W.miniCapDrop;
+    expect(bottom).toBeLessThan(STAGE_H);
   });
 
-  it('楼层级 1 / 2 / 3，色相统一 32，品牌取 core 地块（v5 miniShop 参数）', () => {
+  it('楼层级 1..5，色相统一 32，品牌取 core 地块（v5 miniShop 参数）', () => {
     const shops = by(specs, 'showcase.shop');
     const paramsOf = (i: number) => (shops[i].overrides!['showcase.shop'] as { params: Record<string, unknown> }).params;
-    expect([0, 1, 2].map((i) => paramsOf(i).levels)).toEqual([1, 2, 3]);
-    for (const i of [0, 1, 2]) {
+    expect([0, 1, 2, 3, 4].map((i) => paramsOf(i).levels)).toEqual([1, 2, 3, 4, 5]);
+    for (const i of [0, 1, 2, 3, 4]) {
       expect(paramsOf(i).hue).toBe(W.miniHue);
       expect(paramsOf(i).brand).toBe(TILE_BRAND[0]);
     }
   });
 
-  it('卡标签 = L{lv} 名 · ￥价（v5 optC line 450–452）', () => {
-    expect(by(specs, 'showcase.mini').map((c) => c.state!.caption)).toEqual([
-      `L1 ${LEVEL_NAME[1]} · ￥${PRICE_BY_LEVEL[1]}`,
-      `L2 ${LEVEL_NAME[2]} · ￥${PRICE_BY_LEVEL[2]}`,
-      `L3 ${LEVEL_NAME[3]} · ￥${PRICE_BY_LEVEL[3]}`,
-    ]);
+  it('卡标签 = L{lv} 名 · ￥价（v5 optC line 450–452 扩到 5 级）', () => {
+    expect(by(specs, 'showcase.mini').map((c) => c.state!.caption)).toEqual(
+      [1, 2, 3, 4, 5].map((lv) => `L${lv} ${LEVEL_NAME[lv]} · ￥${PRICE_BY_LEVEL[lv]}`),
+    );
   });
 
   it('楼 / 店招 / 幌子共享同一 fixed：楼在卡内水平居中、缩放 = 1.35 × 卡缩放', () => {
@@ -141,7 +147,7 @@ describe('ShowcaseView · C 版式（三级对照，v5 optC line 449–455）', 
       expect(signs[i].fixed).toEqual(s.fixed);
     });
     const banners = by(specs, 'showcase.banner');
-    expect(banners.map((b) => b.fixed!.cx)).toEqual([shops[1].fixed!.cx, shops[2].fixed!.cx]);
+    expect(banners.map((b) => b.fixed!.cx)).toEqual([1, 2, 3, 4].map((i) => shops[i].fixed!.cx));
   });
 
   it('全部走 fixed 台位 + pass 4，且不出现 B 版式的元素', () => {

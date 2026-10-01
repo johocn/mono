@@ -13,8 +13,8 @@ export const START_CASH = 3000;
 export const PASS_START_BONUS = 200;
 /** 破产分界：现金 < 0 且无可变卖地产 → 破产 */
 export const BANKRUPT_CASH_LINE = 0;
-/** 建筑最高层级 */
-export const MAX_LEVEL = 3;
+/** 建筑最高层级（M7 起 3 → 5：对齐《大富翁 5》并做超越） */
+export const MAX_LEVEL = 5;
 /** 升级施工工期：升级当回合起 1 个回合内不可收租 */
 export const BUILD_TURNS = 1;
 /** 变卖价 = 该地块累计投入的一半（向下取整） */
@@ -37,7 +37,7 @@ export function rentOf(level: number): number {
   return RENT_BY_LEVEL[level] ?? 0;
 }
 
-/** 下一层级（3 级封顶） */
+/** 下一层级（5 级封顶） */
 export function nextLevel(level: number): number {
   return Math.min(level + 1, MAX_LEVEL);
 }
@@ -47,7 +47,7 @@ export function canUpgrade(level: number): boolean {
   return level >= 1 && level < MAX_LEVEL;
 }
 
-/** 变卖价：1 级 ￥30 / 2 级 ￥120 / 3 级 ￥330 */
+/** 变卖价：累计建造价 × SELL_RATIO（L1 ￥30 / L2 ￥120 / L3 ￥330 / L4 ￥760 / L5 ￥1560） */
 export function sellValue(level: number): number {
   let invested = 0;
   for (let l = 1; l <= Math.min(level, MAX_LEVEL); l++) invested += buyPrice(l);

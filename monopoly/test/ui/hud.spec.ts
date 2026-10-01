@@ -15,9 +15,9 @@ import type { Seat } from '../../src/data/ai';
 /** 固定点数骰：每步走 2 格，落点完全可预期 */
 const fixed = (d1: number, d2: number): Dice => ({ roll: () => ({ d1, d2, total: d1 + d2 }) });
 
-/** 让 1 号玩家「掷→走→结算」后停在 pos（advance 走 2 格，故起点设 pos-2） */
+/** 让 1 号玩家「掷→走→结算」后停在 pos（advance 走 2 格，故起点设 pos-2）；固定 seed 让抽卡也可复现 */
 const settledAt = (pos: number, dice: Dice = fixed(1, 1)) => {
-  const g = createGame({ dice });
+  const g = createGame({ dice, seed: 1 });
   g.state.players[0].pos = (pos - 2 + 32) % 32;
   g.rollDice();
   g.moveCurrent();
@@ -70,18 +70,18 @@ describe('hud 买地 / 升级报价（spec §5.2 / §5.4）', () => {
   });
 
   it('停在非 shop 格 → 不给报价', () => {
-    const g = settledAt(5);   // index 5 = 机会卡
+    const g = settledAt(12);   // index 12 = 监狱（非 shop 且不抽卡，落点确定）
     expect(buyOffer(g.state)).toBeNull();
     expect(upgradeOffer(g.state)).toBeNull();
   });
 
-  it('自有 L1 → 升级 ￥180 可用；封顶 L3 → 不给报价', () => {
+  it('自有 L1 → 升级 ￥180 可用；封顶 L5 → 不给报价', () => {
     const g1 = settledAt(3);
     g1.state.estates[3] = { index: 3, owner: 1, level: 1, processing: false };
     expect(upgradeOffer(g1.state)).toEqual({ cost: 180, enabled: true });
 
     const g2 = settledAt(3);
-    g2.state.estates[3] = { index: 3, owner: 1, level: 3, processing: false };
+    g2.state.estates[3] = { index: 3, owner: 1, level: 5, processing: false };
     expect(upgradeOffer(g2.state)).toBeNull();
   });
 
@@ -162,14 +162,14 @@ describe('hud spec 组装（pass 4 / fixed / depth 顺序）', () => {
 
   it('战胜负文案：进行中显示轮次与行动玩家，结束后显示胜者', () => {
     const g = createGame({ dice: fixed(1, 1) });
-    expect(statusText(g.state)).toBe('第 1 轮 · 轮到 你');
+    expect(statusText(g.state)).toBe('第 1 轮 · 轮到 孙悟空');
     g.state.players[1].bankrupt = true;
     g.state.players[2].bankrupt = true;
     g.state.players[3].bankrupt = true;
     g.state.current = 0;
     g.state.phase = 'settled';
     g.endTurn();
-    expect(statusText(g.state)).toBe('本局结束 · 胜者 你');
+    expect(statusText(g.state)).toBe('本局结束 · 胜者 孙悟空');
   });
 });
 
@@ -320,7 +320,7 @@ describe('hud 牌袋抽屉键 + 落地地块卡（spec §7.3）', () => {
     const g = settledAt(3);
     g.state.estates[3] = { index: 3, owner: 2, level: 2, processing: false };
     const card = byId(hudSpecs(g.state, false, [], false, undefined, { tileCard: true }), 'ui.tileCard')[0];
-    expect(String(card.state!.sub)).toBe('等级 L2 · 持有 老王');
+    expect(String(card.state!.sub)).toBe('等级 L2 · 持有 猪八戒');
     /* 非自有地块不给升级报价 → 卡上只剩主按钮 */
     const areas = hitAreas(g.state, [], { tileCard: true });
     expect(areas.map((a) => a.action)).toEqual(['audio:sfx', 'audio:bgm', 'hand', 'end']);
