@@ -127,6 +127,12 @@ const D = fb({
   /* 台阶铺装：门前同心菱形梯台 */
   apron: false, apronN: 3, apronShrink: 0.6, apronLift: 0.7,
   apronDx: 0.28, apronFy: 0.42, apronRx: 0.42, apronRy: 0.38,
+
+  /* ===== M18 D2 · L1 单层小摊的「幡旗」（building.*.l1 用；`flag` 关 = 零绘制） ===== */
+  flag: false, flagX: 0.62, flagY: 0.9, flagPoleW: 1.1, flagPoleH: 16,
+  flagW: 9, flagH: 6, flagWave: 1.4, flagTip: 0.72,
+  /* ===== M18 D2 · L2 双层小铺的「雨棚」（building.*.l2 用；`canopy` 关 = 零绘制） ===== */
+  canopy: false, cnOut: 0.16, cnV1: 0.62, cnRise: 6, cnShade: 1,
 });
 
 /* —— 取值器（params 优先，缺则落 L4 兜底；沿用既有闭包风格） —— */
@@ -412,6 +418,42 @@ export function shop(g: Graphics, ctx: ProcCtx): void {
   cornice(g, ctx, p, F, R, L, h, roofC, tint ?? S('ridge'));
   setbackBox(g, ctx, p, h, levels, wallL, wallR, roofC, tint ?? S('ridge'));
   variantAdd(g, ctx, p, F, R, L, h, levels, wallL, wallR, roofC, upC);
+
+  /* M18 D2：幡旗 / 雨棚共用的旗面·棚面色（业主色优先 → palette `sign` → hue 派生，与 stall 布篷同口径）。
+     注意：**不要写 `S('sign')`** —— `sign` 是 palette 色键、不是 `D` 兜底键，`S()` 会取到 `undefined`；
+     色键一律走 `c(p, 'sign', <兜底>)`（见本文件 stall 布篷 `const cloth = c(p, 'sign', hsl(...))`）。 */
+  const signC = tint ?? c(p, 'sign', hsl(hue, G('gableSatR'), G('gableLitR') * dk));
+
+  /* ⑩a M18 D2 · L1 单层小摊的「幡旗」：坡顶右侧一杆 + 一面布旗（纯几何，不新增场景元素） */
+  if (levels === 1 && b1(p, 'flag')) {
+    const pw0 = G('flagPoleW') * s;
+    const ph0 = G('flagPoleH') * s;
+    const bx = cx + w * G('flagX');
+    const by = cy - h - G('gableRise') * s * G('flagY');
+    fill(g, [[bx - pw0 / 2, by], [bx + pw0 / 2, by], [bx + pw0 / 2, by - ph0], [bx - pw0 / 2, by - ph0]], S('mull'));
+    const fw = G('flagW') * s;
+    const fh = G('flagH') * s;
+    const wave = G('flagWave') * s;
+    fill(g, [
+      [bx + pw0 / 2, by - ph0],
+      [bx + pw0 / 2 + fw, by - ph0 + wave],
+      [bx + pw0 / 2 + fw * G('flagTip'), by - ph0 + fh / 2],
+      [bx + pw0 / 2 + fw, by - ph0 + fh],
+      [bx + pw0 / 2, by - ph0 + fh],
+    ], signC);
+  }
+
+  /* ⑩b M18 D2 · L2 双层小铺的「雨棚」：门店橱窗上方的斜披檐（纯几何，不新增场景元素） */
+  if (levels >= 2 && b1(p, 'canopy')) {
+    const out = G('cnOut');
+    const li = lerp(L, F, G('gU1L') - out);
+    const ri = lerp(L, F, G('gU2L') + out);
+    const lo: Pt = [li[0] - w * out, li[1] + d * out];
+    const ro: Pt = [ri[0] - w * out, ri[1] + d * out];
+    const cv = h * G('cnV1');
+    const rise = G('cnRise') * s;
+    fill(g, [up(li, cv + rise), up(ri, cv + rise), up(ro, cv), up(lo, cv)], signC, G('cnShade'));
+  }
 
   /* ⑨ 温泉池 + 蒸汽：只给带 pool/steam 的楼（复用 onsenHouse 的画法） */
   if (p.pool === true || state.pool === true || p.steam === true || state.steam === true) {

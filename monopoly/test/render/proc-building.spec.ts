@@ -201,3 +201,32 @@ describe('proc preset: 业主色（M18 D3：只染屋面 + 门面 + 描边）', 
     expect(cs).toContain('hsl(32,32%,23%)');    // wallL 未被染
   });
 });
+
+describe('proc preset: shop 换代构件开关（M18 D2）', () => {
+  it('L1 幡旗：flag 开比关多出绘制指令（默认关 = 零回归）', () => {
+    const off = recorder();
+    shop(off.g as never, ctxOf(1) as never);
+    const on = recorder();
+    shop(on.g as never, ctxOf(1, { flag: true }) as never);
+    expect(off.calls.filter((c) => c.op === 'poly').length).toBeGreaterThan(10);
+    expect(on.calls.length).toBeGreaterThan(off.calls.length);
+  });
+
+  it('L2 雨棚：canopy 开比关多出绘制指令（默认关 = 零回归）', () => {
+    const off = recorder();
+    shop(off.g as never, ctxOf(2) as never);
+    const on = recorder();
+    shop(on.g as never, ctxOf(2, { canopy: true }) as never);
+    expect(on.calls.length).toBeGreaterThan(off.calls.length);
+  });
+
+  it('旗面 / 雨棚走 sign 色键（可被 palette 与业主色覆盖）', () => {
+    const { g, calls } = recorder();
+    shop(g as never, ctxOf(1, { flag: true, sign: '#123456' }) as never);
+    expect(colors(calls)).toContain('#123456');
+
+    const c2 = recorder();
+    shop(c2.g as never, ctxOf(2, { canopy: true, sign: '#123456' }) as never);
+    expect(colors(c2.calls)).toContain('#123456');
+  });
+});
