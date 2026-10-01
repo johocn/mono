@@ -8,17 +8,20 @@
  *
  * 浮层可见性：由 `overlayOf` 从状态派生（结算 > 股票盘 > 抽卡翻牌 > 无），天然满足 `?play=1` 默认收起。
  */
-import { PLAYER_NAME, RING_SIZE } from '../data/board';
+import { PLAYER_NAME, RING_SIZE, brandAt } from '../data/board';
 import { ITEM_CARDS, type ItemCardKind } from '../data/cards';
 import { SHARE_LOT, STOCKS, STOCK_TILE_INDEX } from '../data/stocks';
-import { currentPlayer, netWorth, winnerOf, type Game, type GameState } from '../core/game';
-import { previewFor, type TargetKind } from '../core/targeting';
+import { currentPlayer, netWorth, winnerOf, type Game, type GameState, type PendingAuction } from '../core/game';
+import { previewFor, type PickKind } from '../core/targeting';
 import type { ElementSpec } from '../skin/instantiate';
 import {
-  PANEL_BADGE_DRAW_Y, PANEL_BADGE_Y, PANEL_CANCEL_W, PANEL_CANCEL_X,
+  PANEL_BADGE_DRAW_Y, PANEL_BADGE_Y,
+  PANEL_BID_CARD_CX, PANEL_BID_CARD_CY, PANEL_BID_CARD_S, PANEL_BID_H,
+  PANEL_BID_S, PANEL_BID_STEP, PANEL_BID_W, PANEL_BID_X, PANEL_BID_Y0,
+  PANEL_CANCEL_W, PANEL_CANCEL_X,
   PANEL_CARD_CX, PANEL_CARD_CY, PANEL_CARD_S,
   PANEL_CHART_H, PANEL_CHART_W, PANEL_CHART_X, PANEL_CHART_Y, PANEL_CLOSE_H, PANEL_CLOSE_W,
-  PANEL_CLOSE_X, PANEL_CLOSE_Y, PANEL_CX, PANEL_DRAW_X, PANEL_DRAW_Y, PANEL_HAND_Y,
+  PANEL_CLOSE_X, PANEL_CLOSE_Y, PANEL_CX, PANEL_DEBT_CX, PANEL_DEBT_CY, PANEL_DRAW_X, PANEL_DRAW_Y, PANEL_HAND_Y,
   PANEL_PREVIEW_W, PANEL_PREVIEW_X,
   PANEL_ROW_GAP, PANEL_ROW_H, PANEL_ROW_W, PANEL_ROW_X, PANEL_SETTLE_ROW_GAP,
   PANEL_SETTLE_ROW_H, PANEL_SETTLE_ROW_Y, PANEL_SLOT_GAP, PANEL_SLOT_H, PANEL_SLOT_W,
@@ -26,20 +29,21 @@ import {
   PANEL_TRADE_X0, PANEL_TRADE_Y, PANEL_X, PANEL_Y,
 } from '../skin/layout';
 
-/** 浮层动作位（DOM 命中层 `data-action`；`data-target` 给目标格号 / 股票代码） */
+/** 浮层动作位（DOM 命中层 `data-action`；`data-target` 给目标格号 / 股票代码 / 出价金额） */
 export type PanelActionId =
   | 'card:bomb' | 'card:barrier' | 'card:teleport' | 'card:doubleRent' | 'card:demolish'
   | 'card:cancel'
-  | 'stock:buy' | 'stock:sell' | 'card:close' | 'settle:close';
+  | 'stock:buy' | 'stock:sell' | 'card:close' | 'settle:close'
+  | 'auction:bid' | 'auction:pass';
 
-/** M19-D2 选目标态（view → 纯函数的入参；`hovered` 为当前悬停/预选候选格号） */
+/** M19-D2 选目标态（view → 纯函数的入参；`hovered` 为当前悬停/预选候选格号）；M20.1 增 `sell` 口径 */
 export interface TargetingView {
-  kind: TargetKind;
+  kind: PickKind;
   hovered: number | null;
 }
 
-/** 浮层可见态（优先级：结算 > 股票盘 > 抽卡翻牌；无 → null） */
-export type OverlayKind = 'settle' | 'stock' | 'draw';
+/** 浮层可见态（优先级：拍卖 > 结算 > 股票盘 > 抽卡翻牌；无 → null） */
+export type OverlayKind = 'auction' | 'settle' | 'stock' | 'draw';
 
 /* —— 目标解析（「可点性」真源） —— */
 
@@ -155,8 +159,23 @@ export function settlePanel(state: GameState): SettlePanelView | null {
   return { round: state.round, winner, rows };
 }
 
-/** 当前应展开的浮层（未结算 / 无触发 → null，即默认收起） */
+/* —— 破产拍卖（M20.1）—— */
+
+/** 三档出价：起拍价 / ×1.5 / ×2.4（四舍五入到元）；现金低于档位 → 该档禁用 */
+export function auctionBidTiers(startPrice: number, cash: number): { amount: number; label: string; enabled: boolean }[] {
+  const amounts = [startPrice, Math.round(startPrice * 1.5), Math.round(startPrice * 2.4)];
+  return amounts.map((amount) => ({ amount, label: `￥${amount}`, enabled: cash >= amount }));
+}
+
+/** 债务条口径：待清偿 = 欠款；已筹 = Σ已落槌价；还差 = max(0, 待清偿 − 已筹) */
+export function auctionDebtView(a: PendingAuction): { total: number; raised: number; remain: number } {
+  const raised = a.results.reduce((sum, r) => sum + r.price, 0);
+  return { total: a.amount, raised, remain: Math.max(0, a.amount - raised) };
+}
+
+/** 当前应展开的浮层（未结算 / 无触发 → null，即默认收起）；待拍态优先于一切浮层 */
 export function overlayOf(state: GameState): OverlayKind | null {
+  if (state.auction) return 'auction';
   if (state.over) return 'settle';
   if (state.phase !== 'settled') return null;
   /* 站在股票交易所（index 19）→ 盘面常开（买卖后仍停留，便于连续操作） */
@@ -181,10 +200,10 @@ export function panelSpecs(state: GameState, handOpen = false, sel: TargetingVie
 
   /* M19-D2 选目标态：手牌槽整行换成「预演条 + 取消键」（与手牌槽同中心线，二选一） */
   if (sel !== null) {
-    const cardName = ITEM_CARDS.find((c) => c.kind === sel.kind)?.name ?? sel.kind;
+    const label = sel.kind === 'sell' ? '自由出售' : (ITEM_CARDS.find((c) => c.kind === sel.kind)?.name ?? sel.kind);
     const previewLines = sel.hovered !== null
       ? previewFor(sel.kind, sel.hovered, state)
-      : [cardName, '点选棋盘上高亮的格作为目标', '点空处或「取消」返回'];
+      : [label, '点选棋盘上高亮的格作为目标', '点空处或「取消」返回'];
     push('ui.preview', PANEL_PREVIEW_X + PANEL_PREVIEW_W / 2, PANEL_HAND_Y + PANEL_SLOT_H / 2,
       { previewLines });
     push('ui.cancel', PANEL_CANCEL_X + PANEL_CANCEL_W / 2, PANEL_HAND_Y + PANEL_SLOT_H / 2,
@@ -199,7 +218,22 @@ export function panelSpecs(state: GameState, handOpen = false, sel: TargetingVie
   }
 
   const overlay = overlayOf(state);
-  if (overlay === 'settle') {
+  if (overlay === 'auction' && state.auction) {
+    const a = state.auction;
+    const lots = a.results.length + a.queue.length;
+    const cash = state.players.find((p) => p.id === a.pending[0])?.cash ?? 0;
+    push('showcase.panel', PANEL_X, PANEL_Y);
+    push('ui.badge', PANEL_CX, PANEL_BADGE_Y, { text: `破产拍卖 · 第 ${a.results.length + 1}/${lots} 块` });
+    push('ui.bidDebt', PANEL_DEBT_CX, PANEL_DEBT_CY, auctionDebtView(a));
+    push('ui.tileCard', PANEL_BID_CARD_CX, PANEL_BID_CARD_CY,
+      { title: brandAt(a.lot.index), sub: `Lv${a.lot.level} · 起拍 ￥${a.lot.startPrice}` }, PANEL_BID_CARD_S);
+    auctionBidTiers(a.lot.startPrice, cash).forEach((tier, i) => {
+      push('ui.bid', PANEL_BID_X + PANEL_BID_W / 2, PANEL_BID_Y0 + PANEL_BID_H / 2 + i * PANEL_BID_STEP,
+        { label: tier.label, enabled: tier.enabled, primary: i === 0 }, PANEL_BID_S);
+    });
+    push('ui.bid', PANEL_BID_X + PANEL_BID_W / 2, PANEL_BID_Y0 + PANEL_BID_H / 2 + 3 * PANEL_BID_STEP,
+      { label: '放弃', enabled: true, primary: false }, PANEL_BID_S);
+  } else if (overlay === 'settle') {
     const panel = settlePanel(state);
     if (panel) {
       push('showcase.panel', PANEL_X, PANEL_Y);
@@ -284,7 +318,22 @@ export function panelHitAreas(state: GameState, handOpen = false, sel: Targeting
     });
     return out;
   }
-  if (overlay === 'draw') {
+  if (overlay === 'auction' && state.auction) {
+    const a = state.auction;
+    const cash = state.players.find((p) => p.id === a.pending[0])?.cash ?? 0;
+    auctionBidTiers(a.lot.startPrice, cash).forEach((tier, i) => {
+      out.push({
+        action: 'auction:bid', target: tier.amount,
+        x: PANEL_BID_X, y: PANEL_BID_Y0 + i * PANEL_BID_STEP,
+        w: PANEL_BID_W, h: PANEL_BID_H, enabled: tier.enabled,
+      });
+    });
+    out.push({
+      action: 'auction:pass',
+      x: PANEL_BID_X, y: PANEL_BID_Y0 + 3 * PANEL_BID_STEP,
+      w: PANEL_BID_W, h: PANEL_BID_H, enabled: true,
+    });
+  } else if (overlay === 'draw') {
     out.push({
       action: 'card:close', x: PANEL_CLOSE_X, y: PANEL_CLOSE_Y,
       w: PANEL_CLOSE_W, h: PANEL_CLOSE_H, enabled: true,

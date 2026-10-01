@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { typeAt } from '../../src/data/board';
 import { FATE_DECK, ITEM_CARDS } from '../../src/data/cards';
 import { STOCKS } from '../../src/data/stocks';
-import { createGame, type Game, type GameState } from '../../src/core/game';
+import { createGame, type Game, type GameState, type PendingAuction } from '../../src/core/game';
 import { REGISTRY } from '../../src/skin/registry';
 import {
-  drawCard, handSlots, overlayOf, panelHitAreas, panelSpecs, settlePanel, stockRows,
+  auctionBidTiers, auctionDebtView, drawCard, handSlots, overlayOf, panelHitAreas, panelSpecs, settlePanel, stockRows,
 } from '../../src/ui/panels';
 
 /** 固定点数骰：每步走 2 格 */
@@ -207,6 +207,11 @@ describe('panels：DOM 命中层矩形', () => {
     expect(specs.find((s) => s.id === 'ui.cancel')).toBeDefined();
   });
 
+  it('选目标态 sell：命中层只出「取消」键', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    expect(panelHitAreas(g.state, true, { kind: 'sell', hovered: null }).map((h) => h.action)).toEqual(['card:cancel']);
+  });
+
   it('抽卡浮层：只出关闭键（手牌行被面板盖住，不再可点）', () => {
     const g = createGame({ dice: fixed(1, 1) });
     stepTo(g, firstTileOf('fate'));
@@ -250,5 +255,78 @@ describe('panels：可见键台位 == DOM 命中区矩形', () => {
     stepTo(g, firstTileOf('fate'));
     const h = panelHitAreas(g.state).find((x) => x.action === 'card:close')!;
     expect(rectOf('ui.panelClose', g.state)).toEqual({ x: h.x, y: h.y, w: h.w, h: h.h });
+  });
+});
+
+describe('panels：破产拍卖浮层（M20.1 版式 B）', () => {
+  /** 造一个带待拍态的 state（payer=玩家1，欠款 700，当前拍品 = 3 号长峰特产 Lv3，起拍 330） */
+  const stub = (): GameState => {
+    const g = createGame({ dice: fixed(1, 1) });
+    g.state.players[0].cash = 1000;
+    g.state.auction = {
+      trigger: 'bankrupt', payerId: 1, creditorId: 2, amount: 700,
+      queue: [3], lot: { index: 3, level: 3, startPrice: 330 },
+      bids: [], pending: [1], results: [],
+    };
+    return g.state;
+  };
+
+  it('overlayOf：待拍态置顶（over 时仍是 auction，优先于股票盘）', () => {
+    const st = stub();
+    expect(overlayOf(st)).toBe('auction');
+    st.over = true;
+    expect(overlayOf(st)).toBe('auction');
+
+    const st2 = stub();
+    st2.phase = 'settled';
+    st2.players[st2.current].pos = 19;
+    expect(overlayOf(st2)).toBe('auction');
+  });
+
+  it('auctionBidTiers：三档 = 起拍 / ×1.5 / ×2.4；现金门槛决定 enabled', () => {
+    expect(auctionBidTiers(330, 1000)).toEqual([
+      { amount: 330, label: '￥330', enabled: true },
+      { amount: 495, label: '￥495', enabled: true },
+      { amount: 792, label: '￥792', enabled: true },
+    ]);
+    expect(auctionBidTiers(330, 400).map((t) => t.enabled)).toEqual([true, false, false]);
+    expect(auctionBidTiers(330, 100).map((t) => t.enabled)).toEqual([false, false, false]);
+  });
+
+  it('auctionDebtView：待清偿 = 欠款；已筹 = Σ已落槌价；还差 = max(0, 差)', () => {
+    const a: PendingAuction = {
+      trigger: 'bankrupt', payerId: 1, creditorId: null, amount: 700,
+      queue: [5], lot: { index: 5, level: 1, startPrice: 30 },
+      bids: [], pending: [1], results: [{ index: 3, level: 3, winner: 2, price: 400 }],
+    };
+    expect(auctionDebtView(a)).toEqual({ total: 700, raised: 400, remain: 300 });
+  });
+
+  it('specs：面板 + 角标 + 债务条 + 地契卡 + 三档 + 放弃 全命中注册表', () => {
+    const specs = panelSpecs(stub());
+    expect(specs.every((s) => Boolean(REGISTRY[s.id]))).toBe(true);
+    expect(specs.find((s) => s.id === 'ui.badge')!.state?.text).toBe('破产拍卖 · 第 1/1 块');
+    expect(specs.find((s) => s.id === 'ui.bidDebt')!.state).toEqual({ total: 700, raised: 0, remain: 700 });
+    const card = specs.find((s) => s.id === 'ui.tileCard')!;
+    expect(card.state?.title).toBe('长峰特产');
+    expect(card.state?.sub).toBe('Lv3 · 起拍 ￥330');
+    expect(card.fixed?.s).toBe(0.5);
+    expect(specs.filter((s) => s.id === 'ui.bid').map((s) => s.state?.label)).toEqual(['￥330', '￥495', '￥792', '放弃']);
+  });
+
+  it('命中区：三档（带 target 金额）+ 放弃，与可见键逐像素对齐', () => {
+    const st = stub();
+    const hits = panelHitAreas(st);
+    expect(hits.map((h) => h.action)).toEqual(['auction:bid', 'auction:bid', 'auction:bid', 'auction:pass']);
+    expect(hits.slice(0, 3).map((h) => h.target)).toEqual([330, 495, 792]);
+    const boxes = REGISTRY['ui.bid'].box;
+    const specs = panelSpecs(st).filter((s) => s.id === 'ui.bid');
+    specs.forEach((s, i) => {
+      const sc = s.fixed?.s ?? 1;
+      expect({
+        x: s.fixed!.cx - (boxes.w * sc) / 2, y: s.fixed!.cy - (boxes.h * sc) / 2,
+        w: boxes.w * sc, h: boxes.h * sc,
+      }).toEqual({ x: hits[i].x, y: hits[i].y, w: hits[i].w, h: hits[i].h });
+    });
   });
 });
