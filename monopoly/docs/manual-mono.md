@@ -751,6 +751,39 @@ node local/mono-shots-m17.mjs                 # [m17-shots] PASS · 7 项 gate �
 
 **取证脚本**：[local/mono-shots-m17.mjs](file:///d:/zhao/monopoly/local/mono-shots-m17.mjs)。关键口径：总表页**先清空五层 + 移除 `#mono-ui`** 再在 `ground` 画深底，避免棋盘喧宾夺主；直接 `import('/src/render/providers/proc-pawn.ts')` 取**生产 `pawn()`**绘制，与线上同源；`Graphics` 构造器从背景元素 `stage.layers.ground.children[0].constructor` 取得（playwright 不走 vite 改用裸模块名）。对局取证另开一页，避免总表污染真实画面。
 
+### M18 棋盘生长与归属可视化（开局空盘 · 五级换代 · 业主配色）2026-10-01
+
+**范围**：对齐 spec `2026-10-01-monopoly-interaction-roadmap-design` §4.1 与决策 **D1–D4**。
+
+**四项需求与落点**：
+
+| # | 需求（D） | 落点 | 结果 |
+|---|---|---|---|
+| 1 | 开局只 4 栋公共设施楼，商家格全空（D1） | [board.ts](file:///d:/zhao/monopoly/src/data/board.ts) 新增 `START_PUBLIC_LEVEL = { 0: 3, 9: 2, 19: 2, 25: 2 }`；[BuildingView.ts](file:///d:/zhao/monopoly/src/render/BuildingView.ts) 新增 `startLevelsOf()`；[main.ts](file:///d:/zhao/monopoly/src/main.ts) 的 `liveLevels()` 在 play 下以它起算 | 开局 `building.s*.l*` 实例 = **4**，且恒为 `s0.l3 / s9.l2 / s19.l2 / s25.l2` |
+| 2 | L1→L5 五段式换代（D2） | [proc-building.ts](file:///d:/zhao/monopoly/src/render/providers/proc-building.ts)：`shop` 内加 **L1 幡旗** / **L2 雨棚**（`flag` / `canopy` 开关，零新增元素）；`market3` 的顶部体块在 L4 起换成**更宽更矮的退台**（`l4W/l4D/l4H`），L5 加**塔楼尖顶 + 霓虹描边 + 五星徽记** | L3 < L4 < L5 绘制指令数严格递增（单测闸门），且五级截图像素哈希两两不同 |
+| 3 | 业主色只染屋面 + 门面 + 描边（D3） | 复用 `Scene.ts` 已注入的 `state.ownerColors`；新增 `ownerTintOf()`；`shop` / `market3` 的屋面、门洞立面、脊线 / 女儿墙 / 檐线四处走业主色 | 有业主时 `#abcdef` 至少出现 3 次且**占比不过半**；`wallL/wallR` 仍是 hue 派生的 `hsl(...)` |
+| 4 | L5 五星徽记 + 地砖发光环（D4） | `market3` 的 ①c（双环 + 光晕，画在墙之前）与 ⑧（尖顶 + 霓虹 + 五星） | L5 地面 ellipse 比 L4 多 **3**（内/外发光环 2 个描边 + 业主色光晕 1 个填充）；霓虹 `rgba(255,236,170,.9)` 与星色 `#ffe9a8` 只在 L5 出现 |
+
+**归属通路（为什么不用新注入）**：`monopoly/src/render/Scene.ts` 的 `ownerColors()` 已把 skin tokens 的 `owner1..owner4` 折成 `{ 1: '#3fbf7f', ... }` 并注入**每一个** proc 上下文的 `state.ownerColors`（`tile` preset 与 `proc-hud.ts` 早已在用）。建筑 preset 直接复用同一条通路，**未新增任何注入口**，四级可回退体系（L1 元素覆盖 → L2 skin.json → L3 默认皮肤 → L4 `fb` 兜底）不受影响：裸值只出现在 `fb({...})` 内，`npm run build` 的 `check-hardcoded` 前置闸门保持 clean。
+
+**15 个商家格归属不可信的修正（D3 附带）**：`main.ts` 的 `ownedOf()` 原先对无主格回落到 `DEMO_OWNER`（v5 样张的演示归属），导致 play 下**未买入的地块也显示业主色**。M18 改为「**play 只认真实地产**，非 play 样张仍走 `DEMO_OWNER`」——同一函数同时供地砖归属色、楼体业主色与楼顶名牌名色，三处天然同源。
+
+**确定性**：本里程碑**未引入任何随机源**（无 `Math.random`、无 `makeRng` 调用），回放与 e2e 不受影响。
+
+**回归口径（本轮实测）**：
+
+```powershell
+npx tsc --noEmit                                  # 退出码 0、无输出
+npx vitest run                                    # 58 文件 / 586 例全绿
+npm run check                                     # eslint src tools 0 错；[theme] OK / [skin:default] OK / [skin:photo] OK；58 文件 / 586 例全绿
+npm run build                                     # [check-hardcoded] clean（29 个文件）→ ✓ built in 3.84s
+$env:MONO_ORIGIN='http://127.0.0.1:52301'; node local/mono-shots-m18.mjs   # [m18-shots] PASS · 6 项 gate 全 true、errors: []
+```
+
+**截图清单（12 张，均 390×844 @dpr2 手机视口，入 `docs/verify/`）**：`mono-m18-01-levels-none-l1..l5`（五级换代 · 无业主）/ `mono-m18-02-levels-owner1-l1..l5`（五级换代 · 业主色绿）/ `mono-m18-03-street-owner`（街廓连片同色 vs 异业主）/ `mono-m18-04-start-empty`（真实对局开局空盘）/ `mono-m18-05-grown`（注入 L1/L3/L5 三块地产后的生长与归属）。目视复核要点：L1 有幡旗小摊、L2 有雨棚双层、L3 三层 + 小阁楼、L4 四层 + 更宽更矮的退台、L5 塔尖 + 五星 + 地面双光环；有业主版五张的屋面 / 门面 / 描边变绿而**墙身仍是深蓝**（不整楼发绿）。
+
+**取证脚本**：[local/mono-shots-m18.mjs](file:///d:/zhao/monopoly/local/mono-shots-m18.mjs)。关键口径：与 `mono-shots-p2.mjs` 同源，用 `?demo=1` + `scene.buildOne()` + `overrides` 逐件定格（受控对照，不吃 `theme.json` 分派）；另开一页打 `?play=1&seed=20261001&nofx=1&humans=4&tour=0` 取真实开局与生长画面。**五级总表逐级 `scene.reset()` + 居中整幅取景**（因 L5 高过 L4、L4 高过 L3，并排摆放会互相遮挡且把 L4/L5 的退台 / 塔尖裁出画外）。机器闸门 6 项：`01_levels_distinct` / `02_levels_owner1_levels_distinct` / `street_two_colors` / `start_buildings_4` / `start_wall_ids` / `grown_buildings_7`。
+
 ### 最终验收（对照 spec §11 硬性标准）
 
 | # | spec §11 条目 | 证据 |
