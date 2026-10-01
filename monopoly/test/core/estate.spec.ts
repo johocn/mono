@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  assetValue, buy, buyable, canBuy, clearProcessing, ownedBy, rentAt, sellAt, upgrade,
+  assetValue, buy, buyable, canBuy, clearProcessing, ownedBy, rentAt, sellAt, transferEstate, upgrade,
   type Estates,
 } from '../../src/core/estate';
 
@@ -122,5 +122,15 @@ describe('estate 收租 / 变卖 / 持有查询', () => {
     expect(es[4].processing).toBe(true);
     expect(clearProcessing(es, 3)).toBe(1);
     expect(es[4].processing).toBe(false);
+  });
+
+  it('transferEstate：只换 owner，楼层与施工态原样保留；无键 → false', () => {
+    const es = fresh();
+    buy(es, 1, 2, 3000);
+    es[1].level = 3;
+    es[1].processing = true;
+    expect(transferEstate(es, 1, 4)).toBe(true);
+    expect(es[1]).toEqual({ index: 1, owner: 4, level: 3, processing: true });
+    expect(transferEstate(es, 9, 4)).toBe(false);
   });
 });

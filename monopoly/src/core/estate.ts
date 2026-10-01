@@ -98,6 +98,14 @@ export function ownedBy(estates: Estates, owner: number): number[] {
     .sort((a, b) => a - b);
 }
 
+/** 所有权转移（拍卖成交 / 流拍抵债）：只换 owner，`level` 与 `processing` 原样保留 */
+export function transferEstate(estates: Estates, index: number, to: number): boolean {
+  const e = estates[index];
+  if (!e) return false;
+  e.owner = to;
+  return true;
+}
+
 /** 回合开始：解除该玩家全部地块的「施工中」（BUILD_TURNS = 1 的实际执行点），返回解除数量 */
 export function clearProcessing(estates: Estates, owner: number): number {
   let n = 0;
