@@ -145,6 +145,19 @@ function lerp(a: Pt, b: Pt, t: number): Pt {
   return [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])];
 }
 
+/**
+ * M18 D3 · 业主色取值（唯一一份）：Scene 已把 skin tokens 的 `owner1..owner4` 注入
+ * 每个 proc 上下文的 `state.ownerColors`（`Scene.ts` 的 `ownerColors()`）。
+ * 无业主 / 无该业主色 → `null`，调用方回落到原有的 hue 派生色（零回归）。
+ * 用法铁律：**只允许**用在「屋面 / 门面 / 描边」三处，不得染 `wallL` / `wallR`（整楼体会过艳）。
+ */
+function ownerTintOf(state: Record<string, unknown>): string | null {
+  const colors = (state.ownerColors ?? {}) as Record<number, string>;
+  const owner = typeof state.owner === 'number' ? state.owner : null;
+  const hit = owner === null ? undefined : colors[owner];
+  return typeof hit === 'string' && hit !== '' ? hit : null;
+}
+
 /** 等距四角 + 抬升后的四角（各 preset 共用的一套基准点） */
 interface Quad { F: Pt; R: Pt; B: Pt; L: Pt; F2: Pt; R2: Pt; B2: Pt; L2: Pt; w: number; d: number; h: number }
 function quad(cx: number, cy: number, geo: Geo, s: number, h: number): Quad {
@@ -311,13 +324,16 @@ export function shop(g: Graphics, ctx: ProcCtx): void {
 
   const hue = G('hue');
   const dk = state.dim === true ? G('dim') : 1;
+  const tint = ownerTintOf(state);
   const { F, R, B, L, L2, w, d, h } = quad(cx, cy, geo, s, BUILDING_HEIGHTS[levels] * s);
 
   /* —— 主题色键（spec §4）：palette 给了就用 palette，否则沿用 hue 派生（默认皮肤零变化） —— */
   const wallL = c(p, 'wallL', hsl(hue, G('satL'), G('litL12') * dk));
   const wallR = c(p, 'wallR', hsl(hue, G('satR'), G('litR12') * dk));
   const roofKey = typeof p.roof === 'string' && p.roof !== '' ? (p.roof as string) : null;
-  const roofC = roofKey ?? hsl(hue, G('satRoof'), G('roofLit12') * dk);
+  /* M18 D3：有业主 → 屋面走业主色（业主色 ≥ palette roof ≥ hue 派生） */
+  const roofSolid = tint ?? roofKey;
+  const roofC = roofSolid ?? hsl(hue, G('satRoof'), G('roofLit12') * dk);
   const gw = c(p, 'win', levels === 1 ? S('glass1') : S('glass2'));
   const upC = c(p, 'win', S('upFill'));
   const glowC = c(p, 'glow', S('doorGlow'));
@@ -366,7 +382,8 @@ export function shop(g: Graphics, ctx: ProcCtx): void {
   fill(g, win(F, R, h, G('gU1R'), G('gU2R'), gv1, gv1 + G('sillH')), S('sill'));
 
   /* ⑥ 门：门洞 + 内透暖光 + 门槛石 */
-  fill(g, win(L, F, h, G('doorU1'), G('doorU2'), 0, gv2), S('door'));
+  /* M18 D3：门面 = 门洞立面，走业主色 */
+  fill(g, win(L, F, h, G('doorU1'), G('doorU2'), 0, gv2), tint ?? S('door'));
   fill(g, win(L, F, h, G('doorInU1'), G('doorInU2'), G('doorInV1'), G('doorInV2')), S('doorLight'));
   fill(g, win(L, F, h, G('stoneU1'), G('stoneU2'), 0, G('stoneV2')), S('stone'));
 
@@ -382,16 +399,18 @@ export function shop(g: Graphics, ctx: ProcCtx): void {
   fill(g, [L2, up(B, h), up(R, h), up(F, h)], roofC);
   if (levels === 1) {
     const apex: Pt = [cx, cy - h - G('gableRise') * s];
-    fill(g, [L2, up(F, h), apex], roofKey ?? hsl(hue, G('gableSatL'), G('gableLitL') * dk), roofKey ? G('roofFacetL') : 1);
-    fill(g, [up(F, h), up(R, h), apex], roofKey ?? hsl(hue, G('gableSatR'), G('gableLitR') * dk), roofKey ? G('roofFacetR') : 1);
-    line(g, apex, up(apex, G('ridgeLen') * s), S('ridge'), G('ridgeW') * s);
+    fill(g, [L2, up(F, h), apex], roofSolid ?? hsl(hue, G('gableSatL'), G('gableLitL') * dk), roofSolid ? G('roofFacetL') : 1);
+    fill(g, [up(F, h), up(R, h), apex], roofSolid ?? hsl(hue, G('gableSatR'), G('gableLitR') * dk), roofSolid ? G('roofFacetR') : 1);
+    /* M18 D3：脊线 = 描边，走业主色 */
+    line(g, apex, up(apex, G('ridgeLen') * s), tint ?? S('ridge'), G('ridgeW') * s);
   } else {
-    g.poly(ptsToPoly([L2, up(B, h), up(R, h), up(F, h)])).stroke({ color: S('parapet'), width: G('parapetW') * s });
+    /* M18 D3：女儿墙 = 描边，走业主色 */
+    g.poly(ptsToPoly([L2, up(B, h), up(R, h), up(F, h)])).stroke({ color: tint ?? S('parapet'), width: G('parapetW') * s });
   }
 
   /* ⑩ P2 近景增强：轮廓阶梯（B 檐带 / A 退台）+ 体型变体（加法件，全部可按 params 关停） */
-  cornice(g, ctx, p, F, R, L, h, roofC, S('ridge'));
-  setbackBox(g, ctx, p, h, levels, wallL, wallR, roofC, S('ridge'));
+  cornice(g, ctx, p, F, R, L, h, roofC, tint ?? S('ridge'));
+  setbackBox(g, ctx, p, h, levels, wallL, wallR, roofC, tint ?? S('ridge'));
   variantAdd(g, ctx, p, F, R, L, h, levels, wallL, wallR, roofC, upC);
 
   /* ⑨ 温泉池 + 蒸汽：只给带 pool/steam 的楼（复用 onsenHouse 的画法） */
@@ -410,6 +429,7 @@ export function market3(g: Graphics, ctx: ProcCtx): void {
   const s = ctx.s;
   const hue = G('hue');
   const dk = state.dim === true ? G('dim') : 1;
+  const tint = ownerTintOf(state);
   /* 层级由 state.level / params.levels 给；缺省落 L3（店招等旧消费者零变化） */
   const levels = (typeof state.level === 'number' ? state.level : (G('levels') || 3)) as BuildLevel;
   const h = BUILDING_HEIGHTS[Math.max(3, levels)] * s;
@@ -417,7 +437,8 @@ export function market3(g: Graphics, ctx: ProcCtx): void {
 
   const wallL = c(p, 'wallL', hsl(hue, G('satL'), G('litL3') * dk));
   const wallR = c(p, 'wallR', hsl(hue, G('satR'), G('litR3') * dk));
-  const roofC = c(p, 'roof', hsl(hue, G('satRoof'), G('roofLit3') * dk));
+  /* M18 D3：有业主 → 屋面走业主色 */
+  const roofC = tint ?? c(p, 'roof', hsl(hue, G('satRoof'), G('roofLit3') * dk));
   const glowC = c(p, 'glow', S('warm'));
   const winC = c(p, 'win', S('l3Win'));
   const winA = typeof p.win === 'string' ? G('l3WinAlpha') : 1;
@@ -450,7 +471,8 @@ export function market3(g: Graphics, ctx: ProcCtx): void {
   /* ④ 底层内透暖光 + 一层橱窗（暖白玻璃，去青） */
   fill(g, win(L, F, h, G('warmU1L'), G('warmU2L'), G('warmV1'), G('warmV2')), glowC);
   fill(g, win(F, R, h, G('warmU1R'), G('warmU2R'), G('warmV1'), G('warmV2')), glowC);
-  fill(g, win(L, F, h, G('doorU1'), G('doorU2'), 0, G('warmV2')), S('door'));
+  /* M18 D3：门面 = 门洞立面，走业主色 */
+  fill(g, win(L, F, h, G('doorU1'), G('doorU2'), 0, G('warmV2')), tint ?? S('door'));
   fill(g, win(L, F, h, G('stoneU1'), G('stoneU2'), 0, G('stoneV2')), S('stone'));
 
   /* ⑤ 成排暖窗：L3 三排，L4/L5 各加一排（排距与窗高按层级自适应，避免重叠） */
@@ -472,10 +494,10 @@ export function market3(g: Graphics, ctx: ProcCtx): void {
 
   /* ⑥ 平顶 + 女儿墙（原 v5 的青色霓虹描边已删） */
   fill(g, [L2, up(B, h), up(R, h), up(F, h)], roofC);
-  g.poly(ptsToPoly([L2, up(B, h), up(R, h), up(F, h)])).stroke({ color: S('parapet'), width: G('parapetW') * s });
+  g.poly(ptsToPoly([L2, up(B, h), up(R, h), up(F, h)])).stroke({ color: tint ?? S('parapet'), width: G('parapetW') * s });
 
   /* ⑥b P2 轮廓阶梯（B 加法檐带；market3 无坡顶故不做变体/退台） */
-  cornice(g, ctx, p, F, R, L, h, roofC, S('ridge'));
+  cornice(g, ctx, p, F, R, L, h, roofC, tint ?? S('ridge'));
 
   /* ⑦ 顶部小阁楼：等距小体块，让大平顶不秃 */
   const aw = w * G('l3AtticW');
@@ -489,7 +511,7 @@ export function market3(g: Graphics, ctx: ProcCtx): void {
   wallFace(g, bL, bF, ah, wallL);
   fill(g, [up(bL, ah), up(bB, ah), up(bR, ah), up(bF, ah)], roofC);
   g.poly(ptsToPoly([up(bL, ah), up(bB, ah), up(bR, ah), up(bF, ah)]))
-    .stroke({ color: S('ridge'), width: G('ridgeW') * s });
+    .stroke({ color: tint ?? S('ridge'), width: G('ridgeW') * s });
 }
 
 /* ============ stall 坡顶摊位（L1）：木架 + 布篷 + 一盏暖灯 + 平摊台面 ============ */

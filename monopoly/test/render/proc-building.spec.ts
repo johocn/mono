@@ -158,3 +158,46 @@ describe('proc preset: 建筑 6 原型（Task 3 新增 5 个）', () => {
     expect(colors(br.calls)).toContain('#abcdef');
   });
 });
+
+describe('proc preset: 业主色（M18 D3：只染屋面 + 门面 + 描边）', () => {
+  const OWN = '#abcdef';
+  const ctxOwned = (params: Record<string, unknown>, level: number) => ({
+    geo: { hw: 24, hh: 13, ox: 195, oy: 104 },
+    box: { w: 48, d: 26, h: 72 },
+    cx: 195,
+    cy: 104,
+    s: 1,
+    params,
+    state: { level, owner: 1, ownerColors: { 1: OWN } },
+  });
+
+  it('无业主 → 不出现业主色；有业主 → 屋面/门面/描边出现业主色', () => {
+    const none = recorder();
+    market3(none.g as never, { ...ctxOwned({ hue: 200 }, 3), state: { level: 3 } } as never);
+    expect(colors(none.calls)).not.toContain(OWN);
+
+    const owned = recorder();
+    market3(owned.g as never, ctxOwned({ hue: 200 }, 3) as never);
+    const cs = colors(owned.calls);
+    expect(cs).toContain(OWN);
+    /* 至少 3 处：门面 + 屋面 + 描边（女儿墙 / 阁楼檐线） */
+    expect(cs.filter((x) => x === OWN).length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('楼体墙**不**被业主色染：仍走 hue 派生的 hsl，且业主色占比不过半', () => {
+    const { g, calls } = recorder();
+    market3(g as never, ctxOwned({ hue: 200 }, 3) as never);
+    const cs = colors(calls);
+    expect(cs).toContain('hsl(200,32%,20%)');   // wallL：satL 32 / litL3 20
+    expect(cs).toContain('hsl(200,36%,28%)');   // wallR：satR 36 / litR3 28
+    expect(cs.filter((x) => x === OWN).length).toBeLessThan(cs.length / 2);
+  });
+
+  it('shop（L1/L2）同样只染屋面 + 门面 + 脊线/女儿墙', () => {
+    const { g, calls } = recorder();
+    shop(g as never, ctxOwned({ hue: 32 }, 1) as never);
+    const cs = colors(calls);
+    expect(cs).toContain(OWN);
+    expect(cs).toContain('hsl(32,32%,23%)');    // wallL 未被染
+  });
+});
