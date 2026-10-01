@@ -10,9 +10,11 @@
  * 本模块不含任何绘制逻辑：写回经 `deps.apply()`，由 `main.ts` 重算生效补丁并 `paint()` 实时预览。
  */
 import { resolvePlacement, type PlacementOpts } from '../render/Scene';
+import { toWorld } from '../render/camera';
 import type { Geo } from '../render/iso';
+import type { CamPose } from '../core/framing';
 import type { Instance } from '../skin/instantiate';
-import { STAGE_H, STAGE_W } from '../skin/layout';
+import { CAM_MAX_ZOOM, CAM_MIN_ZOOM, STAGE_H, STAGE_W } from '../skin/layout';
 import type { Theme, ThemeBinding, ThemePatch } from '../skin/theme';
 
 export interface ThemeConsoleDeps {
@@ -28,6 +30,8 @@ export interface ThemeConsoleDeps {
   patchOf: (id: string) => ThemePatch | undefined;
   /** 写回：`基准 ⊕ edits` 重算生效补丁并重画（实时预览） */
   apply: (edits: Record<string, ThemePatch>) => void;
+  /** 相机（spec §6 P1 第 16 项）：只读当前位置 + 跟拍倍率滑杆调参 */
+  camera: { current: () => CamPose; setFollowZoom: (z: number) => void; followZoom: () => number };
 }
 
 export interface ThemeConsoleHandle {
@@ -143,7 +147,9 @@ export function createThemeConsole(deps: ThemeConsoleDeps): ThemeConsoleHandle {
     if (rect.width === 0 || rect.height === 0) return;
     const x = (ev.clientX - rect.left) * (STAGE_W / rect.width);
     const y = (ev.clientY - rect.top) * (STAGE_H / rect.height);
-    const id = pickAt(x, y);
+    /* 取景态下画布坐标 ≠ 世界坐标：先过相机反变换，否则点到的永远是放大后的别处（spec §6 P1 第 14 项） */
+    const w = toWorld(x, y, deps.camera.current());
+    const id = pickAt(w.x, w.y);
     if (!id) return;
     selected = id;
     sync();
@@ -289,6 +295,29 @@ export function createThemeConsole(deps: ThemeConsoleDeps): ThemeConsoleHandle {
       exportArea.readOnly = true;
       exportArea.style.cssText = 'width:100%;height:54px;box-sizing:border-box;font:inherit;background:#101a16;color:#9fe;border:1px solid #3a4a42;border-radius:4px';
       box.appendChild(exportArea);
+
+      /* —— 相机（spec §6 P1 第 16 项）：只读位姿 + 跟拍倍率滑杆 ——
+         滑杆改的是内存变量（`camera.setFollowZoom`），不落任何配置文件；刷新即回到 `CAM_FOLLOW_ZOOM`。 */
+      box.appendChild(line('相机', 'margin-top:6px;color:#9fb3a8'));
+      const poseLine = line('', 'color:#d8e4dc');
+      box.appendChild(poseLine);
+      const zRow = row();
+      zRow.appendChild(line('跟拍倍率', 'color:#9fb3a8'));
+      const zoomIn = document.createElement('input');
+      zoomIn.type = 'range';
+      zoomIn.min = String(CAM_MIN_ZOOM);
+      zoomIn.max = String(CAM_MAX_ZOOM);
+      zoomIn.step = '0.1';
+      zoomIn.value = String(deps.camera.followZoom());
+      zoomIn.style.cssText = 'flex:1;min-width:0';
+      zoomIn.addEventListener('input', () => { deps.camera.setFollowZoom(Number(zoomIn.value)); });
+      zRow.appendChild(zoomIn);
+      box.appendChild(zRow);
+      /* 位姿实时读数（`?debug=1` 专用，生产版零占用） */
+      setInterval(() => {
+        const p = deps.camera.current();
+        poseLine.textContent = `cx ${p.cx.toFixed(0)} · cy ${p.cy.toFixed(0)} · zoom ${p.zoom.toFixed(2)}`;
+      }, 200);
 
       root.appendChild(box);
       document.getElementById('stage')?.addEventListener('pointerdown', onCanvasDown as EventListener);

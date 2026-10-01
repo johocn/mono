@@ -326,6 +326,7 @@ export const CAM_SETTLE_MS = 320;
 export const CAM_BACK_MS = 520;
 export const CAM_MAX_TOTAL_MS = 1600;             // ①+③+④ 编排开销上限（② 与 fx 共时轴，不可压缩）
 export const CAM_AI_SCALE = 0.6;                  // AI 回合取景时长压缩比
+export const CAM_FALLBACK_MAX_ZOOM = 3;           // R3 降级档：`?perf=1` 实测帧超预算时把倍率上限降到 3.0
 export const CAM_EASE = FX_EASE_FALLBACK;
 
 /* —— 拆层（DOM 空间）：`#mono-world` 走 fitStage()，`#mono-ui` 走 fitUi() —— */

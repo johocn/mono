@@ -22,6 +22,9 @@ import { mkdirSync } from 'node:fs';
  *   4 state.over===true 且结算面板给出胜者与 4 行名次（由点击到达，非 sim()）
  *   5 关键截图 7 张：开局/首次买地/首次升级/踩监狱/抽卡/股票盘/终局；两两内容哈希不同且非空
  *   6 硬上限：轮数 ≤ 61（设计目标）+ 墙钟超时（避免卡死挂住）
+ *   6b 取景编排（spec §8 V19）：主整局跑 `?nofx=1` ⇒ `world.scale.x` 全程恒 1（gate cam_nofx_idle）；
+ *     另开一页**不带 nofx**，断言移动期推近到 [CAM_MIN_ZOOM, CAM_MAX_ZOOM]（cam_framing）并归位
+ *     到 1±0.01（cam_reset）——该段独立 catch，失败只置对应 gate、不污染主整局断言
  *   7 仅当以上全真 exit 0；`--report-only` 恒 exit 0
  */
 
@@ -40,6 +43,8 @@ const errors = [];
 const gate = {};
 const facts = { tally: {}, clicks: 0, shots: {}, audioUnlocked: null };
 const problems = [];
+/* 取景采样（gate cam_nofx_idle）：主整局每次读到状态都顺手收一次 `world.scale.x` */
+const nofxScaleSamples = [];
 
 const browser = await chromium.launch();
 const viewport = { width: 390, height: 844 };
@@ -84,6 +89,8 @@ const readState = () => page.evaluate(() => {
     cardDoubleRentEnabled: enabled(panels, 'button[data-action="card:doubleRent"]'),
     /* 牌袋抽屉（spec §7.3）：手牌默认收起，打牌前要先点这枚键展开 */
     handKeyEnabled: enabled(hud, 'button[data-action="hand"]'),
+    /* 取景采样（G6）：整局跑在 `?nofx=1` 下，相机不介入 ⇒ `world.scale.x` 必须全程恒 1 */
+    worldScaleX: window.__monoMain?.stage?.world?.scale?.x ?? null,
   };
 });
 
@@ -166,6 +173,7 @@ try {
   let s = await readState();
   facts.minAudioKeys = s.audioKeys;
   facts.seed = SEED;
+  if (typeof s.worldScaleX === 'number') nofxScaleSamples.push(s.worldScaleX);
   await shot('01-start');
 
   const t0 = Date.now();
@@ -233,6 +241,7 @@ try {
     facts.tally[action] = (facts.tally[action] ?? 0) + 1;
     s = next;
     facts.minAudioKeys = Math.min(facts.minAudioKeys, s.audioKeys);
+    if (typeof s.worldScaleX === 'number') nofxScaleSamples.push(s.worldScaleX);   // 取景采样（G6）
 
     if (action === 'buy' && !facts.shots['02-firstbuy']) { await settleFx(); await shot('02-firstbuy'); }
     if (action === 'upgrade' && !facts.shots['03-firstupgrade']) { await settleFx(); await shot('03-firstupgrade'); }
@@ -287,6 +296,15 @@ try {
 } finally {
   gate.noErrors = errors.length === 0;
 }
+
+/* —— G6：主整局跑在 `?nofx=1` 下，相机完全不介入 ⇒ `world.scale.x` 全程恒 1（容差 1e-6）—— */
+facts.camNofx = {
+  samples: nofxScaleSamples.length,
+  min: nofxScaleSamples.length ? Math.min(...nofxScaleSamples) : null,
+  max: nofxScaleSamples.length ? Math.max(...nofxScaleSamples) : null,
+};
+gate.cam_nofx_idle = nofxScaleSamples.length > 0
+  && nofxScaleSamples.every((v) => Math.abs(v - 1) <= 1e-6);
 
 /*
  * 追加：AI 局（1 真人 + 3 AI）跑到 over=true。
@@ -374,6 +392,81 @@ try {
   problems.push(String(e && e.stack ? e.stack : e));
 }
 
+/*
+ * 追加：取景编排（spec §8 V19 / G3·G5）。
+ * 上面整局跑 `?nofx=1`（守墙钟预算）**测不到推近**，故这里另开一页「不带 nofx」：
+ *   cam_framing —— `move` 期间 `stage.world.scale.x` 的 max ∈ [CAM_MIN_ZOOM, CAM_MAX_ZOOM]；
+ *   cam_reset   —— 关闭结算 / 结束回合并等 `camera.current().zoom` 回到 1±0.01。
+ * 独立 catch：本段任何失败只置对应 gate 为 false 并把原因塞进 problems，不污染主整局断言。
+ * 常量出处 `src/skin/layout.ts`（同值内联）。
+ */
+const CAM_MIN_ZOOM = 1.6;
+const CAM_MAX_ZOOM = 4;
+gate.cam_framing = false;
+gate.cam_reset = false;
+try {
+  const camPage = await browser.newPage({ viewport, deviceScaleFactor: 2 });
+  camPage.on('pageerror', (e) => errors.push(String(e)));
+  camPage.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  await camPage.goto(`${ORIGIN}/mono.html?play=1&seed=${SEED}&humans=4&tour=0`, { waitUntil: 'networkidle' });
+  await camPage.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 20000 });
+
+  const primary = camPage.locator('#mono-hud button[data-primary]');
+  await primary.click();   // roll（真实骰子动效）
+  await camPage.waitForFunction(() => window.__monoMain?.game?.state?.phase === 'rolled', null, { timeout: 8000 })
+    .catch(() => {});
+  await camPage.waitForFunction(() => !window.__monoMain.fx?.busy?.(), null, { timeout: 8000 }).catch(() => {});
+  await primary.click();   // move（真实时长：相机应推近）
+
+  /* move 期间连续 30 帧采样 `stage.world.scale.x`（rAF ≈16ms/帧） */
+  facts.camMoveSamples = await camPage.evaluate((n) => new Promise((resolve) => {
+    const out = [];
+    const step = () => {
+      const w = window.__monoMain && window.__monoMain.stage && window.__monoMain.stage.world;
+      out.push(w ? w.scale.x : null);
+      if (out.length >= n) resolve(out);
+      else requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }), 30);
+  {
+    const nums = facts.camMoveSamples.filter((v) => typeof v === 'number');
+    facts.camMoveMax = nums.length ? Number(Math.max(...nums).toFixed(3)) : null;
+    facts.camMoveMin = nums.length ? Number(Math.min(...nums).toFixed(3)) : null;
+    gate.cam_framing = nums.length >= 20
+      && facts.camMoveMax >= CAM_MIN_ZOOM && facts.camMoveMax <= CAM_MAX_ZOOM;
+  }
+
+  await camPage.waitForFunction(() => !window.__monoMain.fx?.busy?.(), null, { timeout: 15000 }).catch(() => {});
+  /* 关闭结算 / 结束回合并等归位：有界轮询，读到 `zoom=1±0.01` 即停；`idle`/`over` 时只等不点 */
+  let resetZoom = null;
+  for (let i = 0; i < 20; i += 1) {
+    const st = await camPage.evaluate(() => {
+      const m = window.__monoMain;
+      const c = m.camera;
+      const close = document.querySelector('#mono-panels button[data-action="card:close"]');
+      return {
+        phase: m.game.state.phase, over: m.game.state.over,
+        zoom: c ? c.current().zoom : null, busy: c ? c.busy() : true,
+        hasClose: Boolean(close && !close.disabled),
+      };
+    });
+    if (st.zoom !== null && Math.abs(st.zoom - 1) <= 0.01 && !st.busy) { resetZoom = st.zoom; break; }
+    if (st.phase === 'idle' || st.over) { await camPage.waitForTimeout(80); continue; }
+    const sel = st.hasClose ? '#mono-panels button[data-action="card:close"]' : '#mono-hud button[data-primary]';
+    await camPage.evaluate((x) => { const el = document.querySelector(x); if (el && !el.disabled) el.click(); }, sel);
+    await camPage.waitForFunction(() => !window.__monoMain.fx?.busy?.(), null, { timeout: 8000 }).catch(() => {});
+    await camPage.waitForTimeout(80);
+  }
+  facts.camResetZoom = resetZoom ?? await camPage.evaluate(
+    () => (window.__monoMain.camera ? window.__monoMain.camera.current().zoom : null),
+  );
+  gate.cam_reset = typeof facts.camResetZoom === 'number' && Math.abs(facts.camResetZoom - 1) <= 0.01;
+  await camPage.close();
+} catch (e) {
+  problems.push(String(e && e.stack ? e.stack : e));
+}
+
 await browser.close();
 
 facts.errors = errors;
@@ -397,6 +490,14 @@ console.log(JSON.stringify({
   gate,
   ai: facts.aiGame ?? null,
   aiDiag: facts.aiDiag ?? null,
+  /* 取景编排事实（spec §8 V19）：nofx 全程恒 1 / move 期采样 max·min / 归位倍率 */
+  cam: {
+    nofx: facts.camNofx ?? null,
+    moveMax: facts.camMoveMax ?? null,
+    moveMin: facts.camMoveMin ?? null,
+    moveSamples: facts.camMoveSamples ?? null,
+    resetZoom: facts.camResetZoom ?? null,
+  },
   problems,
   errors,
 }, null, 2));

@@ -462,9 +462,9 @@ npm run e2e:play                 # PASS · round=61 · 973 次点击 · 退出�
 - **V7**：`hw === 24` → `21.5`，纵向带下界 `320` → `SHOWCASE_Y = 406`（街市带上沿）。新几何实测 `top=46 / bottom=352 / height=306`，占底坞 `50.5% ≥ 33%`。
 - **V14 气泡四态**：`card` 用例曾偶发 `n = 0`。根因不是实现——`card` 动效仅 **540ms**（`fx.totalMs()`），而 Playwright「点击 → 读取」往返可达数百毫秒，读到时气泡已随终帧收起；`rent/buy` 动效更长故一直通过。修法：**取景前 `fx.speed(0)` 冻结时轴、读完 `speed(1)` 解冻**（只停观感不动状态），并在每条用例前等 `!fx.busy()`（真机上动效期间按钮本就是禁用的，用例用 `evaluate` 直改状态绕过了那道门）。
 
-### M15 P0 · 解耦与相机基座（2026-10-01 · 无可见变化）
+### M15 P0+P1 · 解耦·相机基座 → 取景编排（2026-10-01）
 
-**目标**：为「相机取景（放大近景，spec `2026-10-01-monopoly-camera-framing`）」铺好基座——把**世界层**与**UI 层**彻底解耦，并让取景算法（纯函数）与相机驱动（容器变换）就位。**本轮硬要求：无任何可见变化**（390×844 首屏逐像素一致）；相机接线属 P1，本轮不改变任何观感。
+**目标**：为「相机取景（放大近景，spec `2026-10-01-monopoly-camera-framing`）」落地——P0 把**世界层**与**UI 层**彻底解耦、并让取景算法（纯函数）与相机驱动（容器变换）就位（**该部分硬要求无任何可见变化**：390×844 首屏逐像素一致）；P1 把相机**接入主循环**，走位时自动「起势 → 跟拍 → 落点 → 归位」。§15.1–15.2 记 P0，§15.3–15.5 记 P1。
 
 | # | 改动 | 关键文件 |
 |---|---|---|
@@ -485,7 +485,7 @@ npm run e2e:play                 # PASS · round=61 · 973 次点击 · 退出�
 - **V16 UI 解耦（只断言解耦，命中高按逻辑尺寸）**：`#mono-ui` 是 `#mono-world` 的**平级兄弟**（非其子节点）且其 transform 只含页面适配 `k`（390 视口下 `k=1`，无任何相机缩放）；主按钮**逻辑布局高** `offsetHeight ≥ 44`（`offsetHeight` 不受 CSS transform 影响，即不乘页面适配 `k`）。**已知项**：更窄视口（如 361×640）下按钮等比缩到实高 <44，留待 P2 做窄屏 UI 适配。
 - **V17 宽屏几何（侧栏留待后续）**：1440×900 下 `#mono-world` 占宽 ≤ 40% 且**左右各留 ≥ `UI_SIDE_W`(220)**——实测 `left=512 / width=416(28.9%) / right=512`，给后续侧栏与 UI 空间。
 
-#### 15.1 回归口径（本轮实测）
+#### 15.1 P0 回归口径（本轮实测）
 
 ```powershell
 npx tsc --noEmit                 # 退出码 0
@@ -499,16 +499,65 @@ npm run check:prod               # 线上 V1–V17 共 39 项 gate 全 true、er
 - **单测新增**：`test/core/framing.spec.ts` 17 例（包围盒 / 并集 / `frameFor` 夹取 / 时间轴单调 / 1·2·6·8·9·16·32 格 / 笔直与跨拐角路径 / **退化阈值实测 8 格不过线、9 格过线** / 落点取景口径）。
 - 控制台 `errors: []`。
 
-#### 15.2 截图（390×844 @dpr2 手机视口，入 `docs/verify/`）
+#### 15.2 P0 截图（390×844 @dpr2 手机视口，入 `docs/verify/`）
 
 | 文件 | 内容 |
 |---|---|
 | `mono-prod-10-p0-mobile.png` | 拆层后手机首屏（390×844 @dpr2 闸门内留证）：与 P0 前一致，UI 未被放大 |
 | `mono-prod-11-p0-desktop.png` | 1440×900 宽屏：`#mono-world` 居中占宽 28.9%，左右各留 512px（≥ `UI_SIDE_W`） |
 
-#### 15.3 待接线（P1 起）
+#### 15.3 P1 · 取景编排接线（2026-10-01）
 
-相机本体（`src/core/framing.ts` + `src/render/camera.ts`）**已就位但尚未接入主循环**——P0 只交付基座，主循环仍恒等取景。P1 接入时新增 `?cam=0`（关闭相机取景、退回恒等）开关；**当前版本无 `?cam` 参数**，故本轮不产生任何开关行为差异。
+P0 交付的相机本体（`src/core/framing.ts` + `src/render/camera.ts`）本轮**接入主循环**：走位时自动完成「**起势 → 跟拍 → 落点 → 归位**」四段（spec §4 触发时机表、§6 P1 第 11–18 项）。
+
+| # | 改动 | 关键文件 |
+|---|---|---|
+| 1 | 新增 `?cam=0` 总回退开关（**缺省开启**）；`camOn = opts.cam && !opts.nofx` —— `nofx` 下 `timeScale=999` 会让相机补间瞬间到位并停在近景，违背 V19「nofx 下恒 1.0」的断言，故 nofx 一律不取景 | `src/main.ts` |
+| 2 | **C 三段编排**按 spec §4 接线：`roll` ⇒ **起势** `frameFor(整条路径 bbox)`（`CAM_PUSH_MS`，与轻推合并进骰子窗口）；`move` ⇒ **跟拍** `camera.follow([起点, 落点], hop 时长)` + **落点** `frameFor(落点 ∪ 前1 ∪ 后1)`（`CAM_SETTLE_MS`）；`settle` ⇒ 命运/机会/补给/股票 **归位**、收租 **近景**（收租格 ∪ 地主格）、其余保留；`buy`/`upgrade` ⇒ 周边近景；`close`/`end`/`skip` ⇒ **归位**（`CAM_BACK_MS`） | `src/main.ts` |
+| 3 | **实现事实落地**：`fx` 的 `hop` 是**单段**「起点 → 落点」直线位移（`motionFor('hop')` 恒 `FX_HOP_MS`，不可被 skin 覆盖），**不是逐格** —— 故跟拍取**首尾两格**、时长取 fx 自身 hop 时长（规格 §3.2 的「逐格 ×(格数−1)」按实现落地）；否则立刻与棋子脱同步 | `src/main.ts` |
+| 4 | 与 `fx` **同时轴**：`camera.setTimeScale()` 与 `fx.speed()` 并联（都落在 `gsap.globalTimeline.timeScale`），故 `?speed=` / `?nofx=1` 对相机与动效同时生效 | `src/main.ts` |
+| 5 | **面板期禁区**：`overlayOf(st) !== null`（结算面板/事件浮层展开）时禁止新的**推近**，但 `reset` 不受限 —— 避免浮层与近景互相打架 | `src/main.ts` |
+| 6 | AI 回合**压缩**：按 `seats[st.current]` 判定，AI 时长 × `CAM_AI_SCALE`；`aiDriver.onSkip` ⇒ `camera.reset(0)` | `src/main.ts` · `src/ui/aiDriver.ts` |
+| 7 | **R3 降级回路**：`?perf=1` 采样跑满 `FX_FRAMES` 后定档 `perf.degraded = p95 > budget.frameP95Ms`，命中则把倍率上限降为 `CAM_FALLBACK_MAX_ZOOM(3)` | `src/main.ts` |
+| 8 | `?debug=1` 控制台加**相机面板**（位姿读数 + 跟拍倍率滑杆）；取景态下的画布点选先过 `toWorld()` 反变换（否则点到的永远是放大后的别处） | `src/ui/themeConsole.ts` |
+| 9 | 闸门 V18–V20（`mono-prod-check.mjs`）+ e2e `cam_nofx_idle` / `cam_framing` / `cam_reset` + 五态截图脚本 | `local/*.mjs` |
+
+**开关语义**（三档，互不影响）：
+
+- **缺省**：取景全开（`cam=true`）。
+- **`?cam=0`**：相机完全不介入，`world.scale.x` 恒 1（G7 线上兜底 / A/B 回归对比）。
+- **`?nofx=1`**：动效瞬间到终帧，相机**不参与补间**，恒等（G6）。
+
+**退化规则**：`frameFor` 的 fit 若 ≤ `CAM_MIN_ZOOM(1.6) + CAM_DEGRADE_EPS(0.02)`（**≥9 步**的长路径）则**跳过起势段**、直接跟拍（避免越走越远）；判定在 `choreography()` 内部完成，调用方不参与。
+
+#### 15.4 五态截图（390×844 @dpr2 手机视口，入 `docs/verify/`）
+
+`npm run shots:cam`（`local/mono-cam-shots.mjs`）一键产出；前四态取「6 步笔直段」`choreography` 的代表关键帧并 **snap**（确定性、与 `framing.spec.ts` 同源），「归位」走**真实点击**（roll → move → 结算）等相机补间回恒等后再截，故画面是「已走位、已结算」的真实局面。
+
+| 文件 | 态 | 实测位姿 `(cx, cy, zoom)` |
+|---|---|---|
+| `mono-cam-01-idle.png` | **全景**（恒等，首屏零回归基线） | `195, 320, 1` |
+| `mono-cam-02-lead.png` | **起势**（整条路径 bbox 的 fit） | `173.5, 334, 1.814` |
+| `mono-cam-03-follow.png` | **跟拍**（固定倍率 `CAM_FOLLOW_ZOOM`） | `130.5, 298, 3.6` |
+| `mono-cam-04-settle.png` | **落点**（落点 ∪ 前 1 ∪ 后 1） | `238, 379, 3.023` |
+| `mono-cam-05-reset.png` | **归位**（真实走位结算后回到恒等） | `195, 320, 1` |
+
+**窄屏命中回归（360×640）**：取景态下画布坐标 ≠ 世界坐标，`?debug=1` 的点选必须先过 `toWorld()` 反变换。脚本用 **round-trip** 取证 —— 同**一个世界点**分别在「取景态（zoom 3.6）」与「恒等态」各点一次，两次必须选到**同一格**：实测两侧均为 `board.tile.chance` ✅（不依赖任何写死的像素位置）。**注意**：控制台面板本身是 `position:fixed` 浮层，在 360×640 下会盖住棋盘上中部，脚本测试前把该面板 `display:none`（DOM 仍在、'选中' 输入框仍可读），被测的画布命中逻辑不受影响。
+
+#### 15.5 P1 回归口径（本轮实测）
+
+```powershell
+npx tsc --noEmit                 # 退出码 0
+npm run check                    # lint 0 错 / lint:skin OK / vitest 55 文件 517 例全绿
+npm run build                    # check-hardcoded clean（29 个文件；camera.ts / framing.ts 无裸倍率·裸时长）
+npm run deploy                   # 本地构建 → scp → 服务器解压 + 备份（20261001-162413）
+npm run check:prod               # 线上 V1–V20 全 true、errors: []（退出码 0）
+npm run e2e:play                 # PASS · round=61 · clicks=973 · 含 cam_nofx_idle / cam_framing / cam_reset
+npm run shots:cam                # PASS · 五态截图 + 窄屏命中 round-trip 一致
+```
+
+- **V19 实测**：`move` 期 30 帧 `world.scale.x` max `3.03`（∈ [1.6, 4] 且 > 1）✅、退出后 `resetZoom = 1` ✅、`?cam=0` 与 `?nofx=1` 各 12 帧恒 `1.0` ✅。
+- **V20 口径说明（诚实声明）**：闸门原文是「p95 **帧间隔** ≤ 16.7ms；超限时已降级」。但 headless Chromium 的 rAF 被浏览器限到 **~8–20fps**（本机实测 frameP50 ≈ 133ms、frameP95 ≈ 217ms，`local/mono-perf.mjs` 早已记录此限制并改用 `redrawP95` 作代理），帧间隔在此环境**不能当真机帧率用**；且 `perf.degraded` 只在采样跑满 `FX_FRAMES = 300` 后才定档（30s 只收到 ~240 帧 ⇒ `degraded` 恒 false 的假失败）。故本闸门在 headless 上**恒走 spec §8 明文允许的「超限 ⇒ 已降级」分支**：实测 `frames 300 / p95 183.4ms / degraded true` ✅，原始数值如实记录、未改阈值口径。**真机帧率仍以手机打开 `?perf=1` 的读数为准**（保留人工勾选 ☐）。
 
 ### 最终验收（对照 spec §11 硬性标准）
 
@@ -526,7 +575,8 @@ npm run check:prod               # 线上 V1–V17 共 39 项 gate 全 true、er
 | 10 | **M11 音效与音乐（本任务新增，超出 spec §11）** | `npm run check` 全绿（51 文件 / 433 例）/ `registry-ids.json: 237 ids` / `npx tsc --noEmit` 无错；线上 `mono-prod-check.mjs` 9 项音频 gate（`audioLazy` 懒建 ctx / `audioUnlock` 单实例 / `audioPlay` 真实发声 / `audioPrefsDefault` / `audioIconsOn` / `audioMute` 静音后无声 + 落库 / `audioResume` 点回恢复 / `audioKeys` 结算后常驻 / `audioForceMute` `?audio=0` 不建 ctx）、`mono-e2e-playthrough.mjs` 新增 `audio_keys` + `ai_audio_keys`；2 张 390×844 @dpr2 截图（`mono-prod-05-audio-on` / `06-audio-off`）；默认皮肤零音频网络请求 |
 | 11 | **M12 真机音频解锁回归（本任务新增，超出 spec §11）** | `npm run check` 全绿（51 文件 / 435 例）/ `npx tsc --noEmit` 无错；本地 preview（52301）与线上双闸门全绿且 `errors=[]`，`mono-prod-check.mjs` 全部 gate 为 `true`（音频项改真机口径：`audioLazy`/`audioUnlock`/`audioForceMute` 走 `isUnlocked()`、`audioPlay` 走 `dice.total`；并新增 `fixDice`/`fixMove`/`fixEvent`）、`mono-e2e-playthrough.mjs` 新增 `audio_unlocked`；3 张 390×844 @dpr2 截图（`mono-prod-07-dice-pips` / `-08-pawn-move` / `-09-event`）；根因与闸门盲区详见 M12 节 |
 | 12 | **M13 画面重设计（本任务新增，超出 spec §11）** | `npm run check` 全绿 / `npx tsc --noEmit` 无错；`node local/mono-prod-check.mjs` 全部 gate 为 `true` 且 `errors=[]`（新增 `v1…v14 / v2b / v6b` 共 16 项）；**14 张 390×844 @dpr2 手机视口截图**（`mono-visual-01a..01e` 五套配色 + `02..06` 局部特写 + `07-catalog` / `07b-atmosphere` 素材库 + `08-console` 风格控制台 + `09-players` 人物气泡）；`theme.json` 改配置即换风格、`src/render/**` 零改动、`git diff --stat src/core` 为空（详见 M13 节） |
-| 13 | **M15 P0 解耦与相机基座（本任务新增，超出 spec §11）** | `npx tsc --noEmit` 退出码 0；`npm run check` 55 文件 / 513 例全绿（新增 `test/core/framing.spec.ts` 17 例）；`npm run build` check-hardcoded clean（29 文件）；线上 `mono-prod-check.mjs` **V1–V17 共 39 项 gate 全 true、errors: []**（新增 V15 分辨率未降 / V16 UI 解耦 / V17 宽屏几何）；**2 张截图**（`mono-prod-10-p0-mobile` 390×844 @dpr2 / `mono-prod-11-p0-desktop` 1440×900）；本轮**无可见变化**，相机本体留待 P1 接线（详见 M15 节） |
+| 13 | **M15 P0 解耦与相机基座（本任务新增，超出 spec §11）** | `npx tsc --noEmit` 退出码 0；`npm run check` 55 文件 / 513 例全绿（新增 `test/core/framing.spec.ts` 17 例）；`npm run build` check-hardcoded clean（29 文件）；线上 `mono-prod-check.mjs` **V1–V17 共 39 项 gate 全 true、errors: []**（新增 V15 分辨率未降 / V16 UI 解耦 / V17 宽屏几何）；**2 张截图**（`mono-prod-10-p0-mobile` 390×844 @dpr2 / `mono-prod-11-p0-desktop` 1440×900）；该部分**无可见变化**，相机本体留待 P1 接线（详见 M15 节 §15.1–15.2） |
+| 14 | **M15 P1 相机取景编排（本任务新增，超出 spec §11）** | `npx tsc --noEmit` 退出码 0；`npm run check` 55 文件 / 517 例全绿；`npm run build` check-hardcoded clean（29 文件，`camera.ts`/`framing.ts` 无裸倍率·裸时长）；线上 `mono-prod-check.mjs` **V1–V20 全 true、errors: []**（新增 V18 静止态烘焙 N/A / V19 取景 `world.scale.x ∈[1.6,4]` + 归位 1±0.01 + `?cam=0`·`?nofx=1` 恒 1 / V20 `?perf=1` 300 帧已按降级兜底）；`mono-e2e-playthrough.mjs` PASS（973 次点击、含 `cam_nofx_idle`/`cam_framing`/`cam_reset`）；`npm run shots:cam` PASS，**五态截图**（`mono-cam-01-idle`/`02-lead`/`03-follow`/`04-settle`/`05-reset`，390×844 @dpr2）+ **360×640 窄屏命中 round-trip 一致**（详见 M15 节 §15.3–15.5） |
 
 **§11.5 性能实测**（两种成本分开测；`node local/mono-perf.mjs` 桌面代理 + `npm run perf:android` CDP 节流代理；受本机负载影响会抖动，同机连测 3 次的区间如下）：
 - 首屏可交互：桌面 default 235–255 ms / photo 1739–1784 ms；4× 节流代理 1.27–1.36 s（门槛 <3000 ✅）

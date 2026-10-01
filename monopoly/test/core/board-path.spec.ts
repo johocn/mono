@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { advance } from '../../src/core/board-path';
+import { advance, pathIndices } from '../../src/core/board-path';
 import { RING_SIZE } from '../../src/data/board';
 
 describe('board-path 逐格移动（spec §5.1 / §5.4）', () => {
@@ -43,5 +43,29 @@ describe('board-path 逐格移动（spec §5.1 / §5.4）', () => {
     expect(advance(3, 4, 8).passedStart).toBe(false);
     expect(advance(3, 6, 8).to).toBe(1);
     expect(advance(3, 6, 8).passedStart).toBe(true);
+  });
+});
+
+describe('board-path 经过格序列（spec §6 P1 第 12 项：相机取景要整条路径）', () => {
+  it('含起点与落点，逐格连续', () => {
+    expect(pathIndices(10, 3)).toEqual([10, 11, 12, 13]);
+    expect(pathIndices(0, 1)).toEqual([0, 1]);
+  });
+
+  it('回绕与整圈后回到原格', () => {
+    expect(pathIndices(30, 3)).toEqual([30, 31, 0, 1]);
+    const full = pathIndices(4, RING_SIZE);
+    expect(full.length).toBe(RING_SIZE + 1);
+    expect(full[0]).toBe(4);
+    expect(full[full.length - 1]).toBe(4);
+  });
+
+  it('0 步 / 后退只有起点，且与 advance 的首尾一致', () => {
+    expect(pathIndices(7, 0)).toEqual([7]);
+    expect(pathIndices(2, -3)).toEqual([2]);
+    const seq = pathIndices(11, 6);
+    const mv = advance(11, 6);
+    expect(seq[0]).toBe(mv.from);
+    expect(seq[seq.length - 1]).toBe(mv.to);
   });
 });

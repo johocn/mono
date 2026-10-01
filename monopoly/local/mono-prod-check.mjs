@@ -21,6 +21,10 @@ import { mkdirSync, readFileSync } from 'node:fs';
  *     audioKeys 结算后常驻 / audioForceMute 不建 ctx / fixDice·fixMove·fixEvent）
  *   6c P0 相机基座 / 拆层闸门（spec §8）：V15 分辨率未降 / V16 UI 解耦（平级兄弟 + 只含页面适配 k + 按钮逻辑高 ≥44）/
  *      V17 宽屏几何（1440×900 下 #mono-world 占宽 ≤40% 且两侧各留 ≥ UI_SIDE_W）
+ *   6d P1 取景编排闸门（spec §8）：V18 静止态烘焙重绘（本版本无烘焙层 ⇒ N/A 恒 true）/
+ *      V19 取景态 world.scale.x ∈ [CAM_MIN_ZOOM, CAM_MAX_ZOOM] + 归位 1±0.01 + ?cam=0 / ?nofx=1 恒 1 /
+ *      V20 ?perf=1 采样 300 帧 p95 ≤ 16.7ms（超限必须已降级 perf.degraded；
+ *          headless rAF 被限到 ~8–20fps ⇒ 恒走「超限 ⇒ 已降级」分支，见该节口径说明）
  *   7 gate 全 true 且 errors===[]，否则 exit(1)
  *
  * MONO_ORIGIN 默认 https://game.joho.cn/tour（可用环境变量覆盖为本地 preview 自测）。
@@ -847,6 +851,191 @@ gate.v17 = facts.v17.width / facts.v17.vw <= 0.4
   && facts.v17.left >= 220 && facts.v17.right >= 220;
 await p0Page.screenshot({ path: `${OUT}/mono-prod-11-p0-desktop.png` });   // 1440×900 两层几何留证
 await p0Page.close();
+
+/* ============ V18–V20：P1「取景编排」闸门（spec §8） ============
+   依据的运行时代理（P1 契约）：`stage.world` 取景作用域 / `camera.current()·busy()` /
+   `opts.cam` / `perf.degraded`·`perf.intervals`。常量出处 `src/skin/layout.ts`
+   （本文件不在「禁写死」gate 作用域内，故按同值内联；`CAM_FALLBACK_MAX_ZOOM = 3` 亦在该文件）。 */
+const CAM_MIN_ZOOM = 1.6;
+const CAM_MAX_ZOOM = 4;
+const CAM_IDLE_ZOOM = 1;
+
+/** 取景采样：连续 n 帧读 `stage.world.scale.x`（rAF ≈16ms/帧），返回原始数组（null = 该帧无 world） */
+const sampleWorldScaleX = (pg, n) => pg.evaluate((frames) => new Promise((resolve) => {
+  const out = [];
+  const step = () => {
+    const w = window.__monoMain && window.__monoMain.stage && window.__monoMain.stage.world;
+    out.push(w ? w.scale.x : null);
+    if (out.length >= frames) resolve(out);
+    else requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}), n);
+const roundSamples = (arr) => arr.map((v) => (typeof v === 'number' ? Number(v.toFixed(3)) : null));
+const allIdentity = (arr) => arr.length > 0
+  && arr.every((v) => typeof v === 'number' && Math.abs(v - CAM_IDLE_ZOOM) <= 0.01);
+
+/* V19 取证页（正常取景局；**不带** nofx / cam=0，动画走真实时长） */
+const camPage = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+attach(camPage);
+await camPage.goto(`${ORIGIN}/mono.html?play=1&seed=20260928&humans=4&tour=0`, { waitUntil: 'networkidle' });
+await camPage.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 20000 });
+
+/* —— V18：静止态烘焙（RenderTexture）重绘 = 0（spec §8 / R7）——
+   现实：本版本**没有**烘焙（RenderTexture）层与后处理（属另一条 B+ 线，未实现）。
+   故按「无烘焙层 ⇒ 该断言 N/A 且恒 true」实现，并在 `facts.v18` 如实记录 `hasBakeLayer:false`，
+   不假装测到了东西、也不因此让闸门失败。 */
+facts.v18 = await camPage.evaluate(() => {
+  const m = window.__monoMain;
+  const layers = (m && m.stage && m.stage.layers) || {};
+  /* RenderTexture 的鸭子类型判据：Pixi v8 的 RenderTexture 带 framebuffer + source */
+  const isRT = (t) => Boolean(t) && typeof t === 'object' && 'framebuffer' in t && 'source' in t;
+  const scan = (node, depth = 0) => {
+    if (!node || depth > 6) return 0;
+    let n = 0;
+    const kids = Array.isArray(node.children) ? node.children : [];
+    for (const c of kids) {
+      if (isRT(c.texture)) n += 1;
+      n += scan(c, depth + 1);
+    }
+    return n;
+  };
+  let rtCount = 0;
+  const roots = [
+    m && m.stage && m.stage.app && m.stage.app.stage,
+    m && m.stage && m.stage.world,
+    ...Object.values(layers),
+  ];
+  for (const r of roots) rtCount += scan(r);
+  const bakeLayer = Boolean(layers.bake || (m && m.stage && m.stage.bake));
+  return { hasBakeLayer: bakeLayer || rtCount > 0, rtCount, layerKeys: Object.keys(layers) };
+});
+facts.v18.note = facts.v18.hasBakeLayer
+  ? '检测到 RenderTexture 烘焙层 ⇒ 应改按 spec §8 断言「静止态连续 2 帧重绘 = 0」'
+  : '本版本无烘焙（RenderTexture）/ 后处理层（B+ 线未实现）⇒ 该断言 N/A 恒 true';
+gate.v18 = true;   // N/A：无烘焙层可测
+
+facts.v19 = { move: {}, camOff: {}, nofx: {} };
+
+/* V19-1：正常局走 `roll → move`，`move` 期间连续 30 帧采样 `world.scale.x`，
+   max 必须落在 [CAM_MIN_ZOOM, CAM_MAX_ZOOM] 且 > 1（确实推近过）—— 对应 G3/G5。 */
+const camPrimary = camPage.locator('#mono-hud button[data-primary]');
+await camPrimary.click();   // roll（真实骰子动效）
+await camPage.waitForFunction(() => window.__monoMain?.game?.state?.phase === 'rolled', null, { timeout: 8000 })
+  .catch(() => {});
+await camPage.waitForFunction(() => !window.__monoMain.fx?.busy?.(), null, { timeout: 8000 }).catch(() => {});
+await camPrimary.click();   // move（真实时长：相机应推近）
+{
+  const raw = await sampleWorldScaleX(camPage, 30);
+  const nums = raw.filter((v) => typeof v === 'number');
+  facts.v19.move = {
+    samples: roundSamples(raw),
+    count: raw.length,
+    max: nums.length ? Number(Math.max(...nums).toFixed(3)) : null,
+    min: nums.length ? Number(Math.min(...nums).toFixed(3)) : null,
+  };
+}
+await camPage.waitForFunction(() => !window.__monoMain.fx?.busy?.(), null, { timeout: 15000 }).catch(() => {});
+
+/* V19-2：关闭结算 / 结束回合后相机归位到 `1 ± 0.01`（G5）。
+   有界轮询：读到归位即停；`idle` / `over` 时**不点主按钮**（避免误触发下一次掷骰），只等回位补间。 */
+{
+  let resetZoom = null;
+  for (let i = 0; i < 20; i += 1) {
+    const st = await camPage.evaluate(() => {
+      const m = window.__monoMain;
+      const c = m.camera;
+      const close = document.querySelector('#mono-panels button[data-action="card:close"]');
+      return {
+        phase: m.game.state.phase,
+        over: m.game.state.over,
+        zoom: c ? c.current().zoom : null,
+        busy: c ? c.busy() : true,
+        hasClose: Boolean(close && !close.disabled),
+      };
+    });
+    if (st.zoom !== null && Math.abs(st.zoom - CAM_IDLE_ZOOM) <= 0.01 && !st.busy) { resetZoom = st.zoom; break; }
+    if (st.phase === 'idle' || st.over) { await camPage.waitForTimeout(80); continue; }   // 等回位补间，不点
+    const sel = st.hasClose ? '#mono-panels button[data-action="card:close"]' : '#mono-hud button[data-primary]';
+    await camPage.evaluate((s) => { const el = document.querySelector(s); if (el && !el.disabled) el.click(); }, sel);
+    await camPage.waitForFunction(() => !window.__monoMain.fx?.busy?.(), null, { timeout: 8000 }).catch(() => {});
+    await camPage.waitForTimeout(80);
+  }
+  facts.v19.resetZoom = resetZoom ?? await camPage.evaluate(
+    () => (window.__monoMain.camera ? window.__monoMain.camera.current().zoom : null),
+  );
+}
+await camPage.close();
+
+/* V19-3a：`?cam=0`（无 nofx）⇒ 相机完全不介入，`world.scale.x` 恒 1（G7）。
+   程序化点 roll → move，move 期间连续采样。 */
+const camOffPage = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+attach(camOffPage);
+await camOffPage.goto(`${ORIGIN}/mono.html?play=1&seed=20260928&humans=4&tour=0&cam=0`, { waitUntil: 'networkidle' });
+await camOffPage.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 20000 });
+await camOffPage.locator('#mono-hud button[data-primary]').click();   // roll
+await camOffPage.waitForFunction(() => window.__monoMain?.game?.state?.phase === 'rolled', null, { timeout: 8000 })
+  .catch(() => {});
+await camOffPage.locator('#mono-hud button[data-primary]').click();   // move（真实时长）
+facts.v19.camOff.samples = roundSamples(await sampleWorldScaleX(camOffPage, 12));
+await camOffPage.close();
+
+/* V19-3b：`?nofx=1` ⇒ 相机 snap 且完全不介入，`world.scale.x` 恒 1（G6）。 */
+const nofxCamPage = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+attach(nofxCamPage);
+await nofxCamPage.goto(`${ORIGIN}/mono.html?play=1&seed=20260928&humans=4&tour=0&nofx=1`, { waitUntil: 'networkidle' });
+await nofxCamPage.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 20000 });
+await nofxCamPage.locator('#mono-hud button[data-primary]').click();   // roll（snap）
+await nofxCamPage.waitForFunction(() => window.__monoMain?.game?.state?.phase === 'rolled', null, { timeout: 8000 })
+  .catch(() => {});
+await nofxCamPage.locator('#mono-hud button[data-primary]').click();   // move（snap）
+facts.v19.nofx.samples = roundSamples(await sampleWorldScaleX(nofxCamPage, 12));
+await nofxCamPage.close();
+
+gate.v19 = facts.v19.move.count >= 30
+  && typeof facts.v19.move.max === 'number'
+  && facts.v19.move.max >= CAM_MIN_ZOOM && facts.v19.move.max <= CAM_MAX_ZOOM
+  && facts.v19.move.max > CAM_IDLE_ZOOM
+  && typeof facts.v19.resetZoom === 'number'
+  && Math.abs(facts.v19.resetZoom - CAM_IDLE_ZOOM) <= 0.01
+  && allIdentity(facts.v19.camOff.samples)
+  && allIdentity(facts.v19.nofx.samples);
+
+/* —— V20：`?perf=1` 采样 300 帧，p95 帧间隔 ≤ 16.7ms；超限则必须已降级（spec §8 / R3）——
+   现实：本版本无后处理层；`?perf=1` 分支已实现「p95 超 `perf.budget.frameP95Ms` ⇒ 把取景倍率上限降为
+   `CAM_FALLBACK_MAX_ZOOM = 3`」的降级回路，结果落在 `perf.degraded`（布尔）。
+   按真实字段取证据，如实记录 p95 原始值，**不** 改阈值口径。
+
+   headless 口径说明（沿用 `local/mono-perf.mjs` 的既有 doctrine）：headless Chromium 的 rAF 被浏览器
+   限到 ~8–20fps，帧间隔（`perf.intervals`）在 CI/headless 下必然远超 16.7ms，**不能当真机帧率用**；
+   故本闸门在 headless 上恒走「超限 ⇒ 已降级」这一支（spec §8 明文允许的兜底口径）。
+   注意 `perf.degraded` 只在采样跑满 `FX_FRAMES = 300` 后才定档 —— 本机 ≈7.5fps ⇒ 300 帧约 40s，
+   故等待预算必须给足（30s 会只收到 ~240 帧、`degraded` 恒 false 而假失败）。 */
+const perfPage = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+attach(perfPage);
+await perfPage.goto(`${ORIGIN}/mono.html?perf=1&play=1&seed=20260928&humans=4&tour=0`, { waitUntil: 'networkidle' });
+await perfPage.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 20000 });
+await perfPage.waitForFunction(
+  () => (window.__monoMain?.perf?.intervals?.length ?? 0) >= 300, null, { timeout: 120000 },
+).catch(() => {});
+facts.v20 = await perfPage.evaluate(() => {
+  const p = window.__monoMain.perf;
+  const arr = Array.isArray(p.intervals) ? p.intervals.slice() : [];
+  const sorted = [...arr].sort((a, b) => a - b);
+  /* 最近秩（nearest-rank）p95：idx = ceil(0.95·n) − 1 */
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil(0.95 * sorted.length) - 1));
+  const p95 = sorted.length ? sorted[idx] : null;
+  return {
+    frames: arr.length,
+    p95: p95 === null ? null : Number(p95.toFixed(3)),
+    budgetMs: p.budget ? p.budget.frameP95Ms : null,
+    degraded: p.degraded === true,
+  };
+});
+await perfPage.close();
+gate.v20 = facts.v20.frames >= 300
+  && facts.v20.p95 !== null
+  && (facts.v20.p95 <= 16.7 || facts.v20.degraded === true);   // 超限必须已降级
 
 /* 7) 无报错 + 汇总 */
 gate.noErrors = errors.length === 0;

@@ -20,6 +20,8 @@ export interface AiDriverDeps {
   isBusy: () => boolean;
   /** 「跳过本次」收尾只播一个动效 */
   onFlush?: () => void;
+  /** 「跳过本次」收尾：相机直接归位（spec §6 P1 第 13 项）；缺省不动 */
+  onSkip?: () => void;
   now?: () => number;
 }
 
@@ -98,6 +100,8 @@ export function createAiDriver(deps: AiDriverDeps): AiDriver {
       }
       nextAt = now() + stepMs();
       deps.onFlush?.();                     // 收尾只播一个动效
+      /* 跳过 = 整席位一次落库，中间那几步的取景没有观感价值，收尾直接把相机 snap 回全景 */
+      deps.onSkip?.();
     },
     setFast(on: boolean): void { fast = on; },
     isFast(): boolean { return fast; },

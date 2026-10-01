@@ -1,7 +1,15 @@
-import { Application, Container, Graphics } from 'pixi.js';
+import { Application, Container, CullerPlugin, Graphics, extensions } from 'pixi.js';
 import { STAGE_W, STAGE_H } from '../skin/layout';
 
 export { STAGE_W, STAGE_H };
+
+/**
+ * 裁剪插件（spec §7 R3）：`world` 是相机作用域，取景放大后棋盘大半落在画布外——
+ * 不开裁剪则「放大反而不省」（绘制量不降反升），`world.cullable` 也形同虚设。
+ * Pixi v8 的裁剪是**可选插件**，必须在 `app.init()` 之前注册，否则 `cullable` / `cullArea` 不生效。
+ * 只裁剪 `world`（`cullable = true`），`fxUi` / DOM 覆盖层不受影响。
+ */
+extensions.add(CullerPlugin);
 
 export interface Stage {
   app: Application;

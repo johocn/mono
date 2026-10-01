@@ -22,6 +22,18 @@ export function assetUrl(packId: string, rel: string, base = './skins'): string 
 }
 
 /**
+ * 装载一张纹理，统一开 mipmap（spec §2.3 / §6 P1 第 15 项）。
+ *
+ * 棋盘的地砖 / 楼体都是矢量 `Graphics`，放大不会糊；**唯一的位图来源就是这里的贴图素材**，
+ * 近景放大后线性采样会在缩小时产生锯齿，故统一开 mipmap（只增内存，不降清晰度）。
+ * Pixi v8 里 v7 的 `mipmap: 'on'` 已更名 —— 等价开关是 `autoGenerateMipmaps`，
+ * 经 `data` 透传给 `ImageSource`（见 `loadTextures` 的实现：`...asset.data`）。
+ */
+async function loadTexture(url: string): Promise<Texture> {
+  return Assets.load<Texture>({ alias: url, src: url, data: { autoGenerateMipmaps: true } });
+}
+
+/**
  * 按相对路径在**多个**皮肤包内逐一尝试装载（任一包命中即算成功）。
  * 用途：商家配置里的图片素材（`shops.json` 的 `sign.src` / `building.src`）与皮肤包同源解析，
  * 但可落在任一已加载包（`skins/default/` 或 `skins/photo/`）内 —— 全部落空才算缺失，
@@ -35,7 +47,7 @@ export async function preloadRelative(rels: string[], packIds: string[], base = 
       const url = assetUrl(id, rel, base);
       if (getTexture(url)) { loaded = true; break; }
       try {
-        putTexture(url, await Assets.load<Texture>(url));
+        putTexture(url, await loadTexture(url));
         loaded = true;
         break;
       } catch {
@@ -71,7 +83,7 @@ export async function preloadSkinAssets(pack: SkinPack | null, base = './skins')
     const url = assetUrl(pack.id, rel, base);
     if (getTexture(url)) continue;
     try {
-      putTexture(url, await Assets.load<Texture>(url));
+      putTexture(url, await loadTexture(url));
     } catch {
       missing.push(url);
     }

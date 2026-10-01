@@ -19,3 +19,17 @@ export function advance(from: number, steps: number, size: number = RING_SIZE): 
   const to = ((raw % size) + size) % size;
   return { from, to, steps, passedStart: steps > 0 && raw >= size };
 }
+
+/**
+ * 本次前进**经过的格序列**（含起点与落点，沿环逐格），spec §6 P1 第 12 项。
+ *
+ * `advance()` 只给首尾两格，而相机取景（`src/core/framing.ts` 的 `bboxOf` / `choreography`）
+ * 与动效上下文（`FxContext.cells`）需要的是**整条路径**——拐角处必须用并集包围盒，
+ * 首尾连线会算出一个装不下路径的框。步数为 0 / 负 → 只有起点（与 `advance` 的原地口径一致）。
+ */
+export function pathIndices(from: number, steps: number, size: number = RING_SIZE): number[] {
+  const out: number[] = [];
+  const n = Math.max(steps, 0);
+  for (let k = 0; k <= n; k += 1) out.push(((from + k) % size + size) % size);
+  return out;
+}

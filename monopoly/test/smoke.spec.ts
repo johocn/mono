@@ -11,15 +11,20 @@ describe('parseOptions', () => {
   it('缺省：进站即交互局（play=true）；humans/ai/tour 缺省为 undefined（走开局面板）', () => {
     expect(parseOptions('')).toEqual({
       skin: 'default', debug: false, seed: 1, speed: 1, show: 'b', play: true, nofx: false, perf: false,
-      audio: true, humans: undefined, ai: [], tour: undefined,
+      cam: true, audio: true, humans: undefined, ai: [], tour: undefined,
     });
   });
   it('解析 ?skin ?debug ?seed ?speed（play 仍默认 true）', () => {
     expect(parseOptions('?skin=photo&debug=1&seed=7&speed=4'))
       .toEqual({
         skin: 'photo', debug: true, seed: 7, speed: 4, show: 'b', play: true, nofx: false, perf: false,
-        audio: true, humans: undefined, ai: [], tour: undefined,
+        cam: true, audio: true, humans: undefined, ai: [], tour: undefined,
       });
+  });
+  it('相机总回退开关 ?cam=0（spec §7）：缺省开启，`?cam=0` 关闭', () => {
+    expect(parseOptions('?cam=0').cam).toBe(false);
+    expect(parseOptions('?cam=1').cam).toBe(true);
+    expect(parseOptions('').cam).toBe(true);
   });
   it('解析 ?humans / ?ai / ?tour（AI 对手 + 新手引导）', () => {
     expect(parseOptions('?humans=1').humans).toBe(1);

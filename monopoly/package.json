@@ -16,6 +16,7 @@
     "perf:android": "node local/mono-perf-android.mjs",
     "shots:m5": "node local/mono-shots-m5.mjs",
     "shots:m6": "node local/mono-shots-m6.mjs",
+    "shots:cam": "node local/mono-cam-shots.mjs",
     "deploy": "node ../scripts/deploy-mono.mjs",
     "check:prod": "node local/mono-prod-check.mjs",
     "e2e:play": "node local/mono-e2e-playthrough.mjs",

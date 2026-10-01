@@ -15,6 +15,9 @@ import { drawLabels } from './render/LabelView';
 import { ipos } from './render/iso';
 import { autoPlay, createGame, currentPlayer, type Game, type SettleResult } from './core/game';
 import { applyStep, type AiStep } from './core/ai';
+import { pathIndices, type Advance } from './core/board-path';
+import { bboxOf, choreography, frameFor, type CamPose, type Cell, type ChoreographyOpts, type View } from './core/framing';
+import { createCamera } from './render/camera';
 import { hudSpecs, mountHud, type HudActionId, type HudHandle } from './ui/Hud';
 import { mountPanels, overlayOf, panelSpecs, type PanelActionId, type PanelHandle } from './ui/panels';
 import { createAiDriver, type AiDriver } from './ui/aiDriver';
@@ -31,7 +34,7 @@ import { SHARE_VERSION } from './data/share';
 import { FATE_DECK, type ItemCardKind } from './data/cards';
 import { DEMO_OWNER, PLAYER_NAME } from './data/board';
 import { STOCK_TILE_INDEX } from './data/stocks';
-import { BUILDING_SCALE, BUILDING_Y_OFFSET, BUBBLE_HOLD_MS, BUBBLE_MOVE_HOLD_MS, DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED, LABEL_GROUND, STAGE_H, STAGE_W, UI_BREAK_W } from './skin/layout';
+import { BUILDING_SCALE, BUILDING_Y_OFFSET, BUBBLE_HOLD_MS, BUBBLE_MOVE_HOLD_MS, CAM_AI_SCALE, CAM_BACK_MS, CAM_FALLBACK_MAX_ZOOM, CAM_FOLLOW_ZOOM, CAM_IDLE_ZOOM, CAM_MAX_ZOOM, CAM_MIN_ZOOM, CAM_PUSH_MS, CAM_SETTLE_MS, CAM_TILE_PAD, CAM_VIEW_CX, CAM_VIEW_CY, CAM_VIEW_H, CAM_VIEW_W, DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED, LABEL_GROUND, STAGE_H, STAGE_W, UI_BREAK_W } from './skin/layout';
 import { SHOP_DEFAULTS, parseShopConfig, type ShopConfig } from './skin/shop-config';
 import { allElementIds } from './skin/registry';
 import {
@@ -55,6 +58,8 @@ export interface UrlOptions {
   nofx: boolean;
   /** `?perf=1`：挂性能覆盖层并采样帧间隔 */
   perf: boolean;
+  /** `?cam=0`：相机取景总回退（spec §7 总回退开关）；缺省开启 */
+  cam: boolean;
   /** `?humans=1..4`：真人数；缺省（undefined）= 先弹开局面板（spec §6） */
   humans?: number;
   /** `?ai=conservative,aggressive,speculative`：AI 席位性格序列（与 humans 搭配） */
@@ -89,6 +94,8 @@ export function parseOptions(search: string): UrlOptions {
     play: q.get('demo') !== '1' && q.get('play') !== '0',
     nofx: q.get('nofx') === '1',
     perf: q.get('perf') === '1',
+    /* 相机取景（spec §7）：`?cam=0` 总回退；裸链接 / `?cam=1` 一律开启 */
+    cam: q.get('cam') !== '0',
     /* AI 对手 + 新手引导（spec §6/§7）：`humans` 需 1..4 才采纳（`num()` 是「>0 才采纳」，口径不同） */
     humans: (() => {
       const v = Number(q.get('humans'));
@@ -234,6 +241,14 @@ export async function boot(): Promise<void> {
   const themePatch = opts.theme === 'off' ? null : mergePatches(compileTheme(theme, ids), forced);
 
   const stage = await createStage(canvas, { bg: BG_FALLBACK, dpr: window.devicePixelRatio || 2 });
+  /* —— 相机（spec §5.2）：`world` 容器变换，与画布自身的页适配（`fitStage`）互不干涉 —— */
+  const camera = createCamera({ world: stage.world });
+  /** 相机是否介入（spec §7 总回退 / §8 V19）：
+   *  `?cam=0` 关掉全部取景；`?nofx=1` 下时轴 = 999，补间会瞬间到位并**停在近景**，
+   *  违背「nofx 下恒 1.0」，故一并禁用（等价于「无动效即无取景」）。 */
+  const camOn = opts.cam && !opts.nofx;
+  /* 倍率上限（spec §7 R3）：`?perf=1` 实测帧超预算时降到 `CAM_FALLBACK_MAX_ZOOM` */
+  const camMax = { zoom: CAM_MAX_ZOOM };
   /* 地块序号 → 建筑层级（与楼体、楼顶名牌同源一份） */
   const slotLevels = slotLevelsOf();
   /* 台位（唯一一份）：Scene 构造与「气泡锚在棋子头顶」共用同一组参数 */
@@ -263,7 +278,11 @@ export async function boot(): Promise<void> {
     make: (id, s) => scene.buildOne({ id, c: 0, r: 0, pass: 4, fixed: { cx: s.cx, cy: s.cy, s: s.s ?? 1 }, state: s.state }),
     motion: (kind: FxKind) => motionFor(kind, fxTokens),
   });
-  fx.speed(opts.nofx ? FX_NOFX_SPEED : timeScaleFrom(opts.speed));
+  /* 时轴唯一一份（spec §5.2 G6）：`fx.speed()` 实现即 `gsap.globalTimeline.timeScale()`，
+     相机沿用同一份全局时轴，故 `?speed=` / `?nofx=1` 天然同时作用于两者；这里的并联是显式声明。 */
+  const timeScale = opts.nofx ? FX_NOFX_SPEED : timeScaleFrom(opts.speed);
+  fx.speed(timeScale);
+  camera.setTimeScale(timeScale);
   let fxPending = false;
 
   /* —— 棋子三表情（spec §6.6）：动作类型 → mood；`fx` 结束回落 calm（只读状态，不改动画） —— */
@@ -307,6 +326,106 @@ export async function boot(): Promise<void> {
     const cell = cells[((index % cells.length) + cells.length) % cells.length] ?? { c: 0, r: 0 };
     const [x, y] = ipos(cell.c, cell.r, geo);
     return { x, y };
+  };
+
+  /* —————————————— 相机取景编排（spec §4 触发时机表 / §6 P1 第 11 项） ——————————————
+     相机是**纯视觉层**：只读 state、绝不写 state（与 `fx` 同一原则，spec §10）。
+     一切取景都经这里算出「一次动作前 / 后各做什么」，再由 `runAction` 在 fx 的同一时轴上调用。 */
+
+  /** 取景视口（舞台空间）：顶带 HUD 之下、底坞之上（spec §3.4） */
+  const CAM_VIEW: View = { w: CAM_VIEW_W, h: CAM_VIEW_H, cx: CAM_VIEW_CX, cy: CAM_VIEW_CY };
+  /** 取景参数包（`camMax` 是变量：R3 降级档会把它调低，故每次取值而不是快照） */
+  const camRange = (): ChoreographyOpts => ({
+    min: CAM_MIN_ZOOM, max: camMax.zoom, follow: CAM_FOLLOW_ZOOM, pad: CAM_TILE_PAD,
+  });
+
+  /** 格号 → 棋盘格坐标（取景用；与 `cellXY` 同一份 cells 表） */
+  const cellAt = (index: number): Cell => {
+    const cell = cells[((index % cells.length) + cells.length) % cells.length] ?? { c: 0, r: 0 };
+    return [cell.c, cell.r];
+  };
+
+  /** 一组格 → 取景位姿（`bboxOf` 已含格足 + `CAM_TILE_PAD` 外扩） */
+  const frameCells = (cs: readonly Cell[]): CamPose =>
+    frameFor(bboxOf(cs, CAM_TILE_PAD, geo), CAM_VIEW, CAM_MIN_ZOOM, camMax.zoom);
+
+  /** 该格 ∪ 环上前后各 1 格（买地 / 升级的「3 格取景」，spec §4） */
+  const aroundCell = (index: number): Cell[] => [cellAt(index - 1), cellAt(index), cellAt(index + 1)];
+
+  /** 一次动作的取景计划：`before` 在动效起播前调用，`after` 在动效结束时调用 */
+  interface CamPlan { before: () => void; after?: () => void }
+
+  /**
+   * 动作 → 取景计划（`null` = 本次不动相机）。
+   *
+   * 两条必须遵守的规则（spec §4）：
+   * 1. **取景禁区**：任一浮层（`#mono-panels`）展开时不再推近（避免与面板边缘视差抖动）；
+   *    归位（`reset`）不受限——面板关闭后必须能收回全景。
+   * 2. **AI 回合**全部时长 × `CAM_AI_SCALE`（按**动作前**的席位判定：`state.current` 要到
+   *    `endTurn` 才换人，故 settle / buy / upgrade 仍属本回合）。
+   */
+  const camPlanOf = (step: AiStep, result: unknown): CamPlan | null => {
+    const st = game?.state;
+    if (!st || !camOn) return null;
+    const open = overlayOf(st) !== null;
+    const ai = (seats[st.current] ?? null) !== null;
+    const ms = (v: number): number => (ai ? v * CAM_AI_SCALE : v);
+    /** 推近（禁区时跳过） */
+    const push = (pose: CamPose, dur: number): void => { if (!open) camera.to(pose, ms(dur)); };
+
+    switch (step.kind) {
+      case 'roll': {
+        /* 骰子已定 ⇒ 本次路径已知：把「轻推」（spec §4 掷骰行）与 ① 起势合并进掷骰动效窗口，
+           于是跟拍段能整段与 `fx` 的 hop 共时轴（hop 是单段位移，见 `camPlanOf('move')` 注释）。 */
+        const total = (result as { total?: number } | null)?.total ?? 0;
+        const path = pathIndices(currentPlayer(st).pos, total).map(cellAt);
+        return { before: () => push(frameCells(path), CAM_PUSH_MS) };
+      }
+      case 'move': {
+        /* ② 跟拍：与 `fx` 的 hop **同起同止**。注意 `fx` 的 hop 是「起点 → 落点」的**单段**位移
+           （时长 `FX_HOP_MS`，不是逐格 × 格数），故这里只取首尾两格、时长取 fx 自身的 hop 时长，
+           否则立即与棋子脱同步（spec §3.2 的「逐格 × (格数−1)」按实现落地为此形态）。 */
+        const mv = result as Advance;
+        const seq = pathIndices(mv.from, mv.steps).map(cellAt);
+        const hopMs = motionFor('hop', fxTokens).durationMs;
+        /* ③ 落点：`choreography` 的末帧（落点 ∪ 前 1 ∪ 后 1，退化规则由纯函数内部判定） */
+        const keys = choreography(seq, geo, CAM_VIEW, camRange());
+        const settle = keys[keys.length - 1]?.pose ?? frameCells([cellAt(mv.to)]);
+        return {
+          before: () => { if (!open) camera.follow([seq[0] ?? cellAt(mv.from), cellAt(mv.to)], hopMs, geo); },
+          after: () => push(settle, CAM_SETTLE_MS),
+        };
+      }
+      case 'settle': {
+        const r = result as SettleResult;
+        /* 面板期不取景（spec §4）：抽卡 / 命运 / 股票盘会盖住取景区，取景纯浪费且干扰读数 ⇒ 回全景。
+           `overlayOf` 此刻已非 null（`lastDraw` / 股票格），故必须**绕过禁区**直接 `reset`。 */
+        if (r.kind === 'fate' || r.kind === 'chance' || r.kind === 'bonus' || r.kind === 'stock') {
+          return { before: () => camera.reset(ms(CAM_BACK_MS)) };
+        }
+        /* 收租：收租格 ∪ 地主格 的并集取景；其余落格结果保持 ③ 落点不动 */
+        if (r.kind === 'rent') {
+          const ownerPos = st.players.find((p) => p.id === r.owner)?.pos ?? r.index;
+          return { before: () => push(frameCells([cellAt(r.index), cellAt(ownerPos)]), CAM_SETTLE_MS) };
+        }
+        return null;
+      }
+      case 'buy':
+      case 'upgrade': {
+        if (!(result as { ok?: boolean } | null)?.ok) return null;   // 失败无 fx（spec §5.3）→ 也不取景
+        const at = currentPlayer(st).pos;
+        return { before: () => push(frameCells(aroundCell(at)), CAM_SETTLE_MS) };
+      }
+      case 'close':
+      case 'end':
+      case 'skip':
+        /* 归位（spec §4 首屏行：`idle` 相位恒等 zoom = 1，即 G5）：
+           浮层关闭 / 回合结束 / 跳过回合一落到下一位玩家的 `idle` 相位就该收回全景，
+           否则下一位真人等待操作时画面还停在上一位的落点近景。 */
+        return { before: () => camera.reset(ms(CAM_BACK_MS)) };
+      default:
+        return null;   // card / trade：沿用当前取景
+    }
   };
 
   /** 非 play：沿用 M3 的六组演示视图 + 可选橱窗 */
@@ -408,9 +527,13 @@ export async function boot(): Promise<void> {
     ctxOf: (r: never) => FxContext | null,
     withFx = true,
     bubbleOf?: (r: unknown) => BubbleContent | null,
+    camOf?: (r: unknown) => CamPlan | null,
   ): void => {
     const result = fn();
     const ctx = withFx ? ctxOf(result as never) : null;
+    /* 取景与动效同生命周期：`before` 随动效起播、`after` 随动效结束（无动效时两者紧邻）。
+       `withFx=false`（跳过本次）时相机完全不介入——aiDriver 收尾会直接 snap 归位。 */
+    const cam = withFx ? (camOf?.(result) ?? null) : null;
     /* 气泡文案与动效同源：有动效 → 随 `fx` 结束收起；无动效（如进监狱）→ 定时器兜底收起。
        前进播报例外：hop 只有 ~320ms，随 fx 收起读不完，改由 `BUBBLE_MOVE_HOLD_MS` 定时器收起。 */
     const content = withFx ? (bubbleOf?.(result) ?? null) : null;
@@ -419,12 +542,15 @@ export async function boot(): Promise<void> {
     mood = ctx ? (MOOD_BY_FX[ctx.kind] ?? 'calm') : MOOD_BY_EVENT(game?.state.lastEvent);
     if (!ctx) {
       fxPending = false;
+      cam?.before();
+      cam?.after?.();     // 无动效可用 ⇒ 两段紧邻，取景照样到位
       paint();
       return;
     }
     /* 与 `fx.play` 同刻、同判空（spec §5.3）：`buy`/`upgrade` 失败无 fx → 也不出声 */
     if (sfxOn) audio.play(ctx.kind);
     fxPending = true;
+    cam?.before();
     paint();
     /* 动效元素在 `paint()` 之后才追加进 `fx` 层，必然盖住正好落在棋子头顶的气泡（买地印章 / 金币）：
        先把气泡容器留一手（行号最大 ⇒ 此刻恒为 `fxUi` 层最后一项），`play()` 之后重挂回最上（spec §6.7）。
@@ -434,6 +560,7 @@ export async function boot(): Promise<void> {
     fx.play(ctx, () => {
       fxPending = false; mood = 'calm';
       if (!reportHold) setBubble(null, 0);
+      cam?.after?.();
       paint();
     });
     if (bubbleTop) fxLayer.addChild(bubbleTop);
@@ -502,6 +629,7 @@ export async function boot(): Promise<void> {
       withFx,
       /* 气泡四态（spec §6.7）：文案取「动作落库后」的所在格短名 + 本次抽卡名 */
       (r: unknown) => bubbleOfStep(step, r, shops.shortAt(currentPlayer(g.state).pos), g.state.lastDraw?.title ?? null),
+      (r: unknown) => camPlanOf(step, r),
     );
   };
 
@@ -556,6 +684,8 @@ export async function boot(): Promise<void> {
       run: (step, withFx = true) => dispatch(step, withFx),
       isBusy: () => fx.busy(),
       onFlush: () => fx.play({ kind: 'end' }, () => paint()),
+      /* 「跳过本次」= 整席位一次落库，中间几步的取景没有观感价值（spec §6 P1 第 13 项）⇒ 直接归位 */
+      onSkip: () => { if (camOn) camera.reset(0); },
     });
     driver.start();
     /* BGM 起播（spec §6.2）：未解锁时只记「想要」，首次手势 `unlock()` 时随解锁一起起播 */
@@ -605,6 +735,7 @@ export async function boot(): Promise<void> {
       instances: () => scene.instancesOf(),
       patchOf: (id) => instantiateDeps.theme?.[id],
       apply: (edits) => { instantiateDeps.theme = mergePatches(basePatch, edits); paint(); },
+      camera,
     });
     themeConsole.mount(document.body);
   }
@@ -636,8 +767,31 @@ export async function boot(): Promise<void> {
     }
   };
 
+  /**
+   * 取景四态的代表性位姿（闸门 / 手机视口截图用；确定性，不依赖真实走位）。
+   * **会立即 snap 到该位姿**并返回它（`__monoMain.stage.world.scale.x` 随即反映该态）。
+   * 取景态取「6 步笔直段」的 `choreography` 关键帧，与 `framing.spec.ts` 的用例同源。
+   */
+  const camPreview = (state: 'idle' | 'lead' | 'follow' | 'settle'): CamPose => {
+    const back: CamPose = { cx: CAM_VIEW_CX, cy: CAM_VIEW_CY, zoom: CAM_IDLE_ZOOM };
+    if (state === 'idle') { camera.snap(back); return back; }
+    const keys = choreography(pathIndices(CURRENT_INDEX, 6).map(cellAt), geo, CAM_VIEW, camRange());
+    const pose = state === 'lead'
+      ? keys[1]?.pose ?? back
+      : state === 'follow'
+        ? keys.find((k) => k.pose.zoom === camRange().follow)?.pose ?? back
+        : keys[keys.length - 1]?.pose ?? back;
+    camera.snap(pose);
+    return pose;
+  };
+
   /** `?perf=1`：帧间隔采样 + 绘制元素峰值（spec §11.5 的测量口径） */
-  const perf = { firstInteractiveMs: 0, intervals: [] as number[], maxDraw: 0, budget: { interactiveMs: 3000, frameP95Ms: 20, draw: 200 } };
+  const perf = {
+    firstInteractiveMs: 0, intervals: [] as number[], maxDraw: 0, p95: 0,
+    /* R3 降级标记（spec §7）：采样结束后若 p95 超预算 ⇒ true，倍率上限同时降到 `CAM_FALLBACK_MAX_ZOOM` */
+    degraded: false,
+    budget: { interactiveMs: 3000, frameP95Ms: 20, draw: 200 },
+  };
   if (opts.perf) {
     const overlay = document.createElement('div');
     overlay.id = 'mono-perf';
@@ -654,7 +808,12 @@ export async function boot(): Promise<void> {
          的整帧元素实例数（非 GPU draw call，Pixi 会同状态合批），单列避免与预算口径混淆 */
       const sceneDraw = st.perPass[1] + st.perPass[2] + st.perPass[3];
       overlay.textContent = `fps ${Math.round(1000 / dt)} · scene ${sceneDraw} · total ${st.total}`;
-      if (perf.intervals.length < FX_FRAMES) requestAnimationFrame(tick);
+      if (perf.intervals.length < FX_FRAMES) { requestAnimationFrame(tick); return; }
+      /* 采样到头 → 定档（spec §7 R3 / §8 V20）：p95 超预算即降倍率上限，取景变浅以省绘制量 */
+      const sorted = [...perf.intervals].sort((a, b) => a - b);
+      perf.p95 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))] ?? 0;
+      perf.degraded = perf.p95 > perf.budget.frameP95Ms;
+      if (perf.degraded) camMax.zoom = CAM_FALLBACK_MAX_ZOOM;
     };
     requestAnimationFrame(tick);
   }
@@ -664,6 +823,9 @@ export async function boot(): Promise<void> {
     stage, scene, opts, geo, skin, missingAssets, game, paint, sim, fx, fxPreview, perf, shops, VERSION,
     audio, seats, aiDriver: driver, hudSeats: () => seats,
     tutorial: () => tutorial, mountTutorial: replayTour, themeConsole,
+    /* 相机（spec §8 V19/V20）：`camera.current()` 读位姿、`camPreview` 直接切态；
+       `camMax` 是可变对象，供 V20 断言降级后的倍率上限 */
+    camera, camMax, camPreview,
   };
 }
 
