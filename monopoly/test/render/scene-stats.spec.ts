@@ -7,7 +7,7 @@ import type { ElementSpec } from '../../src/skin/instantiate';
 /** 最小 Scene：皮肤留空 → resolve 走内建兜底（纯色块，不触文字/精灵），统计口径与线上一致 */
 function makeScene(): Scene {
   return new Scene({
-    layers: { ground: new Container(), labels: new Container(), pieces: new Container(), fx: new Container() },
+    layers: { ground: new Container(), labels: new Container(), pieces: new Container(), fxWorld: new Container(), fxUi: new Container() },
     geo: DEFAULT_GEO,
     bg: { color: '#0c1513', alpha: 1 },
     instantiateDeps: { skin: null, defaultSkin: null, overrides: null, slotLevels: {} },

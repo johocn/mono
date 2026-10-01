@@ -31,7 +31,7 @@ import { SHARE_VERSION } from './data/share';
 import { FATE_DECK, type ItemCardKind } from './data/cards';
 import { DEMO_OWNER, PLAYER_NAME } from './data/board';
 import { STOCK_TILE_INDEX } from './data/stocks';
-import { BUILDING_SCALE, BUILDING_Y_OFFSET, BUBBLE_HOLD_MS, BUBBLE_MOVE_HOLD_MS, DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED, LABEL_GROUND, STAGE_H, STAGE_W } from './skin/layout';
+import { BUILDING_SCALE, BUILDING_Y_OFFSET, BUBBLE_HOLD_MS, BUBBLE_MOVE_HOLD_MS, DEFAULT_GEO, FX_FRAMES, FX_LEVELS, FX_NOFX_SPEED, LABEL_GROUND, STAGE_H, STAGE_W, UI_BREAK_W } from './skin/layout';
 import { SHOP_DEFAULTS, parseShopConfig, type ShopConfig } from './skin/shop-config';
 import { allElementIds } from './skin/registry';
 import {
@@ -154,12 +154,12 @@ async function loadThemeConfig(): Promise<Theme> {
 }
 
 /** 把 390×844 逻辑舞台等比缩放到视口内并居中。
- *  画布与**全部 DOM 覆盖层**共用这一个变换，因此命中区与视觉不会再错位。
+ *  只作用于 `#mono-world`（画布）；DOM 覆盖层由 `fitUi()` 单独适配，故命中区与视觉不再错位。
  *  修复三件事：① 旧版画布 `margin:0 auto` 居中、覆盖层却 `position:fixed` 靠屏幕左边，
  *  视口宽 ≠ 390 时命中区整体左偏 (视口宽-390)/2；② 视口窄于 390 时画布右侧（棋盘右角）被裁；
  *  ③ 宽视口下舞台不再贴左上角，而是居中留边。390×844 视口下 k=1、位移为 0，与改动前逐像素一致。 */
 function fitStage(): void {
-  const fit = document.getElementById('mono-fit');
+  const fit = document.getElementById('mono-world');
   if (!fit) return;
   const k = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
   const dx = Math.max(0, (window.innerWidth - STAGE_W * k) / 2);
@@ -167,14 +167,33 @@ function fitStage(): void {
   fit.style.transform = `translate(${dx}px, ${dy}px) scale(${k})`;
 }
 
+/** DOM 覆盖层的适配（spec §6 P0 第 2 项）：与画布分开算 k。
+ *  - 桌面宽屏（`vw ≥ UI_BREAK_W`）只跟高（`k = vh/844`），UI 不因横向留白被一起缩小；
+ *    此分支在真实桌面比例下与旧 `min()` 数值相同，故无可见变化。
+ *  - 窄屏沿用 `min()`，与 `fitStage()` 同源，覆盖层仍与画布对齐。
+ *  两种分支都居中，命中区始终与画布同一坐标系。 */
+function fitUi(): void {
+  const ui = document.getElementById('mono-ui');
+  if (!ui) return;
+  const k = window.innerWidth >= UI_BREAK_W
+    ? window.innerHeight / STAGE_H
+    : Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
+  const dx = Math.max(0, (window.innerWidth - STAGE_W * k) / 2);
+  const dy = Math.max(0, (window.innerHeight - STAGE_H * k) / 2);
+  ui.style.transform = `translate(${dx}px, ${dy}px) scale(${k})`;
+}
+
+/** 两个 fit 必须同时触发：画布与覆盖层是两个独立层（resize / 转屏） */
+function fitAll(): void { fitStage(); fitUi(); }
+
 export async function boot(): Promise<void> {
   const canvas = document.getElementById('stage') as HTMLCanvasElement | null;
   if (!canvas) throw new Error('[mono] #stage not found');
-  fitStage();
-  window.addEventListener('resize', fitStage);
-  window.addEventListener('orientationchange', fitStage);
-  /** 覆盖层统一挂点（spec：HUD / 浮层 / 引导 / 开局 / 分享 与画布同源，共用 fitStage 的缩放） */
-  const fitRoot = document.getElementById('mono-fit') ?? document.body;
+  fitAll();
+  window.addEventListener('resize', fitAll);
+  window.addEventListener('orientationchange', fitAll);
+  /** 覆盖层统一挂点（spec：HUD / 浮层 / 引导 / 开局 / 分享 与画布同源，共用 fitUi 的缩放） */
+  const fitRoot = document.getElementById('mono-ui') ?? document.body;
   const opts = parseOptions(location.search);
 
   const defaultSkin = await loadSkin('default');
@@ -240,7 +259,7 @@ export async function boot(): Promise<void> {
   /* —— M6 动效层：只回放视觉，绝不写 state；一切参数经 skin.fx / layout 注入 —— */
   const fxTokens = (skin ?? defaultSkin)?.fx ?? null;
   const fx: FxHandle = createFx({
-    fxLayer: stage.layers.fx,
+    fx: { world: stage.layers.fxWorld, ui: stage.layers.fxUi },
     make: (id, s) => scene.buildOne({ id, c: 0, r: 0, pass: 4, fixed: { cx: s.cx, cy: s.cy, s: s.s ?? 1 }, state: s.state }),
     motion: (kind: FxKind) => motionFor(kind, fxTokens),
   });
@@ -408,8 +427,9 @@ export async function boot(): Promise<void> {
     fxPending = true;
     paint();
     /* 动效元素在 `paint()` 之后才追加进 `fx` 层，必然盖住正好落在棋子头顶的气泡（买地印章 / 金币）：
-       先把气泡容器留一手（行号最大 ⇒ 此刻恒为 `fx` 层最后一项），`play()` 之后重挂回最上（spec §6.7）。 */
-    const fxLayer = stage.layers.fx;
+       先把气泡容器留一手（行号最大 ⇒ 此刻恒为 `fxUi` 层最后一项），`play()` 之后重挂回最上（spec §6.7）。
+       气泡是 pass 4（屏幕空间）→ 落在 `fxUi`；世界空间动效在 `fxWorld` 内，恒在 `fxUi` 之下，不会再盖住气泡。 */
+    const fxLayer = stage.layers.fxUi;
     const bubbleTop = bubble ? fxLayer.children[fxLayer.children.length - 1] : null;
     fx.play(ctx, () => {
       fxPending = false; mood = 'calm';

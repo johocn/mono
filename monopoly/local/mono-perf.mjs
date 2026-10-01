@@ -58,12 +58,12 @@ async function sample(query, label) {
     const scene = st.perPass[1] + st.perPass[2] + st.perPass[3];
 
     /* fx 峰值：叠一层满配动效，采样 fx 层多出的 overlay 元素数 */
-    const baseOverlay = m.stage.layers.fx.children.length - st.perPass[4];
+    const baseOverlay = m.stage.layers.fxUi.children.length - st.perPass[4];
     m.fx.speed(3);
     m.fx.play(m.fxPreview('end'));
     let peak = 0;
     for (let i = 0; i < 40; i++) {
-      const overlay = m.stage.layers.fx.children.length - st.perPass[4];
+      const overlay = m.stage.layers.fxUi.children.length - st.perPass[4];
       if (overlay > peak) peak = overlay;
       await new Promise((r) => requestAnimationFrame(() => r(null)));
     }

@@ -8,7 +8,7 @@
  * - 每步补一行「操作方式」（文案取自 `src/data/tutorial.ts`，本文件不写死中文）。
  */
 import { TUTORIAL_STEPS } from '../data/tutorial';
-import { STAGE_H, STAGE_W, TUTORIAL_GAP } from '../skin/layout';
+import { STAGE_H, TUTORIAL_GAP } from '../skin/layout';
 import type { Seat } from '../data/ai';
 
 export type { Rect } from '../data/tutorial';
@@ -50,8 +50,10 @@ export function mountTutorial(root: HTMLElement, deps: { onDone?: () => void } =
 
   const layer = document.createElement('div');
   layer.id = 'mono-tour';
+  /* 拆层后挂点改为 `#mono-ui`（spec §6 P0 第 8 项）：层填满整个 UI 根（inset:0），
+     故 `TUTORIAL_STEPS` 里的 rect 仍是 390×844 舞台坐标，无需再换算。 */
   layer.style.cssText =
-    `position:absolute;left:0;top:0;width:${STAGE_W}px;height:${STAGE_H}px;` +
+    'position:absolute;inset:0;' +
     `z-index:${Z_TOUR};pointer-events:none;font:13px/1.5 ${FONT};color:#d8e4dc`;
 
   /* 高亮样式（描边 / 柔光 / 脉冲）：随 layer 一起挂载与移除，避免遗留到 document */

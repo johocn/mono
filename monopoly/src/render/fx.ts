@@ -13,10 +13,28 @@ import {
   FX_STAMP_MS, FX_STAMP_S, FX_STAMP_S0, FX_STOCK_MS, FX_UPGRADE_MS,
 } from '../skin/layout';
 import type { FxTokens } from '../skin/types';
+import type { Cell } from '../core/framing';
 
 /** spec §5.6 的九条动效（一 kind 一行） */
 export type FxKind =
   | 'dice' | 'hop' | 'buy' | 'upgrade' | 'rent' | 'card' | 'deck' | 'stock' | 'end';
+
+/**
+ * 动效的空间归属（spec §5.4）：`world` = 跟相机（落点由格坐标 `ipos` 算出），
+ * `ui` = 不跟相机（落点用底坞 / 面板常量）。
+ *
+ * `Record<FxKind, …>` 让 TS 做**穷尽检查**：将来新增 kind 而漏归类，编译即报错——
+ * 用类型系统兜这条，而不是人工核对（漏一个就是「取景时骰子飘到世界坐标」）。
+ *
+ * 注：spec §5.4 的表把 `deck` / `stock` 列进 `ui`，同时又把 `stock` 唯一的产物 `shard`
+ * 列进 `world`——两行自相矛盾。此处按 spec 自己给出的**判据**（落点来源）归类：
+ * `deck` / `stock` 的落点都取自 `cellXY()`（格坐标），故归 `world`；只有 `dice`（底坞）与
+ * `card`（面板）落在屏幕空间常量上，归 `ui`。
+ */
+export const FX_SPACE: Record<FxKind, 'world' | 'ui'> = {
+  hop: 'world', buy: 'world', upgrade: 'world', rent: 'world', deck: 'world', stock: 'world', end: 'world',
+  dice: 'ui', card: 'ui',
+};
 
 export type FxTimeline = ReturnType<typeof gsap.timeline>;
 
@@ -126,6 +144,8 @@ export interface FxContext {
   title?: string;
   /** 卡面正文 */
   text?: string;
+  /** 本次移动经过的格序列（供相机 `follow()` 复用同一份路径，避免两处各算一次） */
+  cells?: readonly Cell[];
 }
 
 export interface FxMakeSpec {
@@ -143,8 +163,8 @@ export interface FxBounds {
 }
 
 export interface FxDeps {
-  /** 动画容器（`stage.layers.fx`）；`paint()` 会清层，动效只在两次重画之间存活 */
-  fxLayer: Container;
+  /** 动画容器（按 `FX_SPACE` 分世界 / UI 两条）；`paint()` 会清层，动效只在两次重画之间存活 */
+  fx: { world: Container; ui: Container };
   /** 唯一建元素入口：由 `Scene.buildOne` → `instantiate()`（不得直接绘图） */
   make(id: string, spec: FxMakeSpec): Container;
   /** kind → 参数（绑定皮肤 tokens）；缺省用 `motionFor(kind, null)` */
@@ -176,7 +196,9 @@ export function createFx(deps: FxDeps): FxHandle {
   let speedFactor = 1;
 
   const cleanup = (): void => {
-    for (const c of spawned) if (c.parent === deps.fxLayer) deps.fxLayer.removeChild(c);
+    for (const c of spawned) {
+      if (c.parent === deps.fx.world || c.parent === deps.fx.ui) c.parent.removeChild(c);
+    }
     spawned = [];
   };
 
@@ -186,10 +208,10 @@ export function createFx(deps: FxDeps): FxHandle {
    * 位置会被算两次（此前骰子飞出屏即此故）。局部绘制 + 容器位姿后，
    * 所有绝对目标补间、旋转、缩放都以元素自身中心为基准，天然正确。
    */
-  const spawn = (id: string, spec: FxMakeSpec): Container => {
+  const spawn = (id: string, spec: FxMakeSpec, target: Container): Container => {
     const c = deps.make(id, { ...spec, cx: 0, cy: 0 });
     c.position.set(spec.cx, spec.cy);
-    deps.fxLayer.addChild(c);
+    target.addChild(c);
     spawned.push(c);
     return c;
   };
@@ -202,6 +224,8 @@ export function createFx(deps: FxDeps): FxHandle {
     cleanup();
     const m = deps.motion?.(ctx.kind) ?? motionFor(ctx.kind, null);
     const ease = m.ease;
+    /* 空间归属（spec §5.4）：世界空间的动效进 `world`（跟相机），UI 空间的进 `fxUi` */
+    const target = FX_SPACE[ctx.kind] === 'world' ? deps.fx.world : deps.fx.ui;
     const t = gsap.timeline({
       onComplete: () => { cleanup(); onDone?.(); },
     });
@@ -214,7 +238,7 @@ export function createFx(deps: FxDeps): FxHandle {
       const n = Math.max(finite(m.dust, FX_DUST_COUNT), 2);
       for (let i = 0; i < n; i++) {
         const f = fan(i, n);
-        const d = spawn('fx.dust', { cx, cy, s: FX_DUST_S, state: { owner: 0 } });
+        const d = spawn('fx.dust', { cx, cy, s: FX_DUST_S, state: { owner: 0 } }, target);
         t.fromTo(d, { alpha: 1 }, { alpha: 0, duration: secs(FX_DUST_MS), ease }, 0);
         t.to(d, {
           x: cx + f * FX_DUST_ARC,
@@ -230,7 +254,7 @@ export function createFx(deps: FxDeps): FxHandle {
       const stagger = fly / n;
       for (let i = 0; i < n; i++) {
         const f = fan(i, n);
-        const c = spawn('fx.coin', { cx: x0, cy: y0, s: FX_COIN_S, state: { owner: 0 } });
+        const c = spawn('fx.coin', { cx: x0, cy: y0, s: FX_COIN_S, state: { owner: 0 } }, target);
         const at = i * stagger;
         t.to(c, { y: y0 + FX_COIN_LIFT, x: x0 + f * FX_COIN_ARC, duration: fly / 2, ease }, at);
         t.to(c, { x: tx, y: ty, alpha: 0, duration: fly / 2, ease }, at + fly / 2);
@@ -248,7 +272,7 @@ export function createFx(deps: FxDeps): FxHandle {
           ['dice.face6', { pips: 6 }],
         ];
         for (const [id, state] of diceParts) {
-          const die = spawn(id, { cx: FX_DICE_CX, cy: FX_DICE_CY, s: FX_DICE_S, state });
+          const die = spawn(id, { cx: FX_DICE_CX, cy: FX_DICE_CY, s: FX_DICE_S, state }, target);
           t.to(die, { rotation: spin, duration: d, ease }, 0);
           t.to(die, { y: FX_DICE_CY - hop, duration: d / 2, ease, yoyo: true, repeat: 1 }, 0);
         }
@@ -258,7 +282,7 @@ export function createFx(deps: FxDeps): FxHandle {
         const arc = finite(m.arc, FX_HOP_ARC);
         const kick = secs(finite(m.kickMs, FX_HOP_KICK_MS));
         const up = secs(m.durationMs) - kick;
-        const pawn = spawn('piece.p1', { cx: x0, cy: y0, s: FX_HOP_S, state: { owner: 1 } });
+        const pawn = spawn('piece.p1', { cx: x0, cy: y0, s: FX_HOP_S, state: { owner: 1 } }, target);
         /* 起跳（腾空）→ 落下（落到目标格）+ 落点落尘 */
         t.to(pawn, { y: y0 - arc, duration: kick, ease }, 0);
         t.to(pawn, { y: ty, x: tx, duration: up, ease }, kick);
@@ -267,7 +291,7 @@ export function createFx(deps: FxDeps): FxHandle {
         break;
       }
       case 'buy': {
-        const stamp = spawn('fx.stamp', { cx: x0, cy: y0, s: FX_STAMP_S, state: { owner: 0 } });
+        const stamp = spawn('fx.stamp', { cx: x0, cy: y0, s: FX_STAMP_S, state: { owner: 0 } }, target);
         t.fromTo(stamp,
           { alpha: 0, rotation: rad(FX_STAMP_DEG) },
           { alpha: 1, rotation: 0, duration: secs(FX_STAMP_MS), ease }, 0);
@@ -278,7 +302,7 @@ export function createFx(deps: FxDeps): FxHandle {
         break;
       }
       case 'upgrade': {
-        const sc = spawn('fx.scaffold', { cx: x0, cy: y0, s: FX_SCAFFOLD_S, state: { owner: 0 } });
+        const sc = spawn('fx.scaffold', { cx: x0, cy: y0, s: FX_SCAFFOLD_S, state: { owner: 0 } }, target);
         const build = secs(finite(m.scaffoldMs, FX_SCAFFOLD_MS));
         t.fromTo(sc.scale, { x: FX_SCAFFOLD_S0, y: FX_SCAFFOLD_S0 }, { x: 1, y: 1, duration: build, ease }, 0);
         /* 脚手架搭起后缓慢淡出（与逐层点亮重叠，保证任一静帧都能同时看到「架 + 灯」） */
@@ -286,7 +310,7 @@ export function createFx(deps: FxDeps): FxHandle {
         const levels = Math.max(finite(m.levels, FX_LEVELS), 1);
         const seg = secs(finite(m.perLevelLitMs, FX_PER_LEVEL_LIT_MS));
         for (let l = 0; l < levels; l++) {
-          const spark = spawn('fx.spark', { cx: x0, cy: y0 - l * FX_LEVEL_STEP, s: FX_LIT_S, state: { owner: 0 } });
+          const spark = spawn('fx.spark', { cx: x0, cy: y0 - l * FX_LEVEL_STEP, s: FX_LIT_S, state: { owner: 0 } }, target);
           const at = build + l * seg;
           t.fromTo(spark.scale, { x: 0, y: 0 }, { x: 1, y: 1, duration: seg / 2, ease }, at);
           t.fromTo(spark, { alpha: 0 }, { alpha: 1, duration: seg / 2, ease }, at);
@@ -295,7 +319,7 @@ export function createFx(deps: FxDeps): FxHandle {
       }
       case 'rent': {
         coinsFly();
-        const burst = spawn('fx.spark', { cx: tx, cy: ty, s: FX_LIT_S, state: { owner: 0 } });
+        const burst = spawn('fx.spark', { cx: tx, cy: ty, s: FX_LIT_S, state: { owner: 0 } }, target);
         const fly = secs(finite(m.flyMs, FX_COIN_FLY_MS));
         const burstMs = secs(FX_BURST_MS);
         const at = fly / 2;
@@ -308,12 +332,12 @@ export function createFx(deps: FxDeps): FxHandle {
         const card = spawn('ui.card', {
           cx: FX_CARD_CX, cy: FX_CARD_CY, s: FX_CARD_S,
           state: { title: ctx.title ?? '', text: ctx.text ?? '' },
-        });
+        }, target);
         const sx = finite(m.flipX, FX_FLIP_SCALE_X);
         /* 翻面入场：横向自近侧面展开（容器 scale 是 ObservablePoint，必须补间其 {x,y}） */
         t.fromTo(card.scale, { x: sx, y: 1 }, { x: 1, y: 1, duration: flip, ease }, 0);
         t.fromTo(card, { alpha: 0 }, { alpha: 1, duration: flip / 2, ease }, 0);
-        const shine = spawn('fx.shine', { cx: FX_CARD_CX, cy: FX_CARD_CY, s: FX_CARD_S, state: { owner: 0 } });
+        const shine = spawn('fx.shine', { cx: FX_CARD_CX, cy: FX_CARD_CY, s: FX_CARD_S, state: { owner: 0 } }, target);
         const dx = finite(m.shineDx, FX_SHINE_DX);
         const shineMs = secs(finite(m.shineMs, FX_SHINE_MS));
         t.fromTo(shine, { alpha: 0, x: FX_CARD_CX - dx }, { alpha: 1, x: FX_CARD_CX + dx, duration: shineMs, ease }, flip);
@@ -321,7 +345,7 @@ export function createFx(deps: FxDeps): FxHandle {
         break;
       }
       case 'deck': {
-        const back = spawn('ui.cardBack', { cx: x0, cy: y0, s: FX_DECK_S, state: { owner: 0 } });
+        const back = spawn('ui.cardBack', { cx: x0, cy: y0, s: FX_DECK_S, state: { owner: 0 } }, target);
         const sh = secs(finite(m.shakeMs, FX_SHAKE_MS));
         const amp = finite(m.shakeAmp, FX_SHAKE_AMP);
         t.to(back, { x: x0 + amp, duration: sh / 2, ease, yoyo: true, repeat: 1 }, 0);
@@ -330,7 +354,7 @@ export function createFx(deps: FxDeps): FxHandle {
         break;
       }
       case 'stock': {
-        const shard = spawn('fx.shard', { cx: x0, cy: y0, s: FX_SHARD_S, state: { owner: 0 } });
+        const shard = spawn('fx.shard', { cx: x0, cy: y0, s: FX_SHARD_S, state: { owner: 0 } }, target);
         const pulse = secs(finite(m.pulseMs, FX_PULSE_MS));
         const peak = finite(m.pulseS, FX_PULSE_S);
         t.fromTo(shard.scale, { x: 1, y: 1 }, { x: peak, y: peak, duration: pulse, ease, yoyo: true, repeat: 2 }, 0);
@@ -344,7 +368,7 @@ export function createFx(deps: FxDeps): FxHandle {
         for (let i = 0; i < n; i++) {
           const a = (i / n) * 360;
           const r = rad(a);
-          const s = spawn('fx.spark', { cx: FX_CENTER_X, cy: FX_CENTER_Y, s: FX_END_S, state: { owner: 0 } });
+          const s = spawn('fx.spark', { cx: FX_CENTER_X, cy: FX_CENTER_Y, s: FX_END_S, state: { owner: 0 } }, target);
           t.fromTo(s.scale, { x: 0, y: 0 }, { x: 1, y: 1, duration: fly / 2, ease }, 0);
           t.fromTo(s, { alpha: 0 }, { alpha: 1, duration: fly / 2, ease }, 0);
           t.to(s, {
@@ -380,7 +404,7 @@ export function createFx(deps: FxDeps): FxHandle {
     let x1 = Number.NEGATIVE_INFINITY;
     let y1 = Number.NEGATIVE_INFINITY;
     for (const c of spawned) {
-      if (c.parent !== deps.fxLayer) continue;
+      if (c.parent !== deps.fx.world && c.parent !== deps.fx.ui) continue;
       const b = c.getBounds();
       if (b.width <= 0 && b.height <= 0) continue;
       if (b.x < x0) x0 = b.x;

@@ -28,7 +28,7 @@ facts.hud = await page.evaluate(() => {
     bars: ids.filter((id) => id === 'ui.playerBar').length,
     diceBodies: ids.filter((id) => id === 'dice.body').length,
     diceFaces: ids.filter((id) => id.startsWith('dice.face')).length,
-    fxChildren: m.stage.layers.fx.children.length,
+    fxChildren: m.stage.layers.fxUi.children.length,
     hitButtons: document.querySelectorAll('#mono-hud button[data-action]').length,
     primaryAction: document.querySelector('#mono-hud button[data-primary]')?.dataset.action ?? null,
     phase: m.game.state.phase,

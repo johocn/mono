@@ -304,3 +304,35 @@ export const AUDIO_BGM_PAD_ATTACK_MS = 300;        // 三和弦起音
 export const AUDIO_BGM_PAD_GAIN = 0.35;            // 铺底相对增益
 export const AUDIO_BGM_LOOKAHEAD_MS = 100;         // 排程器轮询间隔
 export const AUDIO_BGM_SCHEDULE_AHEAD_S = 0.3;     // 提前排程窗口
+
+/* —— 相机取景（spec：2026-10-01-monopoly-camera-framing）——
+   `src/render/camera.ts` 处于「禁写死」gate 作用域内，
+   故裸倍率 / 时长 / 边距一律集中在此（本文件不在 gate 内）。 */
+export const CAM_VIEW_TOP = 34;                   // = BOARD_TOP，顶带 HUD_TOP_H(30) 之下
+export const CAM_VIEW_BOTTOM = 606;               // = DOCK_Y，底坞之上
+export const CAM_VIEW_CX = STAGE_W / 2;           // 195
+export const CAM_VIEW_CY = (CAM_VIEW_TOP + CAM_VIEW_BOTTOM) / 2;   // 320
+export const CAM_VIEW_W = STAGE_W;                // 390
+export const CAM_VIEW_H = CAM_VIEW_BOTTOM - CAM_VIEW_TOP;          // 572
+export const CAM_IDLE_ZOOM = 1;                   // 静止态 = 恒等变换（首屏零回归）
+export const CAM_MIN_ZOOM = 1.6;                  // 低于此值判为「退化」，跳过起势段
+export const CAM_MAX_ZOOM = 4;                    // 单格取景理论值 4.53，封顶防过近
+export const CAM_FOLLOW_ZOOM = 3.6;               // 跟拍段固定倍率（可见 ≈2.5 格宽 × 4.4 格高）
+export const CAM_TILE_PAD = 1;                    // 取景外扩格数
+export const CAM_DEGRADE_EPS = 0.02;              // fit 与 CAM_MIN_ZOOM 的容差（浮点）
+export const CAM_LEAD_MS = 380;
+export const CAM_PUSH_MS = 420;                   // 退化时「全景 → 跟拍」的过渡
+export const CAM_SETTLE_MS = 320;
+export const CAM_BACK_MS = 520;
+export const CAM_MAX_TOTAL_MS = 1600;             // ①+③+④ 编排开销上限（② 与 fx 共时轴，不可压缩）
+export const CAM_AI_SCALE = 0.6;                  // AI 回合取景时长压缩比
+export const CAM_EASE = FX_EASE_FALLBACK;
+
+/* —— 拆层（DOM 空间）：`#mono-world` 走 fitStage()，`#mono-ui` 走 fitUi() —— */
+export const UI_BREAK_W = 900;                    // ≥ 此宽度视为桌面：UI 不再跟 min() 一起缩
+export const UI_SIDE_W = 220;                     // 桌面常驻侧栏宽度（侧栏空间下限）
+export const UI_MIN_HIT = 44;                     // 按钮命中高下限（逻辑布局口径）
+export const UI_MIN_FONT = 12;                    // 正文最小字号
+
+/* —— 烘焙（与相机共存）—— */
+export const BAKE_DPR_CAP = 2;                    // 仅用于 RenderTexture；主画布 resolution 不动

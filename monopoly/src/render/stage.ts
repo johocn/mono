@@ -5,11 +5,30 @@ export { STAGE_W, STAGE_H };
 
 export interface Stage {
   app: Application;
-  layers: { ground: Container; labels: Container; pieces: Container; fx: Container };
+  /** 相机作用域：`world.scale/position` 由 `src/render/camera.ts` 驱动 */
+  world: Container;
+  layers: {
+    ground: Container;
+    labels: Container;
+    pieces: Container;
+    /** 世界空间动效（跟相机）：`hop`/`dust`/`buy`/`upgrade`/`rent`/`shard`/`end` */
+    fxWorld: Container;
+    /** UI 空间动效 + pass 4 屏幕空间元素（不跟相机）：`dice`/`card`/`deck`/`stock`/`shine`、HUD、浮层、气泡 */
+    fxUi: Container;
+  };
   destroy(): void;
 }
 
-/** 三遍绘制容器：地面+建筑 → 汉字标签 → 棋子（fx 为特效，独立于排序） */
+/**
+ * 拆层（spec §5.3）：容器树
+ * ```
+ * app.stage
+ *   ├─ world  (cullable = true，camera 作用域)
+ *   │    ├─ ground → labels → pieces → fxWorld
+ *   └─ fxUi   (屏幕空间，不跟相机)
+ * ```
+ * `world` 的初始变换为恒等（由 `createCamera()` 写入），故与改动前逐像素一致。
+ */
 export async function createStage(canvas: HTMLCanvasElement, opts: { bg: number; dpr: number }): Promise<Stage> {
   const app = new Application();
   await app.init({
@@ -22,15 +41,21 @@ export async function createStage(canvas: HTMLCanvasElement, opts: { bg: number;
     autoDensity: true,
   });
 
+  const world = new Container();
   const ground = new Container();
   const labels = new Container();
   const pieces = new Container();
-  const fx = new Container();
+  const fxWorld = new Container();
+  const fxUi = new Container();
+  world.label = 'world';
+  world.cullable = true;
   ground.label = 'ground';
   labels.label = 'labels';
   pieces.label = 'pieces';
-  fx.label = 'fx';
-  app.stage.addChild(ground, labels, pieces, fx);
+  fxWorld.label = 'fxWorld';
+  fxUi.label = 'fxUi';
+  world.addChild(ground, labels, pieces, fxWorld);
+  app.stage.addChild(world, fxUi);
 
   // 空场景也得「出画面」：铺一层占位底，证明管线活着
   const probe = new Graphics();
@@ -39,7 +64,8 @@ export async function createStage(canvas: HTMLCanvasElement, opts: { bg: number;
 
   return {
     app,
-    layers: { ground, labels, pieces, fx },
+    world,
+    layers: { ground, labels, pieces, fxWorld, fxUi },
     destroy: () => app.destroy(true),
   };
 }

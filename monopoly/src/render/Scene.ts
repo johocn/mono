@@ -27,7 +27,7 @@ export function planDrawOrder(items: DrawPlanItem[]): DrawPlanItem[] {
 }
 
 export interface SceneDeps {
-  layers: { ground: Container; labels: Container; pieces: Container; fx: Container };
+  layers: { ground: Container; labels: Container; pieces: Container; fxWorld: Container; fxUi: Container };
   instantiateDeps: InstantiateDeps;
   geo: { hw: number; hh: number; ox: number; oy: number };
   bg: { color: string; alpha: number };
@@ -138,7 +138,8 @@ export class Scene {
     layers.ground.removeChildren();
     layers.labels.removeChildren();
     layers.pieces.removeChildren();
-    layers.fx.removeChildren();
+    layers.fxWorld.removeChildren();
+    layers.fxUi.removeChildren();
 
     const back = new Graphics();
     back.rect(0, 0, layers.ground.width || STAGE_W, layers.ground.height || STAGE_H).fill({ color: bg.color, alpha: bg.alpha });
@@ -163,7 +164,8 @@ export class Scene {
       const inst = this.instances[p.index];
       if (!spec || !inst) continue;
       this.counts[p.pass] += 1;
-      const target = p.pass === 2 ? layers.labels : p.pass === 3 ? layers.pieces : p.pass === 4 ? layers.fx : layers.ground;
+      /* pass 4 = 屏幕空间（HUD / 浮层 / 气泡）：进 `fxUi`（不跟相机），与世界层解耦 */
+      const target = p.pass === 2 ? layers.labels : p.pass === 3 ? layers.pieces : p.pass === 4 ? layers.fxUi : layers.ground;
       const box = new Container();
       this.paintItem(inst, spec, box);
       target.addChild(box);

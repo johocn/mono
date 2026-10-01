@@ -18,7 +18,9 @@ import { mkdirSync, readFileSync } from 'node:fs';
  *   6b M11/M12 音频：**真实 AudioContext**（无桩）+ 真实手势解锁
  *     （audioLazy 懒建 ctx / audioUnlock 已解锁 / audioPlay 零点数∈2..12 且零异常 /
  *      audioPrefsDefault / audioIconsOn / audioMute 静音后无声 + 落库 / audioResume /
- *      audioKeys 结算后常驻 / audioForceMute 不建 ctx / fixDice·fixMove·fixEvent）
+ *     audioKeys 结算后常驻 / audioForceMute 不建 ctx / fixDice·fixMove·fixEvent）
+ *   6c P0 相机基座 / 拆层闸门（spec §8）：V15 分辨率未降 / V16 UI 解耦（平级兄弟 + 只含页面适配 k + 按钮逻辑高 ≥44）/
+ *      V17 宽屏几何（1440×900 下 #mono-world 占宽 ≤40% 且两侧各留 ≥ UI_SIDE_W）
  *   7 gate 全 true 且 errors===[]，否则 exit(1)
  *
  * MONO_ORIGIN 默认 https://game.joho.cn/tour（可用环境变量覆盖为本地 preview 自测）。
@@ -581,7 +583,7 @@ gate.v13 = facts.v13.styles.join(',') === 'bun,cap,short,twintail'
 facts.v9 = await vPage.evaluate(() => {
   const m = window.__monoMain;
   const rd = (v) => Math.round(v);
-  const bars = m.stage.layers.fx.children
+  const bars = m.stage.layers.fxUi.children
     .map((c) => c.getBounds())
     .filter((b) => Math.abs(b.height - 41) < 3 && Math.abs(b.width - 96) < 4)
     .map((b) => ({ x: rd(b.x), y: rd(b.y), w: rd(b.width), h: rd(b.height) }))
@@ -703,7 +705,7 @@ await bubblePage.goto(`${ORIGIN}/mono.html?debug=1&play=1&seed=20260928&humans=4
 await bubblePage.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 20000 });
 const readBubble = () => bubblePage.evaluate(() => {
   const m = window.__monoMain;
-  const kids = m.stage.layers.fx.children;
+  const kids = m.stage.layers.fxUi.children;
   const b = kids.length ? kids[kids.length - 1].getBounds() : null;
   const rects = [...document.querySelectorAll('#mono-hud button')].map((x) => x.getBoundingClientRect());
   const hit = b === null ? false : rects.some((r) => r.left < b.x + b.width && r.right > b.x && r.top < b.y + b.height && r.bottom > b.y);
@@ -777,6 +779,75 @@ gate.v14 = facts.v14.idle.n === 0
   })
   && facts.v14.settle.n === 0;
 
+/* —— V15–V17：P0「解耦与相机基座」闸门（spec §8）——
+   硬要求：拆层后**无任何可见变化**。三项分别锁「分辨率未降 / UI 解耦且命中不缩水 / 宽屏两侧留白」。 */
+const p0Page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
+attach(p0Page);
+/* 不带 `debug=1`：本页只做几何/分辨率断言 + 留一张**干净首屏**截图（无风格控制台遮挡） */
+await p0Page.goto(`${ORIGIN}/mono.html?play=1&seed=20260928&humans=4&tour=0`, { waitUntil: 'networkidle' });
+await p0Page.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 20000 });
+
+/* V15：分辨率未降 —— canvas 后备缓冲 = 逻辑尺寸 × devicePixelRatio（拆层不得动分辨率），
+   且 CSS 逻辑尺寸仍是 390×844（fitStage 的页面适配在 390 视口下 k=1）。 */
+facts.v15 = await p0Page.evaluate(() => {
+  const c = document.getElementById('stage');
+  const dpr = window.devicePixelRatio || 1;
+  const r = c.getBoundingClientRect();
+  return {
+    w: c.width, h: c.height,
+    expectW: Math.round(390 * dpr), expectH: Math.round(844 * dpr),
+    cssW: Math.round(r.width), cssH: Math.round(r.height),
+    dpr,
+  };
+});
+gate.v15 = facts.v15.w === facts.v15.expectW && facts.v15.h === facts.v15.expectH
+  && facts.v15.cssW === 390 && facts.v15.cssH === 844;
+
+/* V16：UI 解耦（只断言解耦，命中高按逻辑尺寸）——
+   ① `#mono-ui` 是 `#mono-world` 的平级兄弟、不是其子节点（DOM 层不跟相机）；
+   ② `#mono-ui` 的 transform 只有页面适配 k（390 视口下 k=1），不含任何相机缩放；
+   ③ 主按钮**逻辑布局高** `offsetHeight ≥ 44`（offsetHeight 不受 CSS transform 影响，
+      即不乘页面适配 k —— 窄屏等比缩到 <44 记已知项，留待 P2 做窄屏 UI 适配，spec §8 注）。 */
+facts.v16 = await p0Page.evaluate(() => {
+  const ui = document.getElementById('mono-ui');
+  const world = document.getElementById('mono-world');
+  const tf = getComputedStyle(ui).transform;
+  let k = 1;
+  if (tf && tf !== 'none') {
+    const m = tf.match(/matrix\(([^)]+)\)/);
+    if (m) k = Number(m[1].split(',')[0]);
+  }
+  const btn = document.querySelector('#mono-hud button[data-primary]');
+  return {
+    uiExists: Boolean(ui), worldExists: Boolean(world),
+    sameNode: ui === world,
+    uiChildOfWorld: Boolean(world && ui) && world.contains(ui),
+    k: Math.round(k * 1000) / 1000,
+    btnH: btn ? btn.offsetHeight : 0,
+  };
+});
+gate.v16 = facts.v16.uiExists && facts.v16.worldExists
+  && facts.v16.sameNode === false && facts.v16.uiChildOfWorld === false
+  && Math.abs(facts.v16.k - 1) < 1e-6
+  && facts.v16.btnH >= 44;
+await p0Page.screenshot({ path: `${OUT}/mono-prod-10-p0-mobile.png` });   // 390×844 @dpr2 首屏留证（P0 零可见变化）
+
+/* V17：宽屏几何断言（侧栏留待后续）—— 1440×900 下 `#mono-world` 占宽 ≤ 40%，
+   且左右各留 ≥ UI_SIDE_W(220) 空白，给后续侧栏与 UI 空间。 */
+await p0Page.setViewportSize({ width: 1440, height: 900 });
+await p0Page.waitForTimeout(80);   // 等 resize 监听里的 fitAll 落完
+facts.v17 = await p0Page.evaluate(() => {
+  const r = document.getElementById('mono-world').getBoundingClientRect();
+  return {
+    left: Math.round(r.left), width: Math.round(r.width),
+    right: Math.round(window.innerWidth - r.right), vw: window.innerWidth,
+  };
+});
+gate.v17 = facts.v17.width / facts.v17.vw <= 0.4
+  && facts.v17.left >= 220 && facts.v17.right >= 220;
+await p0Page.screenshot({ path: `${OUT}/mono-prod-11-p0-desktop.png` });   // 1440×900 两层几何留证
+await p0Page.close();
+
 /* 7) 无报错 + 汇总 */
 gate.noErrors = errors.length === 0;
 facts.screenshots = [
@@ -790,6 +861,8 @@ facts.screenshots = [
   `${OUT}/mono-prod-07-dice-pips.png`,
   `${OUT}/mono-prod-08-pawn-move.png`,
   `${OUT}/mono-prod-09-event.png`,
+  `${OUT}/mono-prod-10-p0-mobile.png`,
+  `${OUT}/mono-prod-11-p0-desktop.png`,
 ];
 
 console.log(JSON.stringify({ origin: ORIGIN, facts, gate, errors }, null, 2));

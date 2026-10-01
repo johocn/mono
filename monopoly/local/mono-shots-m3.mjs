@@ -41,7 +41,7 @@ for (const [show, file, minFx] of views) {
     const inst = main.scene.instancesOf();
     const shots = inst.filter((i) => i.id.startsWith('showcase.'));
     return {
-      fxChildren: main.stage.layers.fx.children.length,
+      fxChildren: main.stage.layers.fxUi.children.length,
       showcase: shots.length,
       showroomL4: shots.filter((i) => i.level === 4).length,
       viewButtons: document.querySelectorAll('#mono-views button').length,

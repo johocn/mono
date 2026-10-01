@@ -21,16 +21,22 @@
     <meta name="description" content="吉林双阳的邻里商业版大富翁：买地、升级、收租、炒股，一局打完看谁是街坊首富。" />
     <style>
       html, body { margin: 0; height: 100%; background: #0c1513; overflow: hidden; }
-      /* 唯一基准：390×844 逻辑舞台。画布与全部 DOM 覆盖层都是它的子节点，
-         由 src/main.ts 的 fitStage() 按 min(vw/390, vh/844) 统一缩放平移。
-         旧版此处用 margin:0 auto 让画布居中、覆盖层却 position:fixed 靠屏幕左边，
-         视口宽 ≠ 390 时两者相差 (视口宽-390)/2，即「命中区左偏」。 */
-      #mono-fit { position: absolute; left: 0; top: 0; width: 390px; height: 844px; transform-origin: 0 0; touch-action: none; }
+      /* 唯一基准：390×844 逻辑舞台，拆成两个平级层（spec §6 P0 第 1 项）：
+         - #mono-world：只装 canvas，由 fitStage() 按 min(vw/390, vh/844) 缩放平移；
+           canvas 内的 pixi `world` 容器再受相机取景作用（放大近景）。
+         - #mono-ui：全部 DOM 覆盖层（HUD / 浮层 / 引导 / 开局 / 分享）的挂点，
+           由 fitUi() 缩放平移——桌面宽屏只跟高，故不随相机放大、命中区不漂移。
+         旧版二者共用 #mono-fit，视口宽 ≠ 390 时覆盖层与画布会相差 (视口宽-390)/2（「命中区左偏」）。 */
+      #mono-world, #mono-ui { position: absolute; left: 0; top: 0; width: 390px; height: 844px; transform-origin: 0 0; }
+      #mono-world { touch-action: none; }
+      /* UI 层自身不吃事件，交互子元素各自 pointer-events:auto —— 不挡住 canvas 的 pointerdown */
+      #mono-ui { pointer-events: none; }
       #stage { display: block; width: 390px; height: 844px; touch-action: none; }
     </style>
   </head>
   <body>
-    <div id="mono-fit"><canvas id="stage"></canvas></div>
+    <div id="mono-world"><canvas id="stage"></canvas></div>
+    <div id="mono-ui"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

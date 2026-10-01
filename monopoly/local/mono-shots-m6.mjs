@@ -79,7 +79,7 @@ for (const [kind, file, frac] of KINDS) {
       progress: m.fx.progress(),
       totalMs: m.fx.totalMs(),
       phase: m.game.state.phase,
-      fxChildren: m.stage.layers.fx.children.length,
+      fxChildren: m.stage.layers.fxUi.children.length,
       bounds: b,
     };
   });

@@ -176,7 +176,7 @@ const shot = async (p, name, opts = {}) => {
     const m = window.__monoMain;
     m.scene.reset();
     m.scene.render();
-    const fx = m.stage.layers.fx;
+    const fx = m.stage.layers.fxUi;
     const cap = (text, x, y, size = '9px', color = '#9fb3a8') => {
       const d = document.createElement('div');
       d.textContent = text;
@@ -225,7 +225,7 @@ const shot = async (p, name, opts = {}) => {
     const m = window.__monoMain;
     m.scene.reset();
     m.scene.render();
-    const fx = m.stage.layers.fx;
+    const fx = m.stage.layers.fxUi;
     const cap = (text, y, color = '#9fb3a8', size = '11px') => {
       const d = document.createElement('div');
       d.textContent = text;
@@ -293,7 +293,7 @@ const shot = async (p, name, opts = {}) => {
     const m = window.__monoMain;
     m.scene.reset();
     m.scene.render();
-    const fx = m.stage.layers.fx;
+    const fx = m.stage.layers.fxUi;
     const cap = (text, x, y, color = '#9fb3a8', size = '9px') => {
       const d = document.createElement('div');
       d.textContent = text;
