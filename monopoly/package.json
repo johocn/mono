@@ -17,6 +17,7 @@
     "shots:m5": "node local/mono-shots-m5.mjs",
     "shots:m6": "node local/mono-shots-m6.mjs",
     "shots:cam": "node local/mono-cam-shots.mjs",
+    "shots:p2": "node local/mono-shots-p2.mjs",
     "deploy": "node ../scripts/deploy-mono.mjs",
     "check:prod": "node local/mono-prod-check.mjs",
     "e2e:play": "node local/mono-e2e-playthrough.mjs",

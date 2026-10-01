@@ -78,7 +78,8 @@ export function buildingSpecs(opts: BuildingOpts = {}): ElementSpec[] {
        渲染层不得在此写死 preset / 色值（spec §1.1 病根修正） */
     out.push({
       id: wallId, slot: index, c, r, level: lv,
-      state: { level: lv, dim: false, owner: ownerOf(index), brand },
+      /* slot 同步进 state：P2 体型变体按 `slot % variant.length` 轮换（proc-building） */
+      state: { level: lv, dim: false, owner: ownerOf(index), brand, slot: index },
       overrides: {},
     });
 

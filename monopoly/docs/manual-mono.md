@@ -462,9 +462,9 @@ npm run e2e:play                 # PASS · round=61 · 973 次点击 · 退出�
 - **V7**：`hw === 24` → `21.5`，纵向带下界 `320` → `SHOWCASE_Y = 406`（街市带上沿）。新几何实测 `top=46 / bottom=352 / height=306`，占底坞 `50.5% ≥ 33%`。
 - **V14 气泡四态**：`card` 用例曾偶发 `n = 0`。根因不是实现——`card` 动效仅 **540ms**（`fx.totalMs()`），而 Playwright「点击 → 读取」往返可达数百毫秒，读到时气泡已随终帧收起；`rent/buy` 动效更长故一直通过。修法：**取景前 `fx.speed(0)` 冻结时轴、读完 `speed(1)` 解冻**（只停观感不动状态），并在每条用例前等 `!fx.busy()`（真机上动效期间按钮本就是禁用的，用例用 `evaluate` 直改状态绕过了那道门）。
 
-### M15 P0+P1 · 解耦·相机基座 → 取景编排（2026-10-01）
+### M15 P0+P1+P2 · 解耦·相机基座 → 取景编排 → 近景建筑增强（2026-10-01）
 
-**目标**：为「相机取景（放大近景，spec `2026-10-01-monopoly-camera-framing`）」落地——P0 把**世界层**与**UI 层**彻底解耦、并让取景算法（纯函数）与相机驱动（容器变换）就位（**该部分硬要求无任何可见变化**：390×844 首屏逐像素一致）；P1 把相机**接入主循环**，走位时自动「起势 → 跟拍 → 落点 → 归位」。§15.1–15.2 记 P0，§15.3–15.5 记 P1。
+**目标**：为「相机取景（放大近景，spec `2026-10-01-monopoly-camera-framing`）」落地——P0 把**世界层**与**UI 层**彻底解耦、并让取景算法（纯函数）与相机驱动（容器变换）就位（**该部分硬要求无任何可见变化**：390×844 首屏逐像素一致）；P1 把相机**接入主循环**，走位时自动「起势 → 跟拍 → 落点 → 归位」；P2 给近景建筑加**体型变体 / 轮廓阶梯 / 台阶铺装**（放大后才看得见，故排最后）。§15.1–15.2 记 P0，§15.3–15.5 记 P1，§15.6–15.8 记 P2。
 
 | # | 改动 | 关键文件 |
 |---|---|---|
@@ -559,6 +559,63 @@ npm run shots:cam                # PASS · 五态截图 + 窄屏命中 round-tri
 - **V19 实测**：`move` 期 30 帧 `world.scale.x` max `3.03`（∈ [1.6, 4] 且 > 1）✅、退出后 `resetZoom = 1` ✅、`?cam=0` 与 `?nofx=1` 各 12 帧恒 `1.0` ✅。
 - **V20 口径说明（诚实声明）**：闸门原文是「p95 **帧间隔** ≤ 16.7ms；超限时已降级」。但 headless Chromium 的 rAF 被浏览器限到 **~8–20fps**（本机实测 frameP50 ≈ 133ms、frameP95 ≈ 217ms，`local/mono-perf.mjs` 早已记录此限制并改用 `redrawP95` 作代理），帧间隔在此环境**不能当真机帧率用**；且 `perf.degraded` 只在采样跑满 `FX_FRAMES = 300` 后才定档（30s 只收到 ~240 帧 ⇒ `degraded` 恒 false 的假失败）。故本闸门在 headless 上**恒走 spec §8 明文允许的「超限 ⇒ 已降级」分支**：实测 `frames 300 / p95 183.4ms / degraded true` ✅，原始数值如实记录、未改阈值口径。**真机帧率仍以手机打开 `?perf=1` 的读数为准**（保留人工勾选 ☐）。
 
+#### 15.6 P2 · 近景建筑增强（2026-10-01）
+
+近景放大后楼体才看得清，故 P2 排最后：给**近景建筑**加三类「加法件」，全部以 **params 键**落地（走取值器，受 `check-hardcoded.mjs` gate 约束），并在 `skin.json` 显式开启。
+
+| # | 改动 | 关键文件 |
+|---|---|---|
+| 1 | **体型变体**：名册 `['plain','veranda','dormer','annex']`，按 `state.slot % 名册长` 选款 —— 门廊立柱外廊（`veranda`）/ 屋顶老虎窗（`dormer`）/ 侧接偏屋（`annex`）/ 素体（`plain`，不绘制） | `src/render/providers/proc-building.ts` |
+| 2 | **轮廓阶梯 B（落地）**：屋顶线下叠 `stepN` 道逐级收进的横向檐带（色带 + 檐线），**零结构改动** | 同上 |
+| 3 | **轮廓阶梯 A（预留，默认关）**：屋顶上退进一层更小的体块（真进退台），`setback` 开且 `levels ≠ 1` 才绘制 | 同上 |
+| 4 | **台阶铺装**：门前以 `apronDx/apronFy` 定位、`apronN` 层同心菱形梯台（越内越窄越高），`shop` / `market3` / `stall` 三处插桩 | 同上 |
+| 5 | 楼体 spec 的 `state` 增加 **`slot`** 透传 ⇒ 变体按格位轮换（`BuildingView.buildingSpecs()`） | `src/render/BuildingView.ts` |
+| 6 | `building.*.l1` / `.l2` 开 `variant` 名册 + `step` + `apron`；`.l3` 开 `step` + `apron` | `public/skins/default/skin.json` |
+| 7 | **P2 专项取证脚本**（定格出图 + 像素哈希 gate） | `local/mono-shots-p2.mjs` · `npm run shots:p2` |
+
+**新增 params 键**（L4 内建默认在 `proc-building.ts` 的 `D = fb({...})` 内；键值可由 skin.json / theme.json 覆盖）：
+
+| 键 | 默认 | 含义 |
+|---|---|---|
+| `variant` | `['plain']` | 体型变体名册（`string[]`）；`state.slot % length` 选款，`plain` 不绘制 |
+| `step` / `stepN` / `stepInset` / `stepDrop` / `stepTH` / `stepLW` | `false` / `2` / `0.05` / `0.055` / `0.03` / `1.2` | 轮廓阶梯 B 开关 / 道数 / 每道水平收进（u 比例） / 每道下移（v 比例） / 带厚（v 比例） / 檐线宽（px·s） |
+| `setback` / `sbW` / `sbD` / `sbH` / `sbEdgeW` | `false` / `0.6` / `0.62` / `0.3` / `1.2` | 轮廓阶梯 A 开关 / 退台体块宽·深（w·d 比例） / 高（h 比例） / 棱线宽（px·s） |
+| `apron` / `apronN` / `apronShrink` / `apronLift` / `apronDx` / `apronFy` / `apronRx` / `apronRy` | `false` / `3` / `0.6` / `0.7` / `0.28` / `0.42` / `0.42` / `0.38` | 铺装开关 / 层数 / 每层收缩 / 每层抬升（px·s） / 锚点前向·右向偏移（w·d 比例） / 首层菱形半径（w·d 比例） |
+| `vrPad` / `vrOut` / `vrH` / `vrW` / `vrRoofRise` | `0.07` / `0.2` / `0.6` / `2.2` / `7` | veranda：柱位外扩（u 比例） / 出挑（w·d 比例） / 柱高（h 比例） / 柱宽（px·s，同 `ridgeW` 口径） / 披檐升起（px·s） |
+| `dmW` / `dmD` / `dmH` / `dmV` / `dmRise` / `dmWinU1..V2` | `0.24` / `0.22` / `0.2` / `0.34` / `5` / … | dormer：体块宽·深（w·d 比例） / 高（h 比例） / L1 沿坡抬升系数 / 双坡升起（px·s） / 前脸暖窗范围 |
+| `axX` / `axY` / `axW` / `axH` / `axRoofRise` | `0.7` / `0.62` / `0.34` / `0.32` / `6` | annex：锚点前向·右向偏移 / 体块宽·深（w 比例） / 高（h 比例） / 双坡升起（px·s） |
+
+**零回归口径**（`board.inner.d1..d8` 橱窗、`showcase.shop` 等其它消费者）：`D` 里 `step` / `apron` / `setback` 默认 **`false`**、`variant` 默认 **`['plain']`**，且 `plain` 分支**不绘制任何几何** ⇒ 未显式开启的消费者逐像素回到 P2 前。`variant` 只挂在 `shop`（L2），`stall` 只挂 `apron`，`market3` 挂 `apron + step` —— 由 `theme.json` 的真实分派决定（`building.*.l1 → stall`、`.l2 → shop`、`.l3 → market3`）。
+
+**`tools/registry-ids.json` 本轮未变动（如实说明）**：规格 #20 写的「登记」按实际口径解读 —— 该文件由 `tools/gen-registry-ids.mjs` 从 `src/skin/registry.ts` 的 `allElementIds()` 自动生成，**只存元素 id**（本轮未新增元素 id，仍 `255 ids`）；`tools/lint-skin.mjs` 对 skin 只校验 `provider.preset` 是否存在，**不校验 params 键**。故 P2 的新键由 `check-hardcoded.mjs`（新增几何不得写死）+ `npm run shots:p2` 的像素哈希 gate 兜住，而非 registry。
+
+#### 15.7 P2 取证截图（390×844 @dpr2 手机视口，入 `docs/verify/`）
+
+`npm run shots:p2`（`local/mono-shots-p2.mjs`）在 `?demo=1` 下用 `scene.buildOne({ fixed, overrides })` **逐件定格出图**：`overrides` 直接给 provider（L1 级、不并 theme）⇒ 每张都是**受控对照**。除目视外，对**同一画面区域**取像素哈希做机器判据：
+
+| 文件 | 内容 |
+|---|---|
+| `mono-p2-01-variants-plain/-veranda/-dormer/-annex.png` | 体型变体四款（同一栋 L2，仅 `variant` 不同；`slot` 摆 0/1/2/3 复现轮换） |
+| `mono-p2-02-step-on/-off.png` | 轮廓阶梯 B：同一栋 L2 仅 `step` 开/关 |
+| `mono-p2-03-apron-on/-off.png` | 台阶铺装：同一栋 L3 仅 `apron` 开/关 |
+| `mono-p2-04-setback-on/-off.png` | 结构退台 A：同一栋 L3 仅 `setback` 开/关（默认关，仅取证） |
+
+- **像素哈希 gate**：四款变体两两不同（`variantsDistinct`）；`step` / `apron` / `setback` 开/关均改变像素（`stepChangesPixels` / `apronChangesPixels` / `setbackChangesPixels`）——「新增几何真的画出来了」的机器判据，非逐像素黄金图。
+- **调参记录（目视后修正）**：`vrW` 初值 `0.05` 被误当「绝对宽」用（实际 `×s` ⇒ 亚像素、立柱不可见），改为 **`2.2`**（与 `ridgeW` 同口径 `px·s`）；`annex` 初值 `axX/axY = 1.08/0.86` 使小屋离体像木箱，收到 **`0.7/0.62`** 贴住右前立面；`stepTH/stepDrop/stepLW` 加粗到 `0.03/0.055/1.2` 才读得出檐带。
+
+#### 15.8 P2 回归口径（本轮实测）
+
+```powershell
+npx tsc --noEmit                 # 退出码 0
+npm run check                    # lint 0 错 / lint:skin OK（255 ids）/ vitest 55 文件 517 例全绿
+npm run build                    # check-hardcoded clean（29 个文件；新增几何全走取值器）
+npm run deploy                   # 本地构建 → scp → 服务器解压 + 备份（20261001-180842）
+npm run check:prod               # 线上 V1–V20 全 true、errors: []（退出码 0）
+npm run e2e:play                 # PASS · round=61 · clicks=973（含 cam_nofx_idle / cam_framing / cam_reset）
+npm run shots:cam                # PASS · 五态截图 + 窄屏命中 round-trip 一致（P2 几何生效后复拍）
+npm run shots:p2                 # PASS · 变体四款两两不同 · step/apron/setback 开关均改变像素
+```
+
 ### 最终验收（对照 spec §11 硬性标准）
 
 | # | spec §11 条目 | 证据 |
@@ -577,6 +634,7 @@ npm run shots:cam                # PASS · 五态截图 + 窄屏命中 round-tri
 | 12 | **M13 画面重设计（本任务新增，超出 spec §11）** | `npm run check` 全绿 / `npx tsc --noEmit` 无错；`node local/mono-prod-check.mjs` 全部 gate 为 `true` 且 `errors=[]`（新增 `v1…v14 / v2b / v6b` 共 16 项）；**14 张 390×844 @dpr2 手机视口截图**（`mono-visual-01a..01e` 五套配色 + `02..06` 局部特写 + `07-catalog` / `07b-atmosphere` 素材库 + `08-console` 风格控制台 + `09-players` 人物气泡）；`theme.json` 改配置即换风格、`src/render/**` 零改动、`git diff --stat src/core` 为空（详见 M13 节） |
 | 13 | **M15 P0 解耦与相机基座（本任务新增，超出 spec §11）** | `npx tsc --noEmit` 退出码 0；`npm run check` 55 文件 / 513 例全绿（新增 `test/core/framing.spec.ts` 17 例）；`npm run build` check-hardcoded clean（29 文件）；线上 `mono-prod-check.mjs` **V1–V17 共 39 项 gate 全 true、errors: []**（新增 V15 分辨率未降 / V16 UI 解耦 / V17 宽屏几何）；**2 张截图**（`mono-prod-10-p0-mobile` 390×844 @dpr2 / `mono-prod-11-p0-desktop` 1440×900）；该部分**无可见变化**，相机本体留待 P1 接线（详见 M15 节 §15.1–15.2） |
 | 14 | **M15 P1 相机取景编排（本任务新增，超出 spec §11）** | `npx tsc --noEmit` 退出码 0；`npm run check` 55 文件 / 517 例全绿；`npm run build` check-hardcoded clean（29 文件，`camera.ts`/`framing.ts` 无裸倍率·裸时长）；线上 `mono-prod-check.mjs` **V1–V20 全 true、errors: []**（新增 V18 静止态烘焙 N/A / V19 取景 `world.scale.x ∈[1.6,4]` + 归位 1±0.01 + `?cam=0`·`?nofx=1` 恒 1 / V20 `?perf=1` 300 帧已按降级兜底）；`mono-e2e-playthrough.mjs` PASS（973 次点击、含 `cam_nofx_idle`/`cam_framing`/`cam_reset`）；`npm run shots:cam` PASS，**五态截图**（`mono-cam-01-idle`/`02-lead`/`03-follow`/`04-settle`/`05-reset`，390×844 @dpr2）+ **360×640 窄屏命中 round-trip 一致**（详见 M15 节 §15.3–15.5） |
+| 15 | **M15 P2 近景建筑增强（本任务新增，超出 spec §11）** | `npx tsc --noEmit` 退出码 0；`npm run check` 55 文件 / 517 例全绿；`npm run build` check-hardcoded clean（29 文件，新增几何全走取值器）；线上 `mono-prod-check.mjs` **V1–V20 全 true、errors: []**；`mono-e2e-playthrough.mjs` PASS（973 次点击）；`npm run shots:cam` PASS（五态复拍）；**`npm run shots:p2` PASS** —— 体型变体 4 款（`plain`/`veranda`/`dormer`/`annex`，按 `state.slot % 4` 轮换，`?debug` 与橱窗消费者零回归）、轮廓阶梯 B 加法檐带（A 结构退台预留开关默认关）、台阶铺装，**10 张 390×844 @dpr2 受控对照截图** + 像素哈希 gate（四款两两不同、开关均改变像素）（详见 M15 节 §15.6–15.8） |
 
 **§11.5 性能实测**（两种成本分开测；`node local/mono-perf.mjs` 桌面代理 + `npm run perf:android` CDP 节流代理；受本机负载影响会抖动，同机连测 3 次的区间如下）：
 - 首屏可交互：桌面 default 235–255 ms / photo 1739–1784 ms；4× 节流代理 1.27–1.36 s（门槛 <3000 ✅）

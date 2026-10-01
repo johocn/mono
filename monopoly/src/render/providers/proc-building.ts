@@ -1,5 +1,5 @@
 import type { Graphics } from 'pixi.js';
-import { up, win, type Geo, type Pt } from '../iso';
+import { dia, up, win, type Geo, type Pt } from '../iso';
 import { ptsToPoly } from '../paint';
 import { BUILDING_HEIGHTS } from '../../skin/registry';
 import { arr, c, fb } from './proc-base';
@@ -108,6 +108,24 @@ const D = fb({
   brBracePad: 0.08, brDoorEdge: 'rgba(0,0,0,.4)', brDoorEdgeW: 0.9,
   brHayR: 4.5, brHayDy: 1.2, brHayN: 3, brHayDx: 1.6, brHayShade: 0.82,
   brWinV1: 0.62, brWinV2: 0.76, brWinU1: 0.24, brWinU2: 0.4,
+
+  /* ===== P2 · 近景建筑增强（体型变体 / 轮廓阶梯 / 台阶铺装） ===== */
+  /* 体型变体：按格位轮换（state.slot % variant.length）；默认单款 = 其它消费者零回归 */
+  variant: ['plain'],
+  /* 门廊立柱外廊（vrW 为柱宽，px·s 口径，同 ridgeW） */
+  vrPad: 0.07, vrOut: 0.2, vrH: 0.6, vrW: 2.2, vrRoofRise: 7,
+  /* 老虎窗 */
+  dmW: 0.24, dmD: 0.22, dmH: 0.2, dmV: 0.34, dmRise: 5,
+  dmWinU1: 0.28, dmWinU2: 0.72, dmWinV1: 0.2, dmWinV2: 0.74,
+  /* 侧偏低屋（贴右前立面接出，非离体小盒） */
+  axX: 0.7, axY: 0.62, axW: 0.34, axH: 0.32, axRoofRise: 6,
+  /* 轮廓阶梯 B · 加法檐带（屋顶线下逐级收进，零结构改动） */
+  step: false, stepN: 2, stepInset: 0.05, stepDrop: 0.055, stepTH: 0.03, stepLW: 1.2,
+  /* 轮廓阶梯 A · 结构退台（预留开关，默认关） */
+  setback: false, sbW: 0.6, sbD: 0.62, sbH: 0.3, sbEdgeW: 1.2,
+  /* 台阶铺装：门前同心菱形梯台 */
+  apron: false, apronN: 3, apronShrink: 0.6, apronLift: 0.7,
+  apronDx: 0.28, apronFy: 0.42, apronRx: 0.42, apronRy: 0.38,
 });
 
 /* —— 取值器（params 优先，缺则落 L4 兜底；沿用既有闭包风格） —— */
@@ -141,6 +159,140 @@ function quad(cx: number, cy: number, geo: Geo, s: number, h: number): Quad {
 /** 一侧墙：给定两侧底边点与高度，画成矩形面 */
 function wallFace(g: Graphics, a: Pt, b: Pt, h: number, color: string): void {
   fill(g, [a, b, up(b, h), up(a, h)], color);
+}
+
+/* —— P2 取值器：开关（boolean）与轮换名册（string[]） —— */
+const b1 = (p: P, k: string): boolean => (typeof p[k] === 'boolean' ? (p[k] as boolean) : (D as P)[k] as boolean);
+const sv = (p: P, k: string): string[] => arr<string>(p, k) ?? ((D as P)[k] as string[]);
+
+/**
+ * 台阶铺装（P2）：以 (ax, ay) 为心的同心菱形梯台，越内越窄、越内越高。
+ * 纯加法件 —— 只在地面叠铺装，不动墙/门/窗；`apron` 关时零绘制。
+ */
+function apronPave(g: Graphics, ctx: ProcCtx, p: P, ax: number, ay: number, w: number, d: number,
+                   colA: string, colB: string): void {
+  if (!b1(p, 'apron')) return;
+  const n = g1(p, 'apronN');
+  for (let i = 0; i < n; i++) {
+    const k = 1 - i * g1(p, 'apronShrink');
+    const lift = i * g1(p, 'apronLift') * ctx.s;
+    g.poly(ptsToPoly(dia(ax, ay, w * g1(p, 'apronRx') * k, d * g1(p, 'apronRy') * k, lift)))
+      .fill({ color: i % 2 === 0 ? colA : colB });
+  }
+}
+
+/**
+ * 轮廓阶梯 B · 加法檐带（P2）：屋顶线下方叠 `stepN` 道逐级收进的横向檐带。
+ * 只在墙面近顶处横铺色带 + 檐线，**不改墙高/结构** ⇒ 关掉即逐像素回到改动前。
+ */
+function cornice(g: Graphics, ctx: ProcCtx, p: P, F: Pt, R: Pt, L: Pt, h: number,
+                 band: string, edge: string): void {
+  if (!b1(p, 'step')) return;
+  const n = g1(p, 'stepN');
+  const ins0 = g1(p, 'stepInset'), drop0 = g1(p, 'stepDrop'), tH = g1(p, 'stepTH');
+  const lw = g1(p, 'stepLW') * ctx.s;
+  for (let i = 0; i < n; i++) {
+    const ins = ins0 * (i + 1);
+    const vt = 1 - drop0 * i;
+    const vb = vt - tH;
+    fill(g, win(L, F, h, ins, 1 - ins, vb, vt), band);
+    fill(g, win(F, R, h, ins, 1 - ins, vb, vt), band);
+    line(g, win(L, F, h, ins, ins, vt, vt)[0], win(L, F, h, 1 - ins, 1 - ins, vt, vt)[0], edge, lw);
+    line(g, win(F, R, h, ins, ins, vt, vt)[0], win(F, R, h, 1 - ins, 1 - ins, vt, vt)[0], edge, lw);
+  }
+}
+
+/**
+ * 轮廓阶梯 A · 结构退台（P2 预留开关，默认关）：在屋顶上退进一层更小的体块，
+ * 形成真正的进退台。`setback` 关时不绘制（零回归），开启后按 sbW/sbD/sbH 退进。
+ */
+function setbackBox(g: Graphics, ctx: ProcCtx, p: P, h: number, levels: 1 | 2 | 3,
+                    wallL: string, wallR: string, roofC: string, edge: string): void {
+  if (!b1(p, 'setback') || levels === 1) return;
+  const s = ctx.s;
+  const { cx, cy } = ctx;
+  const w = ctx.geo.hw * s, d = ctx.geo.hh * s;
+  const aw = w * g1(p, 'sbW'), ad = d * g1(p, 'sbD'), ah = h * g1(p, 'sbH');
+  const by = cy - h;
+  const bF: Pt = [cx, by + ad];
+  const bR: Pt = [cx + aw, by];
+  const bB: Pt = [cx, by - ad];
+  const bL: Pt = [cx - aw, by];
+  wallFace(g, bF, bR, ah, wallR);
+  wallFace(g, bL, bF, ah, wallL);
+  const top: Pt[] = [up(bL, ah), up(bB, ah), up(bR, ah), up(bF, ah)];
+  fill(g, top, roofC);
+  g.poly(ptsToPoly(top)).stroke({ color: edge, width: g1(p, 'sbEdgeW') * s });
+}
+
+/**
+ * 体型变体（P2）：按 `state.slot % variant.length` 从名册里选一款加法件。
+ * 名册与尺寸全走 params 键（skin.json 给），无 slot 的消费者落第 0 款（plain）。
+ */
+function variantAdd(g: Graphics, ctx: ProcCtx, p: P, F: Pt, R: Pt, L: Pt, h: number, levels: 1 | 2 | 3,
+                    wallL: string, wallR: string, roofC: string, winC: string): void {
+  const list = sv(p, 'variant');
+  if (list.length === 0) return;
+  const slot = typeof ctx.state.slot === 'number' ? (ctx.state.slot as number) : 0;
+  const name = list[(slot % list.length + list.length) % list.length] ?? 'plain';
+  if (name === 'plain') return;
+
+  const s = ctx.s;
+  const { cx, cy } = ctx;
+  const w = ctx.geo.hw * s, d = ctx.geo.hh * s;
+
+  if (name === 'veranda') {
+    /* 门廊立柱外廊：门两侧各一根外柱 + 一道斜披檐（局部，不遮整面橱窗） */
+    const vh = h * g1(p, 'vrH');
+    const pw = g1(p, 'vrW') * s;
+    const out = g1(p, 'vrOut');
+    const us = [g1(p, 'doorU1') - g1(p, 'vrPad'), g1(p, 'doorU2') + g1(p, 'vrPad')];
+    for (const u of us) {
+      const bp = lerp(L, F, u);
+      const px = bp[0] - w * out, py = bp[1] + d * out;
+      const ty = py - vh;
+      fill(g, [[px - pw / 2, py], [px, py + pw / 4], [px - pw / 2, ty + pw / 4], [px - pw / 2, ty]], wallL);
+      fill(g, [[px, py + pw / 4], [px + pw / 2, py], [px + pw / 2, ty], [px, ty + pw / 4]], wallR);
+    }
+    const eA = lerp(L, F, us[0]), eB = lerp(L, F, us[1]);
+    const iA: Pt = [eA[0] - w * out, eA[1] + d * out];
+    const iB: Pt = [eB[0] - w * out, eB[1] + d * out];
+    const rise = g1(p, 'vrRoofRise') * s;
+    fill(g, [up(eA, vh + rise), up(eB, vh + rise), up(iB, vh), up(iA, vh)], roofC, g1(p, 'roofFacetL'));
+    line(g, up(iA, vh), up(iB, vh), wallL, g1(p, 'sbEdgeW') * s);
+    return;
+  }
+
+  if (name === 'dormer') {
+    /* 老虎窗：屋顶上的小阁窗体块（L1 沿坡面抬升，L2 落平顶） */
+    const dw = w * g1(p, 'dmW'), dd = d * g1(p, 'dmD'), ah = h * g1(p, 'dmH');
+    const rise0 = (levels === 1 ? g1(p, 'gableRise') : 0) * s * g1(p, 'dmV');
+    const by = cy - h - rise0;
+    const bF: Pt = [cx, by + dd];
+    const bR: Pt = [cx + dw, by];
+    const bL: Pt = [cx - dw, by];
+    wallFace(g, bF, bR, ah, wallR);
+    wallFace(g, bL, bF, ah, wallL);
+    const apex: Pt = [cx, by - ah - g1(p, 'dmRise') * s];
+    fill(g, [up(bL, ah), up(bF, ah), apex], roofC, g1(p, 'roofFacetL'));
+    fill(g, [up(bF, ah), up(bR, ah), apex], roofC, g1(p, 'roofFacetR'));
+    fill(g, win(bL, bF, ah, g1(p, 'dmWinU1'), g1(p, 'dmWinU2'), g1(p, 'dmWinV1'), g1(p, 'dmWinV2')), winC);
+    return;
+  }
+
+  if (name === 'annex') {
+    /* 侧偏低屋：右前方接一间更矮的小屋，拉出参差轮廓 */
+    const aw = w * g1(p, 'axW'), ad = d * g1(p, 'axW'), ah = h * g1(p, 'axH');
+    const acx = cx + w * g1(p, 'axX'), acy = cy + d * g1(p, 'axY');
+    const aF: Pt = [acx, acy + ad];
+    const aR: Pt = [acx + aw, acy];
+    const aL: Pt = [acx - aw, acy];
+    wallFace(g, aF, aR, ah, wallR);
+    wallFace(g, aL, aF, ah, wallL);
+    const apex: Pt = [acx, acy - ah - g1(p, 'axRoofRise') * s];
+    fill(g, [up(aL, ah), up(aF, ah), apex], roofC, g1(p, 'roofFacetL'));
+    fill(g, [up(aF, ah), up(aR, ah), apex], roofC, g1(p, 'roofFacetR'));
+  }
 }
 
 /* ============ shop 等距楼（L1 坡顶小铺 / L2 平顶楼；L3 已抽到 market3） ============ */
@@ -177,6 +329,10 @@ export function shop(g: Graphics, ctx: ProcCtx): void {
     [cx - w + G('shDx') * s, cy + G('shRise') * s],
   ], S('shadow'));
   g.ellipse(cx, cy + d * G('glowFy'), w * G('glowRx'), d * G('glowRy')).fill({ color: glowC });
+
+  /* ①b P2 台阶铺装：门口前的同心菱形梯台（画在墙之前，被楼体自然压住内侧半） */
+  const doorMid = lerp(L, F, (G('doorU1') + G('doorU2')) / 2);
+  apronPave(g, ctx, p, doorMid[0] - w * G('apronDx'), doorMid[1] + d * G('apronFy'), w, d, roofC, wallL);
 
   /* ② 两面墙（右墙亮、左墙暗） */
   wallFace(g, F, R, h, wallR);
@@ -232,6 +388,11 @@ export function shop(g: Graphics, ctx: ProcCtx): void {
     g.poly(ptsToPoly([L2, up(B, h), up(R, h), up(F, h)])).stroke({ color: S('parapet'), width: G('parapetW') * s });
   }
 
+  /* ⑩ P2 近景增强：轮廓阶梯（B 檐带 / A 退台）+ 体型变体（加法件，全部可按 params 关停） */
+  cornice(g, ctx, p, F, R, L, h, roofC, S('ridge'));
+  setbackBox(g, ctx, p, h, levels, wallL, wallR, roofC, S('ridge'));
+  variantAdd(g, ctx, p, F, R, L, h, levels, wallL, wallR, roofC, upC);
+
   /* ⑨ 温泉池 + 蒸汽：只给带 pool/steam 的楼（复用 onsenHouse 的画法） */
   if (p.pool === true || state.pool === true || p.steam === true || state.steam === true) {
     onsenPoolAndSteam(g, ctx, p, h);
@@ -267,6 +428,10 @@ export function market3(g: Graphics, ctx: ProcCtx): void {
   ], S('shadow'));
   g.ellipse(cx, cy + d * G('glowFy'), w * G('glowRx'), d * G('glowRy')).fill({ color: glowC });
 
+  /* ①b P2 台阶铺装（同 shop） */
+  const doorMid = lerp(L, F, (G('doorU1') + G('doorU2')) / 2);
+  apronPave(g, ctx, p, doorMid[0] - w * G('apronDx'), doorMid[1] + d * G('apronFy'), w, d, roofC, wallL);
+
   /* ② 两面墙 + 墙脚 */
   wallFace(g, F, R, h, wallR);
   wallFace(g, L, F, h, wallL);
@@ -300,6 +465,9 @@ export function market3(g: Graphics, ctx: ProcCtx): void {
   /* ⑥ 平顶 + 女儿墙（原 v5 的青色霓虹描边已删） */
   fill(g, [L2, up(B, h), up(R, h), up(F, h)], roofC);
   g.poly(ptsToPoly([L2, up(B, h), up(R, h), up(F, h)])).stroke({ color: S('parapet'), width: G('parapetW') * s });
+
+  /* ⑥b P2 轮廓阶梯（B 加法檐带；market3 无坡顶故不做变体/退台） */
+  cornice(g, ctx, p, F, R, L, h, roofC, S('ridge'));
 
   /* ⑦ 顶部小阁楼：等距小体块，让大平顶不秃 */
   const aw = w * G('l3AtticW');
@@ -345,6 +513,9 @@ export function stall(g: Graphics, ctx: ProcCtx): void {
   ], S('shadow'));
   g.ellipse(cx, cy + d * G('glowFy'), w * G('glowRx'), d * G('glowRy'))
     .fill({ color: c(p, 'glow', S('doorGlow')) });
+
+  /* ①b P2 台阶铺装：摊位正前方一块铺装地台（同 shop/market3 的键，色取 roof/wallL） */
+  apronPave(g, ctx, p, cx - w * G('apronDx'), cy + d * G('apronFy'), w, d, trim, wallL);
 
   /* ② 台面（半人高斜台：两侧板 + 顶板 + 前沿唇线） */
   const ch = h * G('stCounterH');
