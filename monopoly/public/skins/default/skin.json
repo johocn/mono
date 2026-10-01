@@ -172,6 +172,7 @@
     "fx.spark": { "kind": "proc", "preset": "fxSpark", "params": {} },
     "fx.shard": { "kind": "proc", "preset": "fxShard", "params": {} },
     "fx.pulse": { "kind": "proc", "preset": "fxPulse", "params": {} },
+    "fx.rubble": { "kind": "proc", "preset": "fxRubble", "params": {} },
     "fx.shine": { "kind": "proc", "preset": "fxShine", "params": {} },
 
     "dice.body": { "kind": "proc", "preset": "diceBody", "params": {} },

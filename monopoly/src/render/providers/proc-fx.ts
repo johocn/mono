@@ -22,6 +22,8 @@ export const FX_D = fb({
   shardW: 8, shardH: 12, shardFill: '#8fe3ff', shardAlpha: 0.9,
   /* 脉冲环：地块落格特写的扩散光环 */
   pulseR: 9, pulseEdge: '#ffe08a', pulseEdgeW: 2,
+  /* 碎屑：破坏飞散的小块 */
+  rubbleW: 6, rubbleH: 7, rubbleR: 1, rubbleFill: '#b58b5a', rubbleAlpha: 0.95,
   /* 高光：横扫亮条 */
   shineW: 12, shineH: 30, shineFill: 'rgba(255,255,255,.6)',
 });
@@ -97,6 +99,15 @@ export const fxShard: ProcPreset = (g, ctx) => {
   const h = G(params, 'shardH') * s;
   g.poly([cx, cy - h / 2, cx + w / 2, cy, cx, cy + h / 2, cx - w / 2, cy])
     .fill({ color: S(params, 'shardFill'), alpha: G(params, 'shardAlpha') });
+};
+
+/* —— 碎屑：破坏飞散的小块（扇形铺开/淡出由 fx.ts 施加在容器上） —— */
+export const fxRubble: ProcPreset = (g, ctx) => {
+  const { cx, cy, params, s } = ctx;
+  const w = G(params, 'rubbleW') * s;
+  const h = G(params, 'rubbleH') * s;
+  g.roundRect(cx - w / 2, cy - h / 2, w, h, G(params, 'rubbleR') * s)
+    .fill({ color: S(params, 'rubbleFill'), alpha: G(params, 'rubbleAlpha') });
 };
 
 /* —— 脉冲环：地块落格特写的扩散光环（缩放/淡出由 fx.ts 施加在容器上） —— */

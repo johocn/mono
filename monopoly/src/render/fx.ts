@@ -1,6 +1,7 @@
 import type { Container } from 'pixi.js';
 import { gsap } from 'gsap';
 import {
+  BUILDING_Y_OFFSET,
   FX_BUY_MS, FX_BURST_MS, FX_CARD_CX, FX_CARD_CY, FX_CARD_MS, FX_CARD_S,
   FX_CENTER_X, FX_CENTER_Y, FX_COIN_ARC, FX_COIN_COUNT, FX_COIN_FLY_MS, FX_COIN_LIFT,
   FX_COIN_S, FX_DECK_MS, FX_DECK_S, FX_DICE_CX, FX_DICE_CY, FX_DICE_HOP, FX_DICE_MS,
@@ -9,16 +10,19 @@ import {
   FX_HOP_ARC, FX_HOP_KICK_MS, FX_HOP_MS, FX_HOP_S,
   FX_LAND_MS, FX_LAND_PULSE_S, FX_LAND_PUSH_MS, FX_LAND_RING_S, FX_LEVELS, FX_LEVEL_STEP, FX_LIT_S,
   FX_MS_PER_S, FX_NOFX_SPEED, FX_PER_LEVEL_LIT_MS, FX_PULSE_MS, FX_PULSE_S,
-  FX_RENT_MS, FX_SCAFFOLD_MS, FX_SCAFFOLD_S, FX_SCAFFOLD_S0, FX_SHAKE_AMP, FX_SHAKE_MS,
+  FX_RENT_MS, FX_RUBBLE_ARC, FX_RUBBLE_COUNT, FX_RUBBLE_MS, FX_RUBBLE_S,
+  FX_SCAFFOLD_MS, FX_SCAFFOLD_S, FX_SCAFFOLD_S0, FX_SHAKE_AMP, FX_SHAKE_MS,
   FX_SHARD_S, FX_SHINE_DX, FX_SHINE_MS, FX_SPARK_ARC, FX_SPARK_MS, FX_STAMP_DEG,
   FX_STAMP_MS, FX_STAMP_S, FX_STAMP_S0, FX_STOCK_MS, FX_UPGRADE_MS,
+  FX_WRECK_GHOST_S, FX_WRECK_MS, FX_WRECK_SINK,
 } from '../skin/layout';
+import { BUILDING_HEIGHTS } from '../skin/registry';
 import type { FxTokens } from '../skin/types';
 import type { Cell } from '../core/framing';
 
-/** spec §5.6 的九条动效（一 kind 一行） */
+/** spec §5.6 的九条动效（一 kind 一行；M19-D5 增 wreck） */
 export type FxKind =
-  | 'dice' | 'hop' | 'buy' | 'upgrade' | 'rent' | 'card' | 'deck' | 'stock' | 'end' | 'land';
+  | 'dice' | 'hop' | 'buy' | 'upgrade' | 'rent' | 'card' | 'deck' | 'stock' | 'end' | 'land' | 'wreck';
 
 /**
  * 动效的空间归属（spec §5.4）：`world` = 跟相机（落点由格坐标 `ipos` 算出），
@@ -34,7 +38,7 @@ export type FxKind =
  */
 export const FX_SPACE: Record<FxKind, 'world' | 'ui'> = {
   hop: 'world', buy: 'world', upgrade: 'world', rent: 'world', deck: 'world', stock: 'world', end: 'world',
-  land: 'world', dice: 'ui', card: 'ui',
+  land: 'world', wreck: 'world', dice: 'ui', card: 'ui',
 };
 
 export type FxTimeline = ReturnType<typeof gsap.timeline>;
@@ -72,6 +76,8 @@ export interface Motion {
   count?: number;
   sparkMs?: number;
   sparkArc?: number;
+  /* wreck（M19-D5）：碎屑淡出时长（`dust` 复用为碎屑数量） */
+  dustMs?: number;
 }
 
 /** 皮肤 `fx` 段（+ layout 兜底）解析出的全局动效 token */
@@ -119,6 +125,8 @@ export function motionFor(kind: FxKind, tokens?: FxTokens | null): Motion {
       return { durationMs: FX_STOCK_MS, ease: t.ease, pulseMs: FX_PULSE_MS, pulseS: FX_PULSE_S };
     case 'land':
       return { durationMs: FX_LAND_MS, ease: t.ease, pulseMs: FX_LAND_PUSH_MS, pulseS: FX_LAND_PULSE_S };
+    case 'wreck':
+      return { durationMs: FX_WRECK_MS, ease: t.ease, dust: FX_RUBBLE_COUNT, dustMs: FX_RUBBLE_MS };
     default:
       return {
         durationMs: FX_END_MS, ease: t.ease, count: FX_END_COUNT,
@@ -149,6 +157,8 @@ export interface FxContext {
   text?: string;
   /** 本次移动经过的格序列（供相机 `follow()` 复用同一份路径，避免两处各算一次） */
   cells?: readonly Cell[];
+  /** 下沉所用的建筑元素 id（kind=wreck 时由 `main.ts` 按**旧层级**给出 `building.s{s}.l{oldLv}`） */
+  element?: string;
 }
 
 export interface FxMakeSpec {
@@ -370,6 +380,32 @@ export function createFx(deps: FxDeps): FxHandle {
         const peak = finite(m.pulseS, FX_LAND_PULSE_S);
         t.fromTo(ring.scale, { x: 1, y: 1 }, { x: peak, y: peak, duration: pulse, ease }, 0);
         t.to(ring, { alpha: 0, duration: pulse, ease }, pulse);
+        break;
+      }
+      case 'wreck': {
+        /* 破坏（bomb / demolish 命中）：真实棋盘在 paint() 后已无该楼（estate 降级 / 归无主），
+           故用**旧层级**元素 `building.s{slot}.l{oldLv}` 的幽灵副本承载「下沉」；碎屑另起 `fx.rubble`
+           扇形飞散。不触碰地砖与店招（`building.s{slot}.sign`）。 */
+        const lv = Math.max(finite(ctx.levels, 1), 1);
+        const h = (BUILDING_HEIGHTS[lv] ?? BUILDING_HEIGHTS[1]) * FX_WRECK_GHOST_S;
+        const baseY = y0 - BUILDING_Y_OFFSET;
+        const ghost = spawn(ctx.element ?? 'building.s0.l1', {
+          cx: x0, cy: baseY, s: FX_WRECK_GHOST_S,
+          state: { level: lv, owner: 0, dim: false },
+        }, target);
+        t.to(ghost, { y: baseY + h * FX_WRECK_SINK, alpha: 0, duration: secs(m.durationMs), ease }, 0);
+        const n = Math.max(finite(m.dust, FX_RUBBLE_COUNT), 1);
+        const run = secs(finite(m.dustMs, FX_RUBBLE_MS));
+        for (let i = 0; i < n; i++) {
+          const f = fan(i, n);
+          const rb = spawn('fx.rubble', { cx: x0, cy: y0, s: FX_RUBBLE_S, state: { owner: 0 } }, target);
+          t.fromTo(rb, { alpha: 1 }, { alpha: 0, duration: run, ease }, 0);
+          t.to(rb, {
+            x: x0 + f * FX_RUBBLE_ARC,
+            y: y0 - Math.abs(f) * FX_RUBBLE_ARC,
+            duration: run, ease,
+          }, 0);
+        }
         break;
       }
       default: {

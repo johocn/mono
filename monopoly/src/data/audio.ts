@@ -10,10 +10,10 @@
 
 /** 演出 cue 集合（spec §5.1）：FxKind 各时刻 + 1 个「无 fx 的 UI 动作」 */
 export type SfxKind =
-  | 'dice' | 'hop' | 'buy' | 'upgrade' | 'rent' | 'card' | 'deck' | 'stock' | 'end' | 'land' | 'ui';
+  | 'dice' | 'hop' | 'buy' | 'upgrade' | 'rent' | 'card' | 'deck' | 'stock' | 'end' | 'land' | 'wreck' | 'ui';
 
 export const SFX_KINDS: SfxKind[] = [
-  'dice', 'hop', 'buy', 'upgrade', 'rent', 'card', 'deck', 'stock', 'end', 'land', 'ui',
+  'dice', 'hop', 'buy', 'upgrade', 'rent', 'card', 'deck', 'stock', 'end', 'land', 'wreck', 'ui',
 ];
 
 /** 合成音色原型 id（spec §5.2）；skin.json 里的坏值按「缺省」处理 */
@@ -53,7 +53,7 @@ export const VOICES: Record<SfxVoice, VoiceSpec> = {
 /** cue → 默认音色（spec §5.2 表）；`ui` 只给没有 fx 的动作，避免与 dice / buy 叠音 */
 export const DEFAULT_SFX: Record<SfxKind, SfxVoice> = {
   dice: 'rattle', hop: 'hop', buy: 'thud', upgrade: 'blip', rent: 'coin',
-  card: 'sweep', deck: 'sweep', stock: 'tone', end: 'chime', land: 'thud', ui: 'tick',
+  card: 'sweep', deck: 'sweep', stock: 'tone', end: 'chime', land: 'thud', wreck: 'thud', ui: 'tick',
 };
 
 /** BGM 一小节：根音低音 + 三和弦铺底（Hz） */

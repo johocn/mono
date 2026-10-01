@@ -662,8 +662,9 @@ export async function boot(): Promise<void> {
     }
   };
 
-  /** AiStep → FxContext（与既有 HUD/浮层回调逐字一致） */
-  const ctxOfStep = (step: AiStep, r: unknown): FxContext | null => {
+  /** AiStep → FxContext（与既有 HUD/浮层回调逐字一致）。
+   *  `pre` 为破坏类卡（bomb / demolish）在 state 变更**前**捕捉的目标格旧层级（下沉用旧楼层元素）。 */
+  const ctxOfStep = (step: AiStep, r: unknown, pre?: { oldLv: number; owner: number } | null): FxContext | null => {
     switch (step.kind) {
       case 'roll': return { kind: 'dice' };
       case 'move': {
@@ -682,6 +683,13 @@ export async function boot(): Promise<void> {
         return u.ok ? { kind: 'upgrade', x: at.x, y: at.y, levels: u.level ?? FX_LEVELS } : null;
       }
       case 'card': {
+        /* M19-D5：破坏类卡（bomb / demolish）命中目标格 → wreck 于**目标格**，
+           用旧楼层元素 `building.s{slot}.l{oldLv}` 做下沉；其余卡仍为当前玩家格的 deck。 */
+        if ((step.card === 'bomb' || step.card === 'demolish') && typeof step.target === 'number') {
+          const at = cellXY(step.target);
+          const lv = pre?.oldLv ?? 1;
+          return { kind: 'wreck', x: at.x, y: at.y, element: `building.s${step.target}.l${lv}`, levels: lv };
+        }
         const at = cellXY(currentPlayer(game!.state).pos);
         return { kind: 'deck', x: at.x, y: at.y };
       }
@@ -697,9 +705,17 @@ export async function boot(): Promise<void> {
   const dispatch = (step: AiStep, withFx = true): void => {
     const g = game;
     if (!g) return;
+    /* M19-D5：破坏类卡（bomb / demolish）须在 `applyStep` 改 state **之前**捕捉目标格旧层级，
+       以便 `ctxOfStep` 用旧楼元素（building.s{s}.l{oldLv}）播「下沉 + 碎屑」，而非已降级/已删的 estate。
+       `ctxOf(result)` 在 runAction 内于 `applyStep` 之后才被调用，故此处捕捉后由闭包透传。 */
+    let pre: { oldLv: number; owner: number } | null = null;
+    if (step.kind === 'card' && (step.card === 'bomb' || step.card === 'demolish') && typeof step.target === 'number') {
+      const e = g.state.estates[step.target];
+      if (e) pre = { oldLv: e.level, owner: e.owner };
+    }
     runAction(
       () => applyStep(g, step),
-      (r: never) => ctxOfStep(step, r as unknown),
+      (r: never) => ctxOfStep(step, r as unknown, pre),
       withFx,
       /* 气泡四态（spec §6.7）：文案取「动作落库后」的所在格短名 + 本次抽卡名；
          第三段挂当前行动席位的**原著引文**（`data/lines.ts`，逐条标注回目），

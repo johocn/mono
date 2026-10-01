@@ -277,6 +277,17 @@ export const FX_END_COUNT = 16;
 export const FX_SPARK_MS = 620;
 export const FX_SPARK_ARC = 210;
 export const FX_END_S = 2.6;                     // 全屏火花落定缩放
+/* —— M19-D5 破坏表现（旧层级建筑下沉 + 碎屑飞散） ——
+   bomb / demolish 命中后的「建筑下沉」用**旧层级**元素 `building.s{slot}.l{oldLv}` 的幽灵副本承载
+   （`paint()` 已按新 state 重画，真实棋盘此刻已无该楼）；碎屑另起 `fx.rubble` 扇形铺开。
+   不触碰地砖与店招（`building.s{slot}.sign`）。 */
+export const FX_WRECK_MS = 520;                  // 下沉时长
+export const FX_WRECK_SINK = 0.7;                // 下沉比例（相对楼高）
+export const FX_WRECK_GHOST_S = BUILDING_SCALE;  // 幽灵副本缩放（与棋盘楼体一致，基线对齐）
+export const FX_RUBBLE_COUNT = 8;                // 碎屑数量
+export const FX_RUBBLE_MS = 480;                 // 碎屑飞散时长
+export const FX_RUBBLE_S = 3.4;                  // 碎屑元素缩放
+export const FX_RUBBLE_ARC = 26;                 // 碎屑扇形铺开半宽（px）
 
 /* 动效落点兜底（ctx 未给坐标时）：舞台中心 / 底坞骰位 / 橱窗卡面中心 */
 export const FX_CENTER_X = STAGE_W / 2;

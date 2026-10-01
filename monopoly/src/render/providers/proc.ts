@@ -132,7 +132,7 @@ import { uiMusicOff, uiMusicOn, uiSoundOff, uiSoundOn } from './proc-audio';
 import {
   tileCard, uiBadge, uiCard, uiCardBack, uiHandSlot, uiPreview, uiSettleRow, uiStockChart, uiStockRow,
 } from './proc-panel';
-import { fxCoin, fxDust, fxPulse, fxScaffold, fxShard, fxShine, fxSpark, fxStamp } from './proc-fx';
+import { fxCoin, fxDust, fxPulse, fxRubble, fxScaffold, fxShard, fxShine, fxSpark, fxStamp } from './proc-fx';
 
 export const PROC_PRESETS: Record<string, ProcPreset> = {
   tile,
@@ -206,6 +206,7 @@ export const PROC_PRESETS: Record<string, ProcPreset> = {
   fxSpark,
   fxShard,
   fxPulse,
+  fxRubble,
   fxShine,
 };
 
