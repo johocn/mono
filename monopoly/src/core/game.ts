@@ -10,7 +10,7 @@ import {
 import { STOCK_TILE_INDEX, STOCKS } from '../data/stocks';
 import { advance, type Advance } from './board-path';
 import {
-  barrierAt, bombDown, clearBarrier, createDeck, grant, has, placeBarrier,
+  barrierAt, bombDown, clearBarrier, createDeck, demolishDown, grant, has, placeBarrier,
   use as consumeCard, type Barriers, type Deck, type Hand,
 } from './cards';
 import { createDice, makeRng, type Dice, type DiceRoll } from './dice';
@@ -685,6 +685,14 @@ export function createGame(opts: GameOptions = {}): Game {
       case 'bomb': {
         if (target === undefined) return { ok: false, reason: 'no-target' };
         const out = bombDown(state.estates, target, p.id);
+        if (!out.ok) return { ok: false, reason: out.reason };
+        consumeCard(state.hands[i], kind);
+        state.lastEvent = { kind: 'card', card: kind, target };
+        return { ok: true, kind, target };
+      }
+      case 'demolish': {
+        if (target === undefined) return { ok: false, reason: 'no-target' };
+        const out = demolishDown(state.estates, target, p.id);
         if (!out.ok) return { ok: false, reason: out.reason };
         consumeCard(state.hands[i], kind);
         state.lastEvent = { kind: 'card', card: kind, target };

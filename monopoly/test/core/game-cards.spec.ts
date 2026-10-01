@@ -20,10 +20,11 @@ const fateOf = (id: string) => FATE_DECK.find((c) => c.id === id)!;
 const chanceOf = (id: string) => CHANCE_DECK.find((c) => c.id === id)!;
 
 describe('game-cards 手牌开局（spec §5.3）', () => {
-  it('4 名玩家开局各持 5 张道具卡（5 种齐全）', () => {
+  it('4 名玩家开局各持 6 张道具卡（6 种齐全）', () => {
     const g = createGame({ dice: fixed(1, 1) });
     for (const h of g.state.hands) {
-      expect(h).toHaveLength(5);
+      expect(h).toHaveLength(6);
+      expect(new Set(h).size).toBe(6);
       for (const c of ITEM_CARDS) expect(handIndexOf(h, c.kind)).toBeGreaterThanOrEqual(0);
     }
   });
@@ -38,7 +39,7 @@ describe('game-cards 炸弹（spec §5.3）', () => {
     expect(g.state.estates[4].level).toBe(1);
     expect(g.state.estates[4].owner).toBe(2);
     expect(has(g.state.hands[0], 'bomb')).toBe(false);
-    expect(g.state.hands[0]).toHaveLength(4);
+    expect(g.state.hands[0]).toHaveLength(5);
   });
 
   it('炸 L1 对手地块 → 炸回无主（删键）', () => {
@@ -58,6 +59,32 @@ describe('game-cards 炸弹（spec §5.3）', () => {
     expect(g.useCard('bomb', 4)).toEqual({ ok: false, reason: 'own-tile' });
     g.state.hands[0] = g.state.hands[0].filter((k) => k !== 'bomb');
     expect(g.useCard('bomb', 4)).toEqual({ ok: false, reason: 'not-held' });
+  });
+});
+
+describe('game-cards 拆迁令（useCard demolish）', () => {
+  it('打完 demolish：目标归无主、手牌移除、lastEvent 记录目标', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    const foe = g.state.players[(g.state.current + 1) % 4];
+    /* 构造：对手拥有 L3 地块 1（shop） */
+    g.state.estates[1] = { index: 1, owner: foe.id, level: 3, processing: false };
+    g.state.hands[g.state.current] = ['demolish'];
+    const r = g.useCard('demolish', 1);
+    expect(r).toEqual({ ok: true, kind: 'demolish', target: 1 });
+    expect(g.state.estates[1]).toBeUndefined();
+    expect(g.state.hands[g.state.current]).not.toContain('demolish');
+    expect(g.state.lastEvent).toEqual({ kind: 'card', card: 'demolish', target: 1 });
+  });
+
+  it('缺目标 → no-target；目标无楼 → not-estate；自有 → own-tile；且不消耗手牌', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    const me = g.state.players[g.state.current];
+    g.state.hands[g.state.current] = ['demolish'];
+    expect(g.useCard('demolish')).toEqual({ ok: false, reason: 'no-target' });
+    expect(g.useCard('demolish', 4)).toEqual({ ok: false, reason: 'not-estate' });
+    g.state.estates[1] = { index: 1, owner: me.id, level: 2, processing: false };
+    expect(g.useCard('demolish', 1)).toEqual({ ok: false, reason: 'own-tile' });
+    expect(g.state.hands[g.state.current]).toContain('demolish');
   });
 });
 
