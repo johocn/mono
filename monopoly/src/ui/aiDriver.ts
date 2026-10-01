@@ -52,6 +52,7 @@ export function createAiDriver(deps: AiDriverDeps): AiDriver {
     if (destroyed) return;
     const state = deps.game.state;
     if (state.over) return;
+    if (state.auction) return;              // M20.1 待真人出价：拍卖挂起，AI 不推进
     if (!persona()) return;                 // 真人席位 —— 让位，等玩家点击
     if (deps.isBusy()) return;              // 动画未播完，等下一帧
     /* 未 start() 时（单测直接调 tick）以「相对基准」起步：首次可步进时刻 = 0 + stepMs() */
@@ -91,8 +92,8 @@ export function createAiDriver(deps: AiDriverDeps): AiDriver {
       if (!p) return;
       let n = 0;
       while (n < AI_SKIP_MAX_STEPS) {
-        /* 守卫：跑完本席位就停，绝不替下一位（可能是真人）继续决策 */
-        if (deps.game.state.over || deps.game.state.current !== seat) break;
+        /* 守卫：跑完本席位就停，绝不替下一位（可能是真人）继续决策；待拍态（拍卖挂起）同样立即中断 */
+        if (deps.game.state.over || deps.game.state.auction || deps.game.state.current !== seat) break;
         const plan = decideTurn(deps.game.state, p);
         if (plan.length === 0) break;
         deps.run(plan[0], false);           // 只落库 + 重画，不逐个播动效

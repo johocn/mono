@@ -17,7 +17,7 @@ import { ipos, tileAtPoint } from './render/iso';
 import { autoPlay, createGame, currentPlayer, type Game, type SettleResult } from './core/game';
 import { applyStep, type AiStep } from './core/ai';
 import { pathIndices, type Advance } from './core/board-path';
-import { candidatesFor, canTarget, type TargetKind } from './core/targeting';
+import { candidatesFor, canTarget, type PickKind } from './core/targeting';
 import { bboxOf, choreography, frameFor, landingPose, type CamPose, type Cell, type ChoreographyOpts, type View } from './core/framing';
 import { createCamera } from './render/camera';
 import { hudSpecs, mountHud, type HudActionId, type HudHandle } from './ui/Hud';
@@ -732,9 +732,9 @@ export async function boot(): Promise<void> {
     );
   };
 
-  /** HUD 点击 → AiStep（`hand` / `ai:fast` / `ai:skip` / `audio:*` 已在回调里拦截，不会传到这里） */
+  /** HUD 点击 → AiStep（`hand` / `sell` / `ai:fast` / `ai:skip` / `audio:*` 已在回调里拦截，不会传到这里） */
   const stepOfHud = (
-    a: Exclude<HudActionId, 'hand' | 'ai:fast' | 'ai:skip' | 'audio:sfx' | 'audio:bgm'>,
+    a: Exclude<HudActionId, 'hand' | 'sell' | 'ai:fast' | 'ai:skip' | 'audio:sfx' | 'audio:bgm'>,
   ): AiStep =>
     a === 'buy' ? { kind: 'buy' } : a === 'upgrade' ? { kind: 'upgrade' } : { kind: a };
 
@@ -778,9 +778,10 @@ export async function boot(): Promise<void> {
     const { px, py } = toStageXY(e.clientX, e.clientY);
     const idx = tileAtPoint(px, py, { geo, tol: TILE_PICK_TOL });
     uiSel = null;
-    /* 命中候选格 → 落库该卡；点空处 = 取消（清态重画） */
-    if (idx !== null && canTarget(kind, idx, g.state)) dispatch({ kind: 'card', card: kind, target: idx });
-    else paint();
+    /* 命中候选格 → 落库（`sell` 走自由出售；其余是打手牌）；点空处 = 取消（清态重画） */
+    if (idx !== null && canTarget(kind, idx, g.state)) {
+      dispatch(kind === 'sell' ? { kind: 'sell', index: idx } : { kind: 'card', card: kind, target: idx });
+    } else paint();
   };
   pickLayer.addEventListener('pointermove', onBoardMove);
   pickLayer.addEventListener('pointerdown', onBoardDown);
@@ -790,9 +791,12 @@ export async function boot(): Promise<void> {
     if (a === 'card:close' || a === 'settle:close') return { kind: 'close' };
     if (a === 'stock:buy') return { kind: 'trade', code: String(target), shares: 1 };
     if (a === 'stock:sell') return { kind: 'trade', code: String(target), shares: -1 };
+    /* M20.1 破产拍卖：`data-target` 带出出价金额；「放弃」= amount 0（落槌给其余报价） */
+    if (a === 'auction:bid') return { kind: 'auctionBid', amount: Number(target) };
+    if (a === 'auction:pass') return { kind: 'auctionBid', amount: 0 };
     const kind = a.slice('card:'.length) as ItemCardKind;
     if (kind === 'bomb' || kind === 'demolish' || kind === 'barrier' || kind === 'teleport') {
-      uiSel = { kind: kind as TargetKind, hovered: null };
+      uiSel = { kind: kind as PickKind, hovered: null };
       paint();
       return null;                                  // 进入选目标态，不立即 dispatch
     }
@@ -809,7 +813,7 @@ export async function boot(): Promise<void> {
   /** 席位确定后开局（spec §6：选完再 createGame）：建 game → 挂 HUD/浮层/驱动器 → 按需弹引导 → 重画 */
   const startGame = (plan: SeatPlan): void => {
     seats = plan;
-    const g = createGame({ seed: opts.seed, playerCount: 4, abilities: true });
+    const g = createGame({ seed: opts.seed, playerCount: 4, abilities: true, seats: plan });
     game = g;
     hud = mountHud(fitRoot, g, (a: HudActionId) => {
       /* 静音键（spec §7.4）：翻转 → 落库 → 立即重画图标；不跳动画、不推进状态 */
@@ -820,6 +824,8 @@ export async function boot(): Promise<void> {
       }
       /* 牌袋抽屉开合（spec §7.3）：只改可见性、不推进状态，故不走 `dispatch`（也就不吃动效与气泡） */
       if (a === 'hand') { handOpen = !handOpen; paint(); return; }
+      /* 自由出售入口（spec §3.5）：进入 M19 选目标态，等待棋盘点选自有地块 */
+      if (a === 'sell') { uiSel = { kind: 'sell', hovered: null }; paint(); return; }
       if (fx.busy()) fx.skip();   // 点屏加速：状态早已落库，跳过只影响观感时长
       if (a === 'ai:fast') { if (driver) driver.setFast(!driver.isFast()); paint(); return; }
       if (a === 'ai:skip') { driver?.skipRest(); return; }
@@ -979,6 +985,8 @@ export async function boot(): Promise<void> {
     tutorial: () => tutorial, mountTutorial: replayTour, themeConsole,
     /* 选目标交互（M19-D2）：`cellXY(idx)` 供 e2e 由格号取舞台坐标；`uiSel()` 断言是否在选目标态 */
     cellXY, uiSel: () => uiSel,
+    /* 破产拍卖（M20.1）：`auction()` 读待拍态（null = 无拍卖），供 e2e / 取证脚本取证 */
+    auction: () => game?.state.auction ?? null,
     /* 相机（spec §8 V19/V20）：`camera.current()` 读位姿、`camPreview` 直接切态；
        `camMax` 是可变对象，供 V20 断言降级后的倍率上限 */
     camera, camMax, camPreview,

@@ -94,3 +94,31 @@ describe('aiDriver 生命周期', () => {
     expect(driver.persona()).toBeNull();
   });
 });
+
+describe('aiDriver 待拍态（M20.1 破产拍卖）', () => {
+  /** 造一个待拍态：原主 2 破产、债权人 1、当前拍品 3 号（起拍 30），真人 1 待出价 */
+  const openAuction = (game: ReturnType<typeof createGame>): void => {
+    game.state.auction = {
+      trigger: 'bankrupt', payerId: 2, creditorId: 1, amount: 100,
+      queue: [3], lot: { index: 3, level: 1, startPrice: 30 },
+      bids: [], pending: [1], results: [],
+    };
+  };
+
+  it('待拍态：AI 席位也不推进（让位给真人出价）', () => {
+    const { game, driver } = make();
+    game.state.current = 1;                    // AI 席位
+    openAuction(game);
+    driver.tick(AI_STEP_MS * 10);
+    expect(game.state.phase).toBe('idle');     // 未掷骰 / 未推进
+  });
+
+  it('skipRest：遇待拍态立即中断（绝不替真人落槌）', () => {
+    const { game, driver } = make();
+    game.state.current = 1;
+    openAuction(game);
+    driver.skipRest();
+    expect(game.state.auction).not.toBeNull(); // 拍卖仍挂起
+    expect(game.state.current).toBe(1);        // 未越界推进到下一位
+  });
+});
