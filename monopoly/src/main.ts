@@ -254,10 +254,11 @@ export async function boot(): Promise<void> {
   const slotLevels = slotLevelsOf();
   /* 台位（唯一一份）：Scene 构造与「气泡锚在棋子头顶」共用同一组参数。
      主角化：棋子由 0.62（静帧高 12.4px）放大到 1.6（静帧高 32px，与「主角」可辨口径一致），
-     同格四人改 2×2 方阵（`pawnRowDy` 为后排上移量）；角色 IP 化后人物变宽（约 20px），
-     单排间距同步放宽到 19，两人并肩刚好相接、不压邻格。 */
+     同格四人改 2×2 方阵（`pawnRowDy` 为后排上移量）；
+     Q 版化后头部占高 57%，头宽达 18px、八戒垂耳外缘 28px，
+     单排间距同步放宽到 24（相邻两头仍留 6px 净空），两人并肩而不糊成一团。 */
   const PLACEMENT: PlacementOpts = {
-    pawnGap: 19, pawnFrontDy: 1.2, pawnRowDy: 22, pawnScale: 1.6,
+    pawnGap: 24, pawnFrontDy: 1.2, pawnRowDy: 22, pawnScale: 1.6,
     buildingScale: BUILDING_SCALE, buildingYOffset: BUILDING_Y_OFFSET,
   };
   /* 主题补丁挂在一个**可变对象**上：`?debug=1` 的风格控制台就地改写 `theme` 字段即可实时预览（spec §9） */

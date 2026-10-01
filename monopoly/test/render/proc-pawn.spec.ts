@@ -32,6 +32,25 @@ describe('proc preset: pawn（西游·取经四众，spec §6.6）', () => {
     expect(PROC_PRESETS.pawn).toBe(pawn);
   });
 
+  it('Q 版比例：头径 ≈ 总高 57%（1.75 头身）、大眼宽 ≈ 头宽 28%', () => {
+    const { g, names, args } = recorder();
+    pawn(g, ctx({ style: 'sanzang' }, { owner: 1, mood: 'calm' }));
+    /* 三藏差点最少（仅通用的手/耳/头/顶珠/瞳孔），头是唯一的大圆 */
+    const rOf = (n: string): number[][] => names
+      .map((c, i) => (c === n ? (JSON.parse(args[i]) as number[]) : null))
+      .filter((v): v is number[] => v !== null);
+    const headR = Math.max(...rOf('circle').map((a) => a[2]));
+    /* designH * u == box.h * s（scale 恒 1）—— 即「总高」在屏幕上的像素高度 */
+    const total = 20 * 0.62;
+    /* 比宽高的椭圆只有一对（睁眼）：腮红压扁、毗卢帽压扁、投影压扁 */
+    const eyes = rOf('ellipse').filter((a) => a[3] > a[2] && a[2] < 2.5);
+    expect(eyes).toHaveLength(2);
+    expect((2 * headR) / total).toBeGreaterThanOrEqual(0.54);
+    expect((2 * headR) / total).toBeLessThanOrEqual(0.6);
+    expect((2 * eyes[0][2]) / (2 * headR)).toBeGreaterThanOrEqual(0.25);
+    expect((2 * eyes[0][2]) / (2 * headR)).toBeLessThanOrEqual(0.33);
+  });
+
   it('三表情几何互不相同', () => {
     const sig = (mood: string): string => {
       const { g, args } = recorder();

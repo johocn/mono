@@ -708,6 +708,49 @@ npm run check:prod               # 线上闸门全 true、errors: []
 
 **取证脚本**：[local/mono-shots-m9.mjs](file:///d:/zhao/monopoly/local/mono-shots-m9.mjs)（`MONO_ORIGIN` 默认本地 dev `http://127.0.0.1:52301`，可覆盖为线上）。关键口径：格子 → 舞台像素用**页面内动态 `import('/src/render/*.ts')`** 复用 `boardCells` / `ipos`，与渲染层同源、避免坐标手算漂移；棋子落位量 `layers.pieces` 的 `getBounds()`（proc 画在绝对舞台坐标上、pass 容器恒不动）。
 
+### M17 角色形象 Q 版化（更可爱 · 仍合原著）2026-10-01
+
+**范围**：在 M16 的西游·取经四众棋子基础上做 Q 版化 / 可爱化，同时**保持原著特征可辨**。仅动**几何比例**，归属色与造型符号（金箍 / 钉耙 / 络腮胡 / 毗卢帽）不变。
+
+**口径（推荐档 B）**：
+
+| 指标 | 值 | 说明 |
+|---|---|---|
+| 头身比 | **1.75 头身** | 下半身压缩到 10.4 设计单位（躯干 5.8 + 腿 5.4） |
+| 头径 / 总高 | **≈ 57%** | 头半径 5.3 → **6.9**（设计单位） |
+| 大眼宽 / 头宽 | **≈ 28%** | 睁眼椭圆 `[±3, -18, 2, 2.1]` ⇒ 眼宽 4.0 / 头宽 13.8 |
+| 腮红浓度 | 0.42 → **0.5** | 上 / 下表情分别 0.58 / 0.42 |
+
+**实现（唯一落点）**：[proc-pawn.ts](file:///d:/zhao/monopoly/src/render/providers/proc-pawn.ts) 的 `const D = fb({...})`（L4 内建兜底）几何整体重排。**头顶恒 `-24.2` = `designH` 不动**，头心 `-18.9 → -17.3`、头底 `-13.6 → -10.4`；面部五官（眼 / 瞳孔 / 腮红 / 嘴 / 眉 / 泪）按「相对头心的原比例」等比外扩，故四众仍各具原著辨识度。归属色仍**只染「披肩 `scarf` + 腰带 `sash`」**（`trim = ownerColors[owner] ?? col('trim')`），`robeMap` / `headMap` / `hairMap` 未改。
+
+**八戒二次微调（更贴「长嘴大耳朵」）**：垂耳放低加长 `baEarL/R [-7.5, -18, 3, 5.6]`、拱嘴放大 `baSnout [0, -13.2, 4.2, 2.9]`、鼻孔 `[±1.8, -13.3, 0.65]`，避免首版偏圆偏高的「鼠感」。
+
+**同格间距**：`PLACEMENT.pawnGap` **19 → 24**（[main.ts](file:///d:/zhao/monopoly/src/main.ts#L255-L262)）。Q 版后头宽达 18px、八戒垂耳外缘 28px，24 间距下相邻两头仍留 **6px 净空**，两人并肩而不糊成一团；`pawnFrontDy` / `pawnRowDy` / `pawnScale` 不变。
+
+**确定性闸门（新增用例）**：[proc-pawn.spec.ts](file:///d:/zhao/monopoly/test/render/proc-pawn.spec.ts) 第 8 例「Q 版比例」——头径 / 总高 ∈ [0.54, 0.60]、大眼宽 / 头宽 ∈ [0.25, 0.33]。不依赖截图即可回归比例口径。
+
+| # | 步骤 | 期望 | 截图 |
+|---|---|---|---|
+| M17-1 | 直出四众 × 三表情（平静 / 开心 / 难过）总表 | 四列三行全部 Q 版可爱、原著特征可辨，标注不碰撞 | `mono-m17-01-sheet-4x3.png` |
+| M17-2 | 四众单枚近景（平静行） | 金箍 / 长嘴大耳 / 络腮胡 / 毗卢帽各自可辨、可爱 | `mono-m17-02-closeup-{wukong,bajie,wujing,sanzang}.png` |
+| M17-3 | 4 人同置一格并 `paint()` | 2×2 方阵跨度 `24 × 23px`，相邻两头留 6px 净空 | `mono-m17-03-pawns-2x2.png` + `mono-m17-04-pawns-board.png` |
+| M17-4 | 看全屏 | 390×844 观感正常，HUD 四技能卡 + 掷骰无遮挡 | `mono-m17-05-board-full.png` |
+
+**回归口径（本轮实测）**：
+
+```powershell
+npx tsc --noEmit                              # 退出码 0
+npx vitest run test/render/proc-pawn.spec.ts  # 8 passed（含新增 Q 版比例例）
+npm run check                                 # 全绿
+node local/mono-shots-m17.mjs                 # [m17-shots] PASS · 7 项 gate 全 true、errors: []
+```
+
+**实测 facts**：总表 `bounds {x:35, y:84, w:303, h:433}`；同格 `gapX = 24`、`rowDy = 23`、`union {x:84, y:261, w:51, h:69}`；四众绘制外接框互不相同 —— 悟空 **26×43** / 八戒 **28×40** / 悟净 **22×41** / 三藏 **22×45**（`silhouettes_distinct` 闸门按 `${w}x${h}` 四元组判定）。
+
+**截图清单（8 张，均 390×844 @dpr2 手机视口，入 `docs/verify/`）**：`mono-m17-01-sheet-4x3` / `02-closeup-wukong` / `02-closeup-bajie` / `02-closeup-wujing` / `02-closeup-sanzang` / `03-pawns-2x2` / `04-pawns-board` / `05-board-full`。
+
+**取证脚本**：[local/mono-shots-m17.mjs](file:///d:/zhao/monopoly/local/mono-shots-m17.mjs)。关键口径：总表页**先清空五层 + 移除 `#mono-ui`** 再在 `ground` 画深底，避免棋盘喧宾夺主；直接 `import('/src/render/providers/proc-pawn.ts')` 取**生产 `pawn()`**绘制，与线上同源；`Graphics` 构造器从背景元素 `stage.layers.ground.children[0].constructor` 取得（playwright 不走 vite 改用裸模块名）。对局取证另开一页，避免总表污染真实画面。
+
 ### 最终验收（对照 spec §11 硬性标准）
 
 | # | spec §11 条目 | 证据 |
