@@ -30,7 +30,7 @@ export const SLOT_DEFAULTS: SlotConfig = {
   ads: [
     { kind: 'tip', text: '掷骰前进 · 落在空地可买下' },
     { kind: 'tip', text: '经过起点领 ￥200' },
-    { kind: 'tip', text: '同街连片 · 租金更高' },
+    { kind: 'tip', text: '升级到 3 级 · 路过租金 ￥105' },
   ],
 };
 
