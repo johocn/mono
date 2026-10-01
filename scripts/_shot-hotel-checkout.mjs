@@ -273,6 +273,16 @@ if (Number.isFinite(dy) && dy < 12) {
   console.error('FAIL  普通商品-操作行同带：单价与步进器垂直错位');
   failures.push('普通商品-操作行同带');
 }
+// 折行布局断言三：第二行左缩进与商品名左边缘对齐
+// （原由写死的 pl-22 = 88px 保证，现由 --line-thumb 推导出的 --line-indent 保证）
+const indentDx = unitBox && nameBox ? Math.abs(unitBox.x - nameBox.x) : NaN;
+console.log(`  x 左边缘：商品名 ${nameBox ? nameBox.x.toFixed(1) : 'n/a'} ｜ 单价 ${unitBox ? unitBox.x.toFixed(1) : 'n/a'} ｜ 差 = ${Number.isFinite(indentDx) ? indentDx.toFixed(1) : 'n/a'}px（阈值 ≤1）`);
+if (Number.isFinite(indentDx) && indentDx <= 1) {
+  console.log('PASS  普通商品-缩进对齐：第二行左边缘与商品名左边缘一致');
+} else {
+  console.error('FAIL  普通商品-缩进对齐：第二行与商品名左边缘错位');
+  failures.push('普通商品-缩进对齐');
+}
 console.log('  行内文本:', (await normalLine.innerText().catch(() => '')).replace(/\s+/g, ' '));
 
 // —— 尺寸校验 780×1688（= 390×844 @2x） ——

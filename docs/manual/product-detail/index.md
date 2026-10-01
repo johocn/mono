@@ -279,9 +279,19 @@ node scripts/_shot-hotel-checkout.mjs     # 默认 BASE=https://www.youshop.cn/t
 **改前**：商品行 `<li>` 为 `flex`（默认 `nowrap`），「单价 / 步进器 / 行小计（`w-14`）/ 删除」四个 `shrink-0` 块与商品名同排。390px 下固定块 + 间距 + 内边距合计约 317px，中间描述列只剩约 49px，商品名被 `truncate` 到约 1 个字——**改动前既有问题**，非酒店行改动引入。
 
 **改后（方案 A · 折行式）**：
-- `<li>` 统一 `flex-wrap`；普通商品行的价格与操作包进 `basis-full` 第二行容器，左缩进 `pl-22`（= 勾选 16 + gap 8 + 缩略图 56 + gap 8 = 88px），与商品名左边缘对齐。
-- 缩略图 36px → **56px**（`h-14 w-14`）；取图宽度同步 `assetSrc(full, 48)` → `128`（56px @dpr2 的 2× 位图，避免放大发虚）。
+- `<li>` 统一 `flex-wrap`；普通商品行的价格与操作包进 `basis-full` 第二行容器，左缩进与商品名左边缘对齐。
+- 缩略图 36px → **56px**；取图宽度同步 `assetSrc(full, 48)` → `128`（56px @dpr2 的 2× 位图，避免放大发虚）。
 - 第二行加 `flex-wrap` 兜底多语言：en-US `messages.account.delete` 为 "Delete"，比「删除」宽约 14px，单行放不下时换行而非溢出容器。
+
+**同日精简（去重复声明 + 去魔数）**：
+
+| 项 | 原 | 现 | 理由 |
+| --- | --- | --- | --- |
+| 缩略图尺寸 | `class="h-14 w-14"` | `class="h-[var(--line-thumb)] w-[var(--line-thumb)]"`，`--line-thumb: 3.5rem` | 尺寸成为单一来源，供缩进推导引用 |
+| 第二行左缩进 | `pl-22`（写死 5.5rem = 88px） | `ps-[var(--line-indent)]`，`--line-indent: calc(1rem + 0.5rem + var(--line-thumb) + 0.5rem)` | 勾选框/间距/缩略图任一尺寸变化时自动跟随；同时由物理 `pl-` 改逻辑 `ps-`，RTL（fa-IR）下方向正确 |
+| 第二行容器 | `flex w-full basis-full ...` | `flex basis-full ...`（删 `w-full`） | flex 主轴尺寸由 `flex-basis: 100%` 决定，`width: 100%` 被忽略，属重复声明 |
+
+变量定义在 [BoxLines.vue](file:///d:/zhao/nshop/layers/base/app/components/checkout/BoxLines.vue#L224-L232) 的 `<style scoped>` 里，挂在行根 `.box-line` 上由子元素继承。
 
 **版式选型**（按「设计变更先出内联 mockup 定稿」规范，先出 A/B/C 三版式内联预览后由用户选定）：
 
@@ -298,9 +308,12 @@ PASS  普通商品-缩略图 56×56：实际 56×56
 PASS  普通商品-商品名可用宽 ≥200px：实际 244.0px（改造前约 49px，仅容 1 字）
 PASS  普通商品-折行：商品名独占首行，价格与操作折到第二行（y 中心差 69.2px）
 PASS  普通商品-操作行同带：单价与步进器并排于第二行（y 中心差 0.0px）
+PASS  普通商品-缩进对齐：第二行左边缘与商品名左边缘一致（x 差 0.0px，阈值 ≤1）
 PASS  普通商品-行小计：命中「¥336.00」（= 单价 ¥168.00 × 2）
 PASS  06-checkout-normal-product.png 尺寸：780×1688（期望 780×1688）
 ```
+
+> 精简后回归实测：缩略图 `x=53, 56×56`；商品名 `x=117, 宽 244`；单价 `x=117` → x 差 0.0px，证明 `--line-indent` 推导结果仍等于原写死的 88px。`缩进对齐` 这条断言是为替代「靠 `pl-22` 保证对齐」而新增的回归门（脚本 06 段）。
 
 **接口层回归**：取 t2 渠道非酒店变体（`温泉门票` variantId=57）加购，断言 `isHotel === false`、`hotelNightly` 为空（`null` 或空数组，GraphQL 列表类型查询需带子字段）、`linePriceWithTax === unitPriceWithTax × quantity`，3 条全 PASS。
 

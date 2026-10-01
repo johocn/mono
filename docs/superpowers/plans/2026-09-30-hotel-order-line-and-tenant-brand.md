@@ -1923,3 +1923,21 @@ git commit -m "test(hotel): 酒店订单行 e2e 脚本、手机视口截图与�
 **上游遗留键清理（16 条，追加）**：8 个语言包（bg/de/es/fa/fr/it/pt/ru）的**上游模板 `billing` 组**（obj1，`git blame` 指向 nuxtless 原作者 2025-11-25）保留了 `firstName` / `lastName`；zh-CN 的 `billing` 组没有这两个键（zh-CN 的同名键在 `account` 组里，路径不同），故被审计判为「多余」。全仓库无 `messages.billing.firstName|lastName` 引用（仅历史 plan 文档示例代码里出现）→ 死键，已删除。清理后 12 语言包「已译键」全部 = 773、「多余」全部 = 0。
 
 后续可选（未做）：把 `_audit-i18n.mjs` 收敛为仓库常驻守卫（新增词条时防漏译）；后台数据（分类名/商品名）多语言方案。
+
+---
+
+### 收口补记 · 普通商品行几何精简（2026-10-01）
+
+用户复核 6.5「商品图尺寸 + 折行显示」逻辑是否有必要（疑与 6.2 酒店行改动重复）。核查结论：**不重复**——6.2 改的是酒店行（逐晚明细折行），6.5 改的是普通商品行（商品名被挤到 1 字），两行结构不同、仅共用 `flex-wrap`。但顺带确认了 3 处可精简，按用户批准执行其中 2 处（去重复声明 + 去魔数）：
+
+| 项 | 原 | 现 | 理由 |
+| --- | --- | --- | --- |
+| 第二行容器 | `flex w-full basis-full ...` | `flex basis-full ...` | flex 主轴尺寸由 `flex-basis:100%` 决定，`width:100%` 被忽略 → 重复声明 |
+| 第二行左缩进 | `pl-22`（写死 5.5rem） | `ps-[var(--line-indent)]`，`--line-indent: calc(1rem + 0.5rem + var(--line-thumb) + 0.5rem)` | 由「勾选框 + gap + 缩略图 + gap」推导，调尺寸不再错位；`pl-`→`ps-` 逻辑属性，RTL 下方向正确 |
+| 缩略图尺寸 | `h-14 w-14` | `h-[var(--line-thumb)] w-[var(--line-thumb)]`，`--line-thumb: 3.5rem` | 尺寸成为单一来源，供缩进推导引用 |
+
+- 变量定义在 `BoxLines.vue` 的 `<style scoped>`（挂在行根 `.box-line`，子元素继承）
+- `width="56" height="56"` 属性与 Tailwind 类重复，但属上游模板既有写法，**本轮未动**（不影响布局）
+- 新增回归门：`_shot-hotel-checkout.mjs` 06 段加「第二行左边缘 == 商品名左边缘（x 差 ≤1px）」，替代原先只能靠 `pl-22` 隐含保证的对齐
+- 生产实测：缩略图 `x=53 56×56`、商品名 `x=117 宽 244`、单价 `x=117` → **x 差 0.0px**；06 段全部断言 PASS
+- 手册 6.5 追加「同日精简」表与断言输出
