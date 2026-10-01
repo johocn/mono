@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
-  INNER_STREET_PROPS, buildingSpecs, slotLevelsOf, streetPropSpecs,
+  INNER_STREET_PROPS, buildingSpecs, slotLevelsOf, startLevelsOf, streetPropSpecs,
 } from '../../src/render/BuildingView';
 import {
-  DEMO_OWNER, SLOT_BANNER, SLOT_LANTERN_CHAR, TILE_BRAND, TILE_LEVEL,
+  DEMO_OWNER, SLOT_BANNER, SLOT_LANTERN_CHAR, START_PUBLIC_LEVEL, TILE_BRAND, TILE_LEVEL,
 } from '../../src/data/board';
 import type { ElementSpec } from '../../src/skin/instantiate';
 
@@ -21,6 +21,28 @@ describe('BuildingView · 层级表', () => {
     expect(lv[18]).toBe(3);
     expect(lv[30]).toBe(3);
     expect(lv[2]).toBeUndefined();
+  });
+});
+
+describe('BuildingView · 开局层级（M18 D1：未售 = 无楼）', () => {
+  it('startLevelsOf 返回 4 栋公共设施楼的拷贝，与 v5 演示层级表相互独立', () => {
+    const lv = startLevelsOf();
+    expect(lv).toEqual(START_PUBLIC_LEVEL);
+    expect(Object.keys(lv).length).toBe(4);
+    expect(lv[0]).toBe(3);
+    expect(lv[9]).toBe(2);
+    expect(lv[19]).toBe(2);
+    expect(lv[25]).toBe(2);
+    /* 演示表仍是 18 栋（v5 样张零回归）；两者不是同一份数据 */
+    expect(Object.keys(slotLevelsOf()).length).toBe(18);
+    expect(lv).not.toBe(START_PUBLIC_LEVEL);
+  });
+
+  it('play 开局只出 4 栋楼体（s0/s9/s19/s25），17 个商家格无 building.* 条目', () => {
+    const lv = startLevelsOf();
+    const specs = buildingSpecs({ levelOf: (i) => lv[i], ownerOf: () => null });
+    const wallIds = specs.filter((s) => isWall(s.id)).map((s) => s.id).sort();
+    expect(wallIds).toEqual(['building.s0.l3', 'building.s19.l2', 'building.s25.l2', 'building.s9.l2']);
   });
 });
 

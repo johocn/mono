@@ -1,6 +1,6 @@
 import {
   BOARD_COLS, BOARD_ROWS, DEMO_OWNER,
-  SLOT_BANNER, SLOT_LANTERN_CHAR, TILE_BRAND, TILE_LEVEL, ringPath,
+  SLOT_BANNER, SLOT_LANTERN_CHAR, START_PUBLIC_LEVEL, TILE_BRAND, TILE_LEVEL, ringPath,
   type BuildLevel,
 } from '../data/board';
 import type { ElementSpec } from '../skin/instantiate';
@@ -43,6 +43,15 @@ export function slotLevelsOf(): Record<number, BuildLevel> {
     out[index] = lv;
   });
   return out;
+}
+
+/**
+ * M18 D1 · play 模式的开局层级表（未售 = 无楼，只有 4 处公共设施格成楼）。
+ * 与 `slotLevelsOf()`（v5 演示层级，`?show` / `?demo` 样张专用，18 栋）并存：
+ * 演示样张保持逐像素回归，play 开局改走本表。返回**拷贝**，调用方可安全改写。
+ */
+export function startLevelsOf(): Record<number, BuildLevel> {
+  return { ...START_PUBLIC_LEVEL };
 }
 
 /**
