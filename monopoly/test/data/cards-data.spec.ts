@@ -4,20 +4,21 @@ import {
 } from '../../src/data/cards';
 
 describe('cards 数据（spec §5.3）', () => {
-  it('道具 5 种、手牌 5 槽、命运 / 机会牌堆各 20 张', () => {
+  it('道具 6 种、手牌 6 槽、命运 / 机会牌堆各 20 张', () => {
     expect(ITEM_CARDS.map((c) => c.kind)).toEqual(
-      ['bomb', 'barrier', 'pardon', 'teleport', 'doubleRent'],
+      ['bomb', 'barrier', 'pardon', 'teleport', 'doubleRent', 'demolish'],
     );
-    expect(ITEM_CARDS).toHaveLength(5);
-    expect(HAND_SIZE).toBe(5);
+    expect(ITEM_CARDS).toHaveLength(6);
+    expect(HAND_SIZE).toBe(6);
     expect(DECK_SIZE).toBe(20);
     expect(FATE_DECK).toHaveLength(20);
     expect(CHANCE_DECK).toHaveLength(20);
   });
 
-  it('道具：炸弹/路障/迁点需选目标，免罚/翻倍不需', () => {
+  it('道具：炸弹/路障/迁点/拆迁令需选目标，免罚/翻倍不需', () => {
     const targetOf = (k: ItemCardKind): string => ITEM_CARDS.find((c) => c.kind === k)!.target;
-    expect([targetOf('bomb'), targetOf('barrier'), targetOf('teleport')]).toEqual(['foe', 'tile', 'tile']);
+    expect([targetOf('bomb'), targetOf('barrier'), targetOf('teleport'), targetOf('demolish')])
+      .toEqual(['foe', 'tile', 'tile', 'foe']);
     expect([targetOf('pardon'), targetOf('doubleRent')]).toEqual(['none', 'self']);
   });
 

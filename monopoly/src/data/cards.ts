@@ -9,7 +9,7 @@
  * （`FateKind` / `ChanceKind`），同种机制用不同金额/步数复现多张，保证「一局内抽到的牌不重样」。
  */
 
-export type ItemCardKind = 'bomb' | 'barrier' | 'pardon' | 'teleport' | 'doubleRent';
+export type ItemCardKind = 'bomb' | 'barrier' | 'pardon' | 'teleport' | 'doubleRent' | 'demolish';
 
 export interface ItemCardDef {
   kind: ItemCardKind;
@@ -24,10 +24,11 @@ export const ITEM_CARDS: ItemCardDef[] = [
   { kind: 'pardon', name: '免罚', desc: '自动抵消一次应付租金或一次入狱', target: 'none' },
   { kind: 'teleport', name: '迁点', desc: '本回合以迁点取代移动，落到任意指定格', target: 'tile' },
   { kind: 'doubleRent', name: '租金翻倍', desc: '本人下一次收租翻倍，收完消耗', target: 'self' },
+  { kind: 'demolish', name: '拆迁令', desc: '一次夷平对手目标地块全部楼体（归无主）', target: 'foe' },
 ];
 
-/** 手牌槽位（5 种道具各持 1 张，去重） */
-export const HAND_SIZE = 5;
+/** 手牌槽位（6 种道具各持 1 张，去重） */
+export const HAND_SIZE = 6;
 
 /** 命运 / 机会牌堆张数（与棋盘 5+5 格解耦） */
 export const DECK_SIZE = 20;
