@@ -816,6 +816,40 @@ $env:MONO_ORIGIN='http://127.0.0.1:52301'; node local/mono-shots-m19.mjs   # [m1
 
 **取证脚本**：[local/mono-shots-m19.mjs](file:///d:/zhao/monopoly/local/mono-shots-m19.mjs)。关键口径：打 `?play=1&seed=20261002&humans=4&tour=0` **真实对局**（第 ①② 项加 `nofx=1`、第 ③ 项去掉以显动效），全程走与用户相同的 UI 路径（HUD 牌袋键 → 手牌槽 `card:demolish` → 棋盘 `#mono-pick` 命中层点选），由 `__monoMain.cellXY(idx)` 取舞台坐标再按 `#mono-ui` 放映矩形换算为页面 CSS 坐标后真实点击；因开局无「对手成楼商家格」⇒ 拆迁键默认不可点，脚本先给当前真人补一张「拆迁令」、在 `SHOP_TILE = 13` 安置一栋对手楼（`level: 1`）再操作（确定性布置，与 `local/mono-e2e-m19-select.mjs` 同源）。机器闸门 8 项：`hand_six_slots` / `demolish_enabled` / `ui_sel_demolish` / `candidates_present` / `target_intact_before_pick` / `cancel_key_present` / `wreck_target_cleared` / `ui_sel_cleared`（第 ③ 项先等 `fx.busy()` 抢拍动画中途帧，gate 只取「目标格 estate 已消失 + `uiSel()` 回到 null」的终态，保证确定性）。
 
+### M20.1 破产拍卖与自由出售（拍卖改所有权 · 真人档位出价 · 卖地筹钱）2026-10-02
+
+**范围**：对齐 spec `docs/superpowers/specs/2026-10-02-monopoly-m20-1-auction-and-sale-design.md` 的决策 **M20.1-D1..D10**（路线图诉求 ⑤「破产拍卖土地，价高者得」+ §4.3「破产拍卖改所有权转移」「自由出售房产」）。只改 `estates` 归属与 `cash`，**17 个商家格一个不动**；不引入银行信贷 / 抵押（M20.2）、股票 UI（M20.3）、设施入股（M20.4）。
+
+**五项需求与落点**：
+
+| # | 需求（D） | 落点 | 结果 |
+|---|---|---|---|
+| 1 | 破产拍卖裁决（D1/D3） | [auction.ts](file:///d:/zhao/monopoly/src/core/auction.ts) 纯函数 `lotOf` / `resolveLot` / `aiBidFor`；[economy.ts](file:///d:/zhao/monopoly/src/data/economy.ts) 增 `BID_RENT_MULT=6`；[ai.ts](file:///d:/zhao/monopoly/src/data/ai.ts) `AiParams.bidMult`（保守 0.6 / 激进 1.4 / 投机 1.0） | 单地块一轮密封报价，起拍价 = `sellAt()`；有效报价 `amount ≥ 起拍价`，最高价中标、**并列取小 id**，无有效报价流拍 |
+| 2 | 所有权转移（D2） | [estate.ts](file:///d:/zhao/monopoly/src/core/estate.ts) 新增 `transferEstate`（唯一改 `owner` 的入口） | 成交后只换 `owner`，`level` / `processing` **原样保留**（不从零复建） |
+| 3 | 清算路径改造（D3/D4/D5） | [game.ts](file:///d:/zhao/monopoly/src/core/game.ts) `settleDebt`：现金不足且有地 → 进入拍卖（`ownedBy` 按 `sellAt` 升序）；所得先清偿欠款、余额归破产者、不足由债权人承担差额；拍够即停 | 流拍且债权人为人 → 转移抵债；流拍且债权人为银行 → 删键回归「可购买」 |
+| 4 | 待拍态 + 真人档位出价（D7） | `GameState.auction` / `seats`；`Game.sellEstate` / `bidAuction` / `autoResolveAuction`；[panels.ts](file:///d:/zhao/monopoly/src/ui/panels.ts) 拍卖浮层（版式 B）；[Hud.ts](file:///d:/zhao/monopoly/src/ui/Hud.ts) 真人「出售」键 | 待出价时游戏挂起（`settleCurrent` 返回 `{ kind:'auction' }`）；真人三档「起拍 / ×1.5 / ×2.4」+ 放弃 |
+| 5 | 自由出售（D8）+ AI 同源（D9） | [targeting.ts](file:///d:/zhao/monopoly/src/core/targeting.ts) `PickKind` + `sell` 候选 / 预演；[main.ts](file:///d:/zhao/monopoly/src/main.ts) 复用 M19 选目标命中层 | 价 = `sellAt()`×100%、仅自己回合、售出删键回归「可购买」；`aiBidFor` 与真人共用 `resolveLot`，AI 不主动自由出售 |
+
+**已知限制（M20.1-D6）**：多人分账路径（进贡 `tribute` 逐个债权人、抽成 `collect` 逐个付款人）本轮**保持既有自动变卖**，未改走拍卖；这些路径一次结算串行触发多笔债务，改造面大、回归风险高，M20.2 统一。即：**仅「单一债权人 / 收款人」的收租、税务等清算改走拍卖；多人分账债务仍按旧「自动变卖」处理。**
+
+**归属通路 / 四级回退**：新增两个可见元素 `ui.bid`（出价键）/ `ui.bidDebt`（债务条）走 L2/L3 [skin.json](file:///d:/zhao/monopoly/public/skins/default/skin.json) → `uiBid` / `uiBidDebt` preset（见 Task 7）；几何常数集中在 [layout.ts](file:///d:/zhao/monopoly/src/skin/layout.ts) 的 `PANEL_BID_*` / `PANEL_DEBT_*`，色值走 [proc-panel.ts](file:///d:/zhao/monopoly/src/render/providers/proc-panel.ts) 的 L4 `PANEL_D` 内建兜底；地契卡复用既有 `ui.tileCard`（`PANEL_BID_CARD_S = 0.5`，`s=1` 时 HUD 逐值不变 ⇒ 零回归）。其余全部复用既有元素。
+
+**确定性**：拍卖全链路**零随机**（顺序按 `sellAt` 升序 + 小格号；裁决最高价、并列取小 id；`aiBidFor` 为纯函数）——回放与 e2e 可复现。
+
+**回归口径（本轮实测）**：
+
+```powershell
+npx tsc --noEmit                                 # 退出码 0、无输出
+npm run check                                    # eslint src tools 0 错；[theme] OK / [skin:default] OK / [skin:photo] OK；registry-ids.json: 334 ids；63 文件 / 638 例全绿
+npm run build                                    # [check-hardcoded] clean → ✓ built in 6.25s
+$env:MONO_ORIGIN='http://127.0.0.1:52301'; node local/mono-e2e-m20-1.mjs     # OK（待拍 pending=[2,3,4]；三档 + 放弃；成交归玩家 2 / 保留 L3 / 原主不破产；出售删键、现金 100 → 430、uiSel 清空）
+$env:MONO_ORIGIN='http://127.0.0.1:52301'; node local/mono-shots-m20-1.mjs   # [m20-1-shots] PASS · 10 项 gate 全 true、errors: []
+```
+
+**截图清单（3 张，均 390×844 @dpr2 手机视口，出 780×1688 PNG，入 `docs/verify/`）**：`mono-m20-1-01-auction`（破产拍卖浮层：角标「破产拍卖 · 第 1/1 块」+ 债务条「待清偿 ￥105」+ 左侧地契卡「长峰特产 / Lv3 · 起拍 ￥330」+ 右侧三档「￥330 / ￥495 / ￥792」+ 放弃）/ `mono-m20-1-02-sell-select`（点 HUD「出售」后悬停候选格的选目标态：自有地块金框 + 预演条「出售 · 长峰特产 / 售价 ￥330（变卖价 100%）/ 售出后地块回归可购买」）/ `mono-m20-1-03-auction-done`（落槌后：3 号地块业主色变为玩家 2、楼层仍 L3）。目视复核要点：①② 同一手机视口下浮层不溢出、三档文案与债务条读数清晰；③ 产权转移（地契卡显示「持有 猪八戒」）而楼体层级不变。
+
+**取证脚本**：[local/mono-shots-m20-1.mjs](file:///d:/zhao/monopoly/local/mono-shots-m20-1.mjs)（10 项机器闸门）与 [local/mono-e2e-m20-1.mjs](file:///d:/zhao/monopoly/local/mono-e2e-m20-1.mjs)（真实点击整链路）。关键口径：打 `?play=1&seed=20261002&nofx=1&humans=4&tour=0` 真实对局，全程走 `#mono-hud` / `#mono-panels` / `#mono-pick` 命中层；确定性布置由 `__monoMain` 在进站后完成——布置 `estates` / `cash`、**移除起始手牌中的「免罚」`pardon`**（否则收租被自动抵消而进不了清算），掷骰后读 `state.dice.total` 预校正 `pos`、**「前进」后再把 `pos` 钉到 `RENT_TILE = 13`**（因 `createGame({ abilities: true })` 使当前玩家带技能「筋斗云」`stepBonus=1`、实际前进 = `total + 1`），随后「前进 → 结算」必触发 13 号 shop 格收租破产拍卖。机器闸门 10 项：`auction_overlay` / `auction_badge` / `auction_bid_visual` / `auction_debt_bar` / `auction_card` / `auction_resolved` / `estate_owner2` / `level_preserved` / `sell_sel` / `sell_candidates`。
+
 ### 最终验收（对照 spec §11 硬性标准）
 
 | # | spec §11 条目 | 证据 |
