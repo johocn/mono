@@ -10,15 +10,20 @@
  * （① 标题 ② 后果 ③ 受影响方），供 UI 直接渲染。
  */
 import { BARRIER_RANGE, ITEM_CARDS, HAND_SIZE, type ItemCardKind } from '../data/cards';
-import { PLAYER_NAME, RING_SIZE, typeAt, nameAt } from '../data/board';
+import { PLAYER_NAME, RING_SIZE, brandAt, typeAt, nameAt } from '../data/board';
+import { ownedBy, sellAt } from './estate';
 import type { GameState } from './game';
 
 /** 需要选目标的道具（与卡面 `target` 非 none/self 对齐） */
 export type TargetKind = Extract<ItemCardKind, 'bomb' | 'barrier' | 'teleport' | 'demolish'>;
 
-export function candidatesFor(kind: TargetKind, state: GameState): number[] {
+/** 需要选目标的交互（M20.1 增 'sell'：自由出售自有地块） */
+export type PickKind = TargetKind | 'sell';
+
+export function candidatesFor(kind: PickKind, state: GameState): number[] {
   const me = state.players[state.current];
   const myId = me.id;
+  if (kind === 'sell') return ownedBy(state.estates, myId);   /* 自由出售：自有地块（升序） */
   if (kind === 'bomb' || kind === 'demolish') {
     const out: number[] = [];
     for (let i = 0; i < RING_SIZE; i++) {
@@ -41,7 +46,7 @@ export function candidatesFor(kind: TargetKind, state: GameState): number[] {
   return out;
 }
 
-export function canTarget(kind: TargetKind, index: number, state: GameState): boolean {
+export function canTarget(kind: PickKind, index: number, state: GameState): boolean {
   return candidatesFor(kind, state).includes(index);
 }
 
@@ -51,7 +56,10 @@ function cardDef(kind: ItemCardKind) {
 }
 
 /** 底部预演条三行：① 标题 ② 后果 ③ 受影响方 */
-export function previewFor(kind: TargetKind, index: number, state: GameState): [string, string, string] {
+export function previewFor(kind: PickKind, index: number, state: GameState): [string, string, string] {
+  if (kind === 'sell') {
+    return [`出售 · ${brandAt(index)}`, `售价 ￥${sellAt(state.estates, index)}（变卖价 100%）`, '售出后地块回归可购买'];
+  }
   const who = state.players[state.current];
   const title = `${cardDef(kind)?.name ?? kind} · ${nameAt(index)}`;
   if (kind === 'bomb' || kind === 'demolish') {
