@@ -230,3 +230,48 @@ describe('proc preset: shop 换代构件开关（M18 D2）', () => {
     expect(colors(c2.calls)).toContain('#123456');
   });
 });
+
+describe('proc preset: market3 换代（M18 D2/D4）', () => {
+  const lv = (n: number) => ({
+    geo: { hw: 24, hh: 13, ox: 195, oy: 104 },
+    box: { w: 48, d: 26, h: 72 },
+    cx: 195,
+    cy: 104,
+    s: 1,
+    params: { hue: 200 },
+    state: { level: n },
+  });
+  const draw = (n: number) => {
+    const r = recorder();
+    market3(r.g as never, lv(n) as never);
+    return r.calls;
+  };
+  const ellipses = (cs: Array<{ op: string }>) => cs.filter((c) => c.op === 'ellipse');
+
+  it('L3 → L4 → L5 绘制指令逐级递增（换代真的发生）', () => {
+    const c3 = draw(3).length, c4 = draw(4).length, c5 = draw(5).length;
+    expect(c4).toBeGreaterThan(c3);
+    expect(c5).toBeGreaterThan(c4);
+  });
+
+  it('霓虹描边 + 五星徽记只在 L5 出现', () => {
+    const NEON = 'rgba(255,236,170,.9)';
+    const STAR = '#ffe9a8';
+    expect(colors(draw(3))).not.toContain(NEON);
+    expect(colors(draw(4))).not.toContain(NEON);
+    expect(colors(draw(5))).toContain(NEON);
+    expect(colors(draw(5))).toContain(STAR);
+  });
+
+  it('地砖发光环 + 光晕只在 L5 出现（地面 ellipse 数 +2）', () => {
+    /* Step 6 实画「双环 ×2 描边 ellipse + 光晕 ×1 填充 ellipse」共 3 个地面 ellipse，
+       断言按其语义「至少多 2」（环 + 光晕），并确认 L3/L4 一个都不多。 */
+    expect(ellipses(draw(3)).length).toBe(ellipses(draw(4)).length);
+    expect(ellipses(draw(5)).length).toBeGreaterThanOrEqual(ellipses(draw(4)).length + 2);
+  });
+
+  it('L5 的五角星是 10 顶点一填充（starN 兜底 = 10）', () => {
+    const polys = draw(5).filter((c) => c.op === 'poly' && (c.pts?.length ?? 0) === 20) as never[];
+    expect(polys.length).toBeGreaterThanOrEqual(1);
+  });
+});

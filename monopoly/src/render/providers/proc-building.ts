@@ -133,6 +133,16 @@ const D = fb({
   flagW: 9, flagH: 6, flagWave: 1.4, flagTip: 0.72,
   /* ===== M18 D2 · L2 双层小铺的「雨棚」（building.*.l2 用；`canopy` 关 = 零绘制） ===== */
   canopy: false, cnOut: 0.16, cnV1: 0.62, cnRise: 6, cnShade: 1,
+
+  /* ===== M18 D2 · L4 四层商厦的顶部退台（宽/深为楼宽比例，高为楼高比例） ===== */
+  l4W: 0.6, l4D: 0.62, l4H: 0.3,
+  /* ===== M18 D2/D4 · L5 地标五星：塔楼尖顶 + 霓虹 + 光晕 + 地砖发光环 + 五星徽记 ===== */
+  spireW: 0.22, spireD: 0.24, spireH: 18, spireRise: 13,
+  neon: 'rgba(255,236,170,.9)', neonW: 1.6,
+  halo: 'rgba(255,255,255,.16)', haloAlpha: 0.22, haloFy: 1, haloRx: 1.35, haloRy: 0.95,
+  ring: 'rgba(255,255,255,.35)', ringFy: 1, ringRx: 1.2, ringRy: 0.92,
+  ringW: 2.4, ringIn: 0.72, ringInnerW: 0.5,
+  starFill: '#ffe9a8', starR: 6.5, starUp: 9, starN: 10, starInner: 0.42,
 });
 
 /* —— 取值器（params 优先，缺则落 L4 兜底；沿用既有闭包风格） —— */
@@ -162,6 +172,20 @@ function ownerTintOf(state: Record<string, unknown>): string | null {
   const owner = typeof state.owner === 'number' ? state.owner : null;
   const hit = owner === null ? undefined : colors[owner];
   return typeof hit === 'string' && hit !== '' ? hit : null;
+}
+
+/**
+ * M18 D4 · 五角星徽记：`n` 个顶点交替「外半径 r / 内半径 r × inner」连线填充。
+ * 顶点数 `n` 与内外比 `inner` 一律由 params 给（兜底 10 / 0.42），函数内不写裸视觉常数。
+ */
+function fiveStar(g: Graphics, cx: number, cy: number, r: number, n: number, inner: number, color: string): void {
+  const pts: Pt[] = [];
+  for (let i = 0; i < n; i++) {
+    const rad = i % 2 === 0 ? r : r * inner;
+    const a = -Math.PI / 2 + (i * Math.PI) / (n / 2);
+    pts.push([cx + Math.cos(a) * rad, cy + Math.sin(a) * rad]);
+  }
+  fill(g, pts, color);
 }
 
 /** 等距四角 + 抬升后的四角（各 preset 共用的一套基准点） */
@@ -494,6 +518,18 @@ export function market3(g: Graphics, ctx: ProcCtx): void {
   ], S('shadow'));
   g.ellipse(cx, cy + d * G('glowFy'), w * G('glowRx'), d * G('glowRy')).fill({ color: glowC });
 
+  /* ①c M18 D4 · L5 地标五星：地砖发光环（双环）+ 业主色光晕。
+     画在墙之前 ⇒ 恒在楼体之下、地砖之上（地砖是更早的另一元素，环要盖住它才看得见）。 */
+  if (levels >= 5) {
+    const glowRing = tint ?? S('ring');
+    g.ellipse(cx, cy + d * G('ringFy'), w * G('ringRx'), d * G('ringRy'))
+      .stroke({ color: glowRing, width: G('ringW') * s });
+    g.ellipse(cx, cy + d * G('ringFy'), w * G('ringRx') * G('ringIn'), d * G('ringRy') * G('ringIn'))
+      .stroke({ color: glowRing, width: G('ringInnerW') * s });
+    g.ellipse(cx, cy + d * G('haloFy'), w * G('haloRx'), d * G('haloRy'))
+      .fill({ color: tint ?? S('halo'), alpha: G('haloAlpha') });
+  }
+
   /* ①b P2 台阶铺装（同 shop） */
   const doorMid = lerp(L, F, (G('doorU1') + G('doorU2')) / 2);
   apronPave(g, ctx, p, doorMid[0] - w * G('apronDx'), doorMid[1] + d * G('apronFy'), w, d, roofC, wallL);
@@ -541,10 +577,12 @@ export function market3(g: Graphics, ctx: ProcCtx): void {
   /* ⑥b P2 轮廓阶梯（B 加法檐带；market3 无坡顶故不做变体/退台） */
   cornice(g, ctx, p, F, R, L, h, roofC, tint ?? S('ridge'));
 
-  /* ⑦ 顶部小阁楼：等距小体块，让大平顶不秃 */
-  const aw = w * G('l3AtticW');
-  const ad = d * G('l3AtticD');
-  const ah = G('l3AtticH') * s;
+  /* ⑦ 顶部体块（M18 D2 换代）：L3 是「小阁楼」（避免大平顶显秃），
+     **L4/L5 换成更宽更矮的「退台」**（l4W/l4D/l4H 按楼宽/楼高比例）——
+     这是 L3 → L4 肉眼可辨的体量跃迁，而非仅仅多一排窗。 */
+  const aw = w * (levels >= 4 ? G('l4W') : G('l3AtticW'));
+  const ad = d * (levels >= 4 ? G('l4D') : G('l3AtticD'));
+  const ah = levels >= 4 ? h * G('l4H') : G('l3AtticH') * s;
   const bF: Pt = [cx, cy - h + ad];
   const bR: Pt = [cx + aw, cy - h];
   const bB: Pt = [cx, cy - h - ad];
@@ -554,6 +592,28 @@ export function market3(g: Graphics, ctx: ProcCtx): void {
   fill(g, [up(bL, ah), up(bB, ah), up(bR, ah), up(bF, ah)], roofC);
   g.poly(ptsToPoly([up(bL, ah), up(bB, ah), up(bR, ah), up(bF, ah)]))
     .stroke({ color: tint ?? S('ridge'), width: G('ridgeW') * s });
+
+  /* ⑧ M18 D2/D4 · L5 塔楼尖顶 + 霓虹描边 + 五星徽记（在退台顶面之上再起一座塔） */
+  if (levels >= 5) {
+    const tw = w * G('spireW');
+    const td = d * G('spireD');
+    const th = G('spireH') * s;
+    const topY = cy - h - ah;
+    const spF: Pt = [cx, topY + td];
+    const spR: Pt = [cx + tw, topY];
+    const spB: Pt = [cx, topY - td];
+    const spL: Pt = [cx - tw, topY];
+    wallFace(g, spF, spR, th, wallR);
+    wallFace(g, spL, spF, th, wallL);
+    const apex: Pt = [cx, topY - th - G('spireRise') * s];
+    fill(g, [up(spL, th), up(spB, th), apex], roofC, G('roofFacetL'));
+    fill(g, [up(spB, th), up(spR, th), apex], roofC, G('roofFacetR'));
+    /* 霓虹描边：塔尖两条棱线（描边 → 走业主色优先） */
+    line(g, up(spL, th), apex, tint ?? S('neon'), G('neonW') * s);
+    line(g, apex, up(spR, th), tint ?? S('neon'), G('neonW') * s);
+    /* 五星徽记：塔身正面的五角星（描边同色系，走业主色优先） */
+    fiveStar(g, cx, topY - th - G('starUp') * s, G('starR') * s, G('starN'), G('starInner'), tint ?? S('starFill'));
+  }
 }
 
 /* ============ stall 坡顶摊位（L1）：木架 + 布篷 + 一盏暖灯 + 平摊台面 ============ */
