@@ -53,6 +53,9 @@ export const PANEL_D = fb({
   tilePadX: 18, tileDotR: 3, tileDotGap: 10,
   tileTitleDy: -26, tileTitleFs: 14, tileTitleFill: '#f5c451',
   tileSubDy: -12, tileSubFs: 11, tileSubFill: '#9fb3a8',
+  /* M19-D2 选目标预演条：深底金边 + 三行（标题 / 后果 / 受影响方，纵向居中） */
+  previewR: 8, previewFill: '#06120a', previewEdge: '#f5c451', previewEdgeW: 1.2,
+  previewLineDy: 12, previewFs: 12, previewTextFill: '#ffe9b0',
 });
 
 const G = (p: Record<string, unknown>, k: keyof typeof PANEL_D): number => num(p, k, PANEL_D[k] as number);
@@ -232,4 +235,23 @@ export const uiBadge: ProcPreset = (g, ctx) => {
     .stroke({ color: S(params, 'badgeEdge'), width: G(params, 'badgeEdgeW') });
   if (!text) return;
   text({ text: typeof state.text === 'string' ? state.text : '', x: cx, y: cy, size: G(params, 'badgeFs'), fill: S(params, 'badgeTxFill') });
+};
+
+/* —— M19-D2 选目标预演条：深底金边 + 三行文字（标题 / 后果 / 受影响方，纵向居中）——
+   文案由 UI 层经 `state.previewLines` 组装传入（preset 不含业务语义） —— */
+export const uiPreview: ProcPreset = (g, ctx) => {
+  const { cx, cy, box, params, state, s, text } = ctx;
+  const w = box.w * s;
+  const h = box.h * s;
+  g.roundRect(cx - w / 2, cy - h / 2, w, h, G(params, 'previewR'))
+    .fill({ color: S(params, 'previewFill') })
+    .stroke({ color: S(params, 'previewEdge'), width: G(params, 'previewEdgeW') });
+  if (!text) return;
+  const lines = Array.isArray(state.previewLines) ? (state.previewLines as string[]) : [];
+  const dy = G(params, 'previewLineDy');
+  const fs = G(params, 'previewFs');
+  const mid = (lines.length - 1) / 2;
+  for (let i = 0; i < lines.length; i++) {
+    text({ text: lines[i], x: cx, y: cy + (i - mid) * dy, size: fs, fill: S(params, 'previewTextFill') });
+  }
 };

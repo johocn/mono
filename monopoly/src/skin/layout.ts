@@ -104,12 +104,23 @@ export const BUBBLE_HOLD_MS = 1100;
 export const BUBBLE_MOVE_HOLD_MS = 820;
 
 /* —— M5 浮层（手牌 / 股票盘 / 抽卡翻牌 / 结算面板；元素一律 pass 4 + 定格台位） —— */
-/* 手牌行：5 槽横排，落在底坞（606）之上 */
+/* 手牌行：M19 起 6 槽横排（6×55 + 5×6 = 360 ≤ 390），落在底坞（606）之上 */
 export const PANEL_HAND_Y = 550;                 // 顶
-export const PANEL_SLOT_W = 68;
+export const PANEL_SLOT_W = 55;
 export const PANEL_SLOT_H = 52;
 export const PANEL_SLOT_GAP = 6;
-export const PANEL_SLOT_X0 = 13;                 // (390 − (5×68 + 4×6)) / 2
+export const PANEL_SLOT_X0 = 15;                 // (390 − (6×55 + 5×6)) / 2
+
+/* —— M19-D2 选目标：屏幕反查容差 + 预演条 + 取消键 ——
+   预演条占手牌行（10+272+6+96 = 384 ≤ 390），与手牌槽同中心线，二选一显示 */
+export const TILE_PICK_TOL = 30;
+export const PANEL_PREVIEW_X = 10;
+export const PANEL_PREVIEW_W = 272;
+export const PANEL_PREVIEW_H = PANEL_SLOT_H;
+export const PANEL_CANCEL_X = 288;
+export const PANEL_CANCEL_W = 96;
+export const PANEL_PREVIEW_LINE_DY = 12;
+export const PANEL_PREVIEW_FS = 12;
 
 /* 通用浮层面板：占用橱窗区域（play 模式下该区域为空），避免遮住棋盘与底坞。
    底板复用注册表里 370×300 的 `showcase.panel`（不新增 ID），故 W/H 与之一致 */

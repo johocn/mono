@@ -1,5 +1,6 @@
 import {
-  AUDIO_KEY_SIZE, BUBBLE_H, BUBBLE_W, HUD_BAR_W, PANEL_CLOSE_H, PANEL_CLOSE_W,
+  AUDIO_KEY_SIZE, BUBBLE_H, BUBBLE_W, HUD_BAR_W, PANEL_CANCEL_W, PANEL_CLOSE_H, PANEL_CLOSE_W,
+  PANEL_PREVIEW_H, PANEL_PREVIEW_W, PANEL_SLOT_H, PANEL_SLOT_W,
   PANEL_TALL_H, PANEL_TALL_W, TILE_CARD_H, TILE_CARD_W,
 } from './layout';
 import type { RegistryEntry } from './types';
@@ -204,7 +205,7 @@ reg['bg.streetLamp'] = showcaseEntry('bg.streetLamp', { w: 40, d: 1, h: 70 });
 reg['bg.lanternString'] = showcaseEntry('bg.lanternString', { w: 390, d: 1, h: 30 });
 
 // —— M5 浮层（手牌 / 卡面 / 行情 / 结算 / 角标）：全部 ground 挂载 + fixed 定格台位 ——
-reg['ui.handSlot'] = showcaseEntry('ui.handSlot', { w: 68, d: 1, h: 52 });
+reg['ui.handSlot'] = showcaseEntry('ui.handSlot', { w: PANEL_SLOT_W, d: 1, h: PANEL_SLOT_H });
 reg['ui.card'] = showcaseEntry('ui.card', { w: 66, d: 1, h: 88 });
 reg['ui.cardBack'] = showcaseEntry('ui.cardBack', { w: 66, d: 1, h: 88 });
 reg['ui.stockRow'] = showcaseEntry('ui.stockRow', { w: 342, d: 1, h: 34 });
@@ -221,6 +222,10 @@ reg['ui.bubble'] = showcaseEntry('ui.bubble', { w: BUBBLE_W, d: 1, h: BUBBLE_H }
 /* 落地地块卡（spec §7.3）：仅 `settled` + 无浮层 + 抽屉收起时滑入（非常驻）；
    台位由 Hud.ts 给 TILE_CARD_*，卡上两枚次要键与命中区同源 */
 reg['ui.tileCard'] = showcaseEntry('ui.tileCard', { w: TILE_CARD_W, d: 1, h: TILE_CARD_H });
+/* M19-D2 选目标：底部预演条 + 取消键（占手牌行，与手牌槽二选一）+ 棋盘候选格金框 */
+reg['ui.preview'] = showcaseEntry('ui.preview', { w: PANEL_PREVIEW_W, d: 1, h: PANEL_PREVIEW_H });
+reg['ui.cancel'] = showcaseEntry('ui.cancel', { w: PANEL_CANCEL_W, d: 1, h: PANEL_SLOT_H });
+reg['board.tile.candidate'] = showcaseEntry('board.tile.candidate', { w: TILE.w, d: TILE.d, h: TILE.h });
 
 export const REGISTRY: Record<string, RegistryEntry> = reg;
 

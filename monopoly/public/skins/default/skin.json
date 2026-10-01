@@ -136,6 +136,9 @@
     "showcase.mini": { "kind": "proc", "preset": "showcaseMini", "params": { "gy": 0.62, "radius": 12, "fill": "#101a17", "skyline": "#16221e", "ground": "#1b2622", "slab": "#2a3830", "capTx": "#e8e4d8" } },
 
     "ui.handSlot": { "kind": "proc", "preset": "uiHandSlot", "params": {} },
+    "ui.preview": { "kind": "proc", "preset": "uiPreview", "params": {} },
+    "ui.cancel": { "kind": "proc", "preset": "uiButton", "params": { "btnFs": 12, "btnR": 7 } },
+    "board.tile.candidate": { "kind": "proc", "preset": "tileEdge", "params": { "inset": 0.86, "width": 2, "edge": "#f5c451" } },
     "ui.card": { "kind": "proc", "preset": "uiCard", "params": {} },
     "ui.cardBack": { "kind": "proc", "preset": "uiCardBack", "params": {} },
     "ui.stockRow": { "kind": "proc", "preset": "uiStockRow", "params": {} },

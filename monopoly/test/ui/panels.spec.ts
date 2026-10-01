@@ -26,11 +26,11 @@ const stepTo = (g: Game, index: number): void => {
   g.settleCurrent();
 };
 
-describe('panels：手牌 5 槽（纯函数）', () => {
-  it('恒 5 槽、顺序 = ITEM_CARDS.kind、开局全持有', () => {
+describe('panels：手牌 6 槽（纯函数）', () => {
+  it('恒 6 槽、顺序 = ITEM_CARDS.kind、开局全持有', () => {
     const g = createGame({ dice: fixed(1, 1) });
     const slots = handSlots(g.state);
-    expect(slots).toHaveLength(5);
+    expect(slots).toHaveLength(6);
     expect(slots.map((s) => s.kind)).toEqual(ITEM_CARDS.map((c) => c.kind));
     expect(slots.map((s) => s.name)).toEqual(ITEM_CARDS.map((c) => c.name));
     expect(slots.every((s) => s.held)).toBe(true);
@@ -56,7 +56,7 @@ describe('panels：手牌 5 槽（纯函数）', () => {
     const bomb = handSlots(g.state).find((s) => s.kind === 'bomb')!;
     expect(bomb.held).toBe(false);
     expect(bomb.enabled).toBe(false);
-    expect(handSlots(g.state)).toHaveLength(5);
+    expect(handSlots(g.state)).toHaveLength(6);
   });
 });
 
@@ -116,14 +116,14 @@ describe('panels：结算面板', () => {
 });
 
 describe('panels：spec 组装（pass 4 / fixed / 注册表命中）', () => {
-  it('全部 pass 4 + fixed，ID 全部命中注册表，r 递增；手牌展开时恒 5 槽、收起时 0 槽', () => {
+  it('全部 pass 4 + fixed，ID 全部命中注册表，r 递增；手牌展开时恒 6 槽、收起时 0 槽', () => {
     const g = createGame({ dice: fixed(1, 1) });
     const specs = panelSpecs(g.state, true);
     expect(specs.every((s) => s.pass === 4)).toBe(true);
     expect(specs.every((s) => Boolean(s.fixed))).toBe(true);
     expect(specs.every((s) => s.c === 0)).toBe(true);
     expect(specs.every((s) => Boolean(REGISTRY[s.id]))).toBe(true);
-    expect(specs.filter((s) => s.id === 'ui.handSlot')).toHaveLength(5);
+    expect(specs.filter((s) => s.id === 'ui.handSlot')).toHaveLength(6);
     const rs = specs.map((s) => s.r);
     expect([...rs].sort((a, b) => a - b)).toEqual(rs);
     expect(overlayOf(g.state)).toBeNull();
@@ -177,19 +177,34 @@ describe('panels：DOM 命中层矩形', () => {
     expect(panelHitAreas(g.state, false)).toEqual([]);
   });
 
-  it('抽屉展开：5 个手牌键（pardon 不可点、bomb 带目标格号），全部落在舞台内', () => {
+  it('抽屉展开：6 个手牌键（无 target，动作序列含 demolish），全部落在舞台内', () => {
     const g = createGame({ dice: fixed(1, 1) });
     g.state.estates[3] = { index: 3, owner: 2, level: 1, processing: false };
     const hits = panelHitAreas(g.state, true);
     expect(hits.map((h) => h.action)).toEqual([
-      'card:bomb', 'card:barrier', 'card:pardon', 'card:teleport', 'card:doubleRent',
+      'card:bomb', 'card:barrier', 'card:pardon', 'card:teleport', 'card:doubleRent', 'card:demolish',
     ]);
-    expect(hits[0].target).toBe(3);
-    expect(hits[2].enabled).toBe(false);
+    /* M19：手牌键不再由 UI 自动挑目标（改由「选目标态」棋盘点选） */
+    for (const h of hits) expect(h.target).toBeUndefined();
+    expect(hits[2].enabled).toBe(false);      // pardon 被动卡
     for (const h of hits) {
       expect(h.x).toBeGreaterThanOrEqual(0);
       expect(h.x + h.w).toBeLessThanOrEqual(390);
     }
+  });
+
+  it('选目标态：命中层只出「取消」键；预演条三行 + 无手牌槽', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    const cancel = panelHitAreas(g.state, true, { kind: 'demolish', hovered: null });
+    expect(cancel.map((h) => h.action)).toEqual(['card:cancel']);
+    expect(cancel[0].target).toBeUndefined();
+
+    const specs = panelSpecs(g.state, true, { kind: 'demolish', hovered: 1 });
+    expect(specs.filter((s) => s.id === 'ui.handSlot')).toHaveLength(0);
+    const preview = specs.find((s) => s.id === 'ui.preview')!;
+    expect(preview).toBeDefined();
+    expect(preview.state?.previewLines).toHaveLength(3);
+    expect(specs.find((s) => s.id === 'ui.cancel')).toBeDefined();
   });
 
   it('抽卡浮层：只出关闭键（手牌行被面板盖住，不再可点）', () => {
