@@ -10,7 +10,7 @@ import { atmosphereSpecs } from './render/AtmosphereView';
 import { PAWN_COUNT, pawnSpecs, type PawnMood, type PawnState } from './render/PieceView';
 import { bubbleOfStep, bubbleSpecs, type BubbleContent } from './render/BubbleView';
 import { pickLineForSeat, QUOTE_MAX_CHARS } from './data/lines';
-import { buildingSpecs, slotLevelsOf, streetPropSpecs } from './render/BuildingView';
+import { buildingSpecs, slotLevelsOf, startLevelsOf, streetPropSpecs } from './render/BuildingView';
 import { showcaseSpecs } from './render/ShowcaseView';
 import { drawLabels } from './render/LabelView';
 import { ipos } from './render/iso';
@@ -460,23 +460,33 @@ export async function boot(): Promise<void> {
     g.state.phase === 'settled' && overlayOf(g.state) === null
     && !handOpenEff() && !(seats[g.state.current] ?? null);
 
-  /** play：地砖归属色 / 当前格 / 棋子位置跟游戏状态联动，再叠 HUD */
-  const ownedOf = (i: number): number | null => game?.state.estates[i]?.owner ?? ownerOf(i);
+  /**
+   * 地砖归属色 / 楼体业主色 / 楼顶名牌名色 **共用同一个归属口**（M18 D1/D3）。
+   * play 下**只认真实地产**：未售商家格与公共设施格 → `null`（中性色），
+   * 开局空盘一眼可辨、买下后归属才出现；不再回落到 v5 演示归属 `DEMO_OWNER`。
+   * 非 play 的 v5 演示样张（`?show=b|c` / `?demo=1`）仍走 `DEMO_OWNER`，保持逐像素回归。
+   */
+  const ownedOf = (i: number): number | null =>
+    game ? (game.state.estates[i]?.owner ?? null) : ownerOf(i);
   /** 顶部状态条 + 左下战报的同一份文案：「谁 · 做了什么」（无气泡时为 null，两处各自回退默认显示） */
   const calloutOf = (g: Game | null): string | null =>
     g && bubble ? `${PLAYER_NAME[currentPlayer(g.state).id - 1]} ${bubble.title} · ${bubble.amount}` : null;
   /**
-   * 棋盘楼体层级（**演示层级 ∪ 实时地产层级**，取大值）：
-   *   · 未售地块 → 演示层级 `slotLevelsOf()`，首屏与 v5 样张逐像素一致（零回归）；
-   *   · 已售地块 → 取「演示层级」与「地产层级」的大者：买下**不会**把装饰高楼缩回
-   *     L1 摊位（视觉降级），而升级 L4/L5 会让楼体逐级长高（此前楼体恒走演示层级，
-   *     5 级地产在棋盘上看不见 —— 见 `docs/manual-mono.md` M4 结论的「有意偏差」）。
-   * 同一份表同时供 `buildingSpecs`（楼体/店招/挂件层级）、`drawLabels`（楼顶名牌）与
-   * `instantiateDeps.slotLevels`（贴墙挂件的抬升高度 `hostHeightOf`）——三处必须同源，
-   * 否则长高后的楼会把灯笼/招牌落在旧高度上。
+   * 棋盘楼体层级（**唯一一份**，同时供 `buildingSpecs` 的楼体/店招/挂件层级、
+   * `drawLabels` 的楼顶名牌、`instantiateDeps.slotLevels` 的贴墙挂件抬升高度
+   * `hostHeightOf` —— 三处必须同源，否则长高后的楼会把灯笼/招牌落在旧高度上）。
+   *
+   * 起算表（M18 D1）：
+   *   · **play**：`startLevelsOf()` —— 开局只有 4 栋公共设施楼，未售商家格**无楼**，
+   *     买地后从 L1 长起（不再回落 v5 演示层级，那正是「开局满盘楼」的来源）；
+   *   · **非 play（演示样张）**：仍用 v5 演示层级 `slotLevels`，首屏与样张逐像素一致（零回归）。
+   *
+   * 已售地块取「起算层级」与「地产层级」的大者：公共设施楼不会被地产层级拉低，
+   * 而升级 L4/L5 会让楼体逐级长高（此前楼体恒走演示层级，5 级地产在棋盘上看不见
+   * —— 见 `docs/manual-mono.md` M4 结论的「有意偏差」，M16 已关闭该偏差）。
    */
   const liveLevels = (): Record<number, BuildLevel> => {
-    const out: Record<number, BuildLevel> = { ...slotLevels };
+    const out: Record<number, BuildLevel> = game ? startLevelsOf() : { ...slotLevels };
     const es = game?.state.estates;
     if (!es) return out;
     for (const key of Object.keys(es)) {
