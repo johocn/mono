@@ -9,7 +9,8 @@ describe('cards 数据（spec §5.3）', () => {
       ['bomb', 'barrier', 'pardon', 'teleport', 'doubleRent', 'demolish'],
     );
     expect(ITEM_CARDS).toHaveLength(6);
-    expect(HAND_SIZE).toBe(6);
+    /* 槽数由种类数派生（M20.3）：M20.3-B 追加两种卡后自动变 8，无需改版式 */
+    expect(HAND_SIZE).toBe(ITEM_CARDS.length);
     expect(DECK_SIZE).toBe(20);
     expect(FATE_DECK).toHaveLength(20);
     expect(CHANCE_DECK).toHaveLength(20);
@@ -20,6 +21,16 @@ describe('cards 数据（spec §5.3）', () => {
     expect([targetOf('bomb'), targetOf('barrier'), targetOf('teleport'), targetOf('demolish')])
       .toEqual(['foe', 'tile', 'tile', 'foe']);
     expect([targetOf('pardon'), targetOf('doubleRent')]).toEqual(['none', 'self']);
+  });
+
+  it('常用度 priority（M20.3 spec §4.1）：取值固定且两两不等（全序、零随机）', () => {
+    const priorityOf = (k: ItemCardKind): number => ITEM_CARDS.find((c) => c.kind === k)!.priority;
+    expect([
+      priorityOf('pardon'), priorityOf('doubleRent'), priorityOf('bomb'),
+      priorityOf('barrier'), priorityOf('teleport'), priorityOf('demolish'),
+    ]).toEqual([10, 20, 30, 40, 50, 60]);
+    const all = ITEM_CARDS.map((c) => c.priority);
+    expect(new Set(all).size).toBe(all.length);
   });
 
   it('命运 20 张以负向/中性为主；机会 20 张全为正向', () => {

@@ -16,19 +16,28 @@ export interface ItemCardDef {
   name: string;
   desc: string;
   target: 'none' | 'tile' | 'foe' | 'self';
+  /**
+   * 常用度排序键（spec §4.1，M20.3 新增）：数值小 = 更常用，手牌行按它升序。
+   * 口径「被动保命 > 即时收益 > 位置干预 > 破坏 > 长线」；
+   * `ITEM_CARDS` 数组下标仍是第三键兜底，保证全序、零随机。
+   */
+  priority: number;
 }
 
 export const ITEM_CARDS: ItemCardDef[] = [
-  { kind: 'bomb', name: '炸弹', desc: '拆对手目标地块 1 级（L1 炸回无主）', target: 'foe' },
-  { kind: 'barrier', name: '路障', desc: '在前方 1–6 格内设障，拦停下一位经过者', target: 'tile' },
-  { kind: 'pardon', name: '免罚', desc: '自动抵消一次应付租金或一次入狱', target: 'none' },
-  { kind: 'teleport', name: '迁点', desc: '本回合以迁点取代移动，落到任意指定格', target: 'tile' },
-  { kind: 'doubleRent', name: '租金翻倍', desc: '本人下一次收租翻倍，收完消耗', target: 'self' },
-  { kind: 'demolish', name: '拆迁令', desc: '一次夷平对手目标地块全部楼体（归无主）', target: 'foe' },
+  { kind: 'bomb', name: '炸弹', desc: '拆对手目标地块 1 级（L1 炸回无主）', target: 'foe', priority: 30 },
+  { kind: 'barrier', name: '路障', desc: '在前方 1–6 格内设障，拦停下一位经过者', target: 'tile', priority: 40 },
+  { kind: 'pardon', name: '免罚', desc: '自动抵消一次应付租金或一次入狱', target: 'none', priority: 10 },
+  { kind: 'teleport', name: '迁点', desc: '本回合以迁点取代移动，落到任意指定格', target: 'tile', priority: 50 },
+  { kind: 'doubleRent', name: '租金翻倍', desc: '本人下一次收租翻倍，收完消耗', target: 'self', priority: 20 },
+  { kind: 'demolish', name: '拆迁令', desc: '一次夷平对手目标地块全部楼体（归无主）', target: 'foe', priority: 60 },
 ];
 
-/** 手牌槽位（6 种道具各持 1 张，去重） */
-export const HAND_SIZE = 6;
+/**
+ * 手牌槽位（每种道具至多持 1 张，去重）——**由道具种类数派生**：
+ * M20.3-B 往 `ITEM_CARDS` 追加 `bullBear` / `dividend` 后自动变 8 槽，手牌行与商店目录零改版。
+ */
+export const HAND_SIZE = ITEM_CARDS.length;
 
 /** 命运 / 机会牌堆张数（与棋盘 5+5 格解耦） */
 export const DECK_SIZE = 20;
