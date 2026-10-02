@@ -6,7 +6,7 @@
 
 **Architecture:** 新增纯函数模块 `coupon-channel.ts` 承载全部渠道判定与场景过滤逻辑（无 IO、可单测）；实体新增 `distributionChannels` / `salePrice` 两列并以幂等迁移补列；四处既有查询改为「SQL 粗筛（保留历史券可行集）+ 纯函数精筛」，使 `null` 渠道集合的历史券走老字段推导、显式配置的券走显式集合。
 
-**Tech Stack:** TypeScript、TypeORM、NestJS、Vendure v2 插件体系、jest、PostgreSQL（生产）/ SQLite（本地开发）
+**Tech Stack:** TypeScript、TypeORM、NestJS、Vendure v2 插件体系、**vitest**（该包不使用 jest）、PostgreSQL（生产）/ SQLite（本地开发）
 
 **仓库位置：** 本计划所有路径相对 `d:\zhao\vendure`（该目录是独立 git 仓库）。所有 `git` 命令的 cwd 均为 `d:\zhao\vendure`。
 
@@ -39,11 +39,13 @@
 
 - [ ] **Step 1: 先确认测试运行器可用**
 
+> **已核实（执行后修正）**：本包**不使用 jest**（`npx vitest --config vitest.config.mts --run` 会拉到裸 jest 且无法解析 TS，报 `Unexpected token`）。真实运行器是 **vitest**，且未开启 `globals`，所有既有 spec 均从 `vitest` 显式导入 `describe / expect / it`。以下命令为本计划的实际口径。
+
 Run（cwd `d:\zhao\vendure\packages\coupon-plugin`）:
 ```
-npx jest src/in-store-bill.spec.ts
+npx vitest --config vitest.config.mts --run src/in-store-bill.spec.ts
 ```
-Expected: 该既有单测全部 PASS（说明 jest 可在包内直接运行）。若报找不到配置，改用 cwd `d:\zhao\vendure` 执行 `npx jest packages/coupon-plugin/src/in-store-bill.spec.ts`，并在此后所有 jest 命令沿用同一 cwd。
+Expected: 该既有单测全部 PASS（基线为 9 passed / 0 failed）。
 
 - [ ] **Step 2: 在 types.ts 末尾追加渠道类型**
 
@@ -67,6 +69,8 @@ export type CouponChannel = 'CENTRE' | 'SALE' | 'POINTS' | 'CODE' | 'PRODUCT' | 
 创建 `packages/coupon-plugin/src/coupon-channel.spec.ts`：
 
 ```ts
+import { describe, expect, it } from 'vitest';
+
 import {
     filterTemplatesByChannelAndScene,
     hasChannel,
@@ -192,7 +196,7 @@ describe('filterTemplatesByChannelAndScene', () => {
 
 Run（cwd `d:\zhao\vendure\packages\coupon-plugin`）:
 ```
-npx jest src/coupon-channel.spec.ts
+npx vitest --config vitest.config.mts --run src/coupon-channel.spec.ts
 ```
 Expected: FAIL —— `Cannot find module './coupon-channel'`。
 
@@ -297,7 +301,7 @@ export function filterTemplatesByChannelAndScene<T extends CouponChannelFields>(
 
 Run（cwd `d:\zhao\vendure\packages\coupon-plugin`）:
 ```
-npx jest src/coupon-channel.spec.ts
+npx vitest --config vitest.config.mts --run src/coupon-channel.spec.ts
 ```
 Expected: PASS，全部用例通过（0 failed）。
 
@@ -445,7 +449,7 @@ import { AddCouponDistributionChannelsMigration } from './migrations/add-coupon-
 
 Run（cwd `d:\zhao\vendure\packages\coupon-plugin`）:
 ```
-npx jest
+npx vitest --config vitest.config.mts --run
 ```
 Expected: PASS —— 本包全部既有单测通过，无新增失败。
 
@@ -565,7 +569,7 @@ import { filterTemplatesByChannelAndScene } from './coupon-channel';
 
 Run（cwd `d:\zhao\vendure\packages\coupon-plugin`）:
 ```
-npx jest
+npx vitest --config vitest.config.mts --run
 ```
 Expected: PASS —— 含 `coupon-channel.spec.ts` 与全部既有单测，0 failed。
 
@@ -701,7 +705,7 @@ import { filterTemplatesByChannelAndScene, hasChannel, matchesScene } from './co
 
 Run（cwd `d:\zhao\vendure\packages\coupon-plugin`）:
 ```
-npx jest
+npx vitest --config vitest.config.mts --run
 ```
 Expected: PASS —— 0 failed。
 
@@ -737,7 +741,7 @@ git commit -m "优惠券分发渠道：优惠码兑换与详情页绑券按渠�
 
 Run（cwd `d:\zhao\vendure\packages\coupon-plugin`）:
 ```
-npx jest
+npx vitest --config vitest.config.mts --run
 ```
 Expected: PASS，0 failed。
 
