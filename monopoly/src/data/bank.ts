@@ -5,6 +5,8 @@
  * 裸值只在此处定义，core / ui / render 一律引用本文件，禁止各处硬编码。
  */
 
+/** 鹿乡银行所在地块序号（办理信用贷款 / 抵押贷款须站此格；spec §3.2） */
+export const BANK_TILE_INDEX = 9;
 /** 存款利率 +3%/轮（轮末复利，spec §3.3） */
 export const DEPOSIT_RATE = 0.03;
 /** 信用贷款利率 6%/轮（轮末复利） */

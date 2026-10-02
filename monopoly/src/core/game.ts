@@ -26,6 +26,10 @@ import {
   BANK_CAP, BANK_RATE, HOSPITAL_TURNS, JAIL_TURNS, LOTTERY_STAKE, TAX_CAP, TAX_RATE,
   nextJail, rollBonus, rollLottery, specialAt, type BonusReward,
 } from './special';
+import { BANK_TILE_INDEX, LOAN_RATE, LOAN_TERM, MORTGAGE_RATE, MORTGAGE_TERM } from '../data/bank';
+import {
+  loanLimitOf, mortgageLimitOf, type DebtBook, type MortgageBook,
+} from './bank';
 import { abilityOfPlayer, type AbilityDef } from '../data/abilities';
 import { personaParams, type AiParams, type Persona, type Seat } from '../data/ai';
 import { aiBidFor, lotOf, resolveLot, type AuctionBid, type AuctionLot, type AuctionTrigger } from './auction';
@@ -40,6 +44,13 @@ export interface Player {
   pos: number;
   cash: number;
   bankrupt: boolean;
+  /* —— M20.2 信贷（spec §3.1）—— */
+  /** 存款（轮末 +3% 复利；欠款清算时优先自动取出，但不免死） */
+  deposit: number;
+  /** 信用贷款（同时至多 1 笔；null = 无） */
+  loan: DebtBook | null;
+  /** 抵押贷款（可多笔，按 `index` 升序） */
+  mortgages: MortgageBook[];
 }
 
 /** 最近一次抽卡（翻牌动画消费）：`deck` + 卡面 id + 标题/文案（取自 `cards.ts` 数据） */
@@ -211,12 +222,32 @@ type HospitalSettle = Extract<SettleResult, { kind: 'hospital' }>;
 
 /** 玩家动作在错误阶段调用（按钮边界），返回失败原因而不抛错 */
 export type GameBuyOutcome = BuyOutcome | { ok: false; reason: 'bad-phase' };
-export type GameUpgradeOutcome = UpgradeOutcome | { ok: false; reason: 'bad-phase' };
+export type GameUpgradeOutcome = UpgradeOutcome | { ok: false; reason: 'bad-phase' | 'mortgaged' };
 
 /** 自由出售结果（spec §3.5） */
 export type SellOutcome =
   | { ok: true; index: number; price: number; cash: number }
-  | { ok: false; reason: 'no-estate' | 'not-owner' };
+  | { ok: false; reason: 'no-estate' | 'not-owner' | 'mortgaged' };
+
+/** 银行信贷操作失败原因（M20.2，spec §3.2 / §3.4） */
+export type BankFail =
+  | 'bad-amount'          // 金额非正整数
+  | 'not-enough-cash'     // 现金不足
+  | 'not-enough-deposit'  // 存款不足
+  | 'not-at-bank'         // 未站在 9 号银行格
+  | 'has-loan'            // 已有未结清信用贷款
+  | 'no-limit'            // 额度为 0
+  | 'no-estate'           // 地块不存在
+  | 'not-owner'           // 非自有地块
+  | 'mortgaged'           // 地块已抵押
+  | 'processing'          // 地块施工中
+  | 'no-debt'             // 无该笔债务
+  | 'no-mortgage';        // 该地块未抵押
+
+/** 银行信贷操作结果（M20.2） */
+export type BankOutcome =
+  | { ok: true; amount: number }
+  | { ok: false; reason: BankFail };
 
 /** 拍卖出价结果（spec §3.4） */
 export type BidOutcome =
@@ -253,6 +284,19 @@ export interface Game {
   bidAuction(amount: number): BidOutcome;
   /** 把当前所有待出价的真人一次性按 AI 同源策略补全并收尾（`sim()` / e2e / 取证用） */
   autoResolveAuction(): void;
+  /* —— M20.2 银行信贷（spec §3.2）—— */
+  /** 存款：现金 → 存款（amount > 0 且现金足） */
+  deposit(amount: number): BankOutcome;
+  /** 取款：存款 → 现金（amount > 0 且存款足） */
+  withdraw(amount: number): BankOutcome;
+  /** 信用贷款：须站 9 号格 + 无未结清贷款 + 额度 > 0；额度一次性入现金 */
+  takeLoan(): BankOutcome;
+  /** 还款：不传 amount 则全额还清可用现金；本金归零即结清 */
+  repayLoan(amount?: number): BankOutcome;
+  /** 抵押贷款：须站 9 号格 + 自有 + 未抵押 + 未施工；借款额 = 变卖价 × 80% 入现金 */
+  takeMortgage(index: number): BankOutcome;
+  /** 赎回抵押：付清该笔本金，解锁地块 */
+  redeemMortgage(index: number): BankOutcome;
   /** 监狱禁行时唯一的 idle 推进 */
   skipTurn(): { skipped: true; remaining: number };
   /** 关闭浮层（只清 lastEvent / lastDraw） */
@@ -299,6 +343,9 @@ export function createGame(opts: GameOptions = {}): Game {
       pos: 0,
       cash: START_CASH,
       bankrupt: false,
+      deposit: 0,
+      loan: null,
+      mortgages: [],
     })),
     current: 0,
     round: 1,
@@ -912,6 +959,7 @@ export function createGame(opts: GameOptions = {}): Game {
   const upgradeCurrent = (): GameUpgradeOutcome => {
     if (state.phase !== 'settled') return { ok: false, reason: 'bad-phase' };
     const p = currentPlayer(state);
+    if (creditLocked(state, p.pos)) return { ok: false, reason: 'mortgaged' };
     const out = upgrade(state.estates, p.pos, p.id, p.cash);
     if (out.ok) p.cash = out.cash;
     return out;
@@ -986,11 +1034,90 @@ export function createGame(opts: GameOptions = {}): Game {
     const e = state.estates[index];
     if (!e) return { ok: false, reason: 'no-estate' };
     if (e.owner !== p.id) return { ok: false, reason: 'not-owner' };
+    if (creditLocked(state, index)) return { ok: false, reason: 'mortgaged' };
     const price = sellAt(state.estates, index);
     releaseEstate(state.estates, index);
     p.cash += price;
     state.lastEvent = { kind: 'sell', index, price };
     return { ok: true, index, price, cash: p.cash };
+  };
+
+  /* —— M20.2 银行信贷六 API（spec §3.2 / §3.4）—— */
+
+  /** 存款：现金 → 存款 */
+  const deposit = (amount: number): BankOutcome => {
+    const p = currentPlayer(state);
+    if (!Number.isInteger(amount) || amount <= 0) return { ok: false, reason: 'bad-amount' };
+    if (p.cash < amount) return { ok: false, reason: 'not-enough-cash' };
+    p.cash -= amount;
+    p.deposit += amount;
+    return { ok: true, amount };
+  };
+
+  /** 取款：存款 → 现金 */
+  const withdraw = (amount: number): BankOutcome => {
+    const p = currentPlayer(state);
+    if (!Number.isInteger(amount) || amount <= 0) return { ok: false, reason: 'bad-amount' };
+    if (p.deposit < amount) return { ok: false, reason: 'not-enough-deposit' };
+    p.deposit -= amount;
+    p.cash += amount;
+    return { ok: true, amount };
+  };
+
+  /** 信用贷款：须站 9 号格 + 无未结清贷款 + 额度 > 0；首轮免息（spec §3.7） */
+  const takeLoan = (): BankOutcome => {
+    const p = currentPlayer(state);
+    if (p.pos !== BANK_TILE_INDEX) return { ok: false, reason: 'not-at-bank' };
+    if (p.loan) return { ok: false, reason: 'has-loan' };
+    const limit = loanLimitOf(netWorth(state, p));
+    if (limit <= 0) return { ok: false, reason: 'no-limit' };
+    p.cash += limit;
+    p.loan = { principal: limit, rate: LOAN_RATE, due: state.round + LOAN_TERM, overdue: 0, freeFirstRound: true };
+    return { ok: true, amount: limit };
+  };
+
+  /** 还款：不传 amount → 用可用现金全额还；本金归零即结清 */
+  const repayLoan = (amount?: number): BankOutcome => {
+    const p = currentPlayer(state);
+    const l = p.loan;
+    if (!l) return { ok: false, reason: 'no-debt' };
+    const amt = amount === undefined ? Math.min(p.cash, l.principal) : amount;
+    if (!Number.isInteger(amt) || amt <= 0) return { ok: false, reason: 'bad-amount' };
+    const pay = Math.min(amt, p.cash, l.principal);
+    if (pay <= 0) return { ok: false, reason: 'not-enough-cash' };
+    p.cash -= pay;
+    l.principal -= pay;
+    if (l.principal <= 0) p.loan = null;
+    return { ok: true, amount: pay };
+  };
+
+  /** 抵押贷款：须站 9 号格 + 自有 + 未抵押 + 未施工；借款额 = 变卖价 × 80% */
+  const takeMortgage = (index: number): BankOutcome => {
+    const p = currentPlayer(state);
+    if (p.pos !== BANK_TILE_INDEX) return { ok: false, reason: 'not-at-bank' };
+    const e = state.estates[index];
+    if (!e) return { ok: false, reason: 'no-estate' };
+    if (e.owner !== p.id) return { ok: false, reason: 'not-owner' };
+    if (e.processing) return { ok: false, reason: 'processing' };
+    if (creditLocked(state, index)) return { ok: false, reason: 'mortgaged' };
+    const amount = mortgageLimitOf(state.estates, index);
+    if (amount <= 0) return { ok: false, reason: 'no-limit' };
+    p.cash += amount;
+    p.mortgages.push({ principal: amount, rate: MORTGAGE_RATE, due: state.round + MORTGAGE_TERM, overdue: 0, index });
+    p.mortgages.sort((a, b) => a.index - b.index);
+    return { ok: true, amount };
+  };
+
+  /** 赎回抵押：付清该笔本金，解锁地块 */
+  const redeemMortgage = (index: number): BankOutcome => {
+    const p = currentPlayer(state);
+    const k = p.mortgages.findIndex((m) => m.index === index);
+    if (k < 0) return { ok: false, reason: 'no-mortgage' };
+    const cost = p.mortgages[k].principal;
+    if (p.cash < cost) return { ok: false, reason: 'not-enough-cash' };
+    p.cash -= cost;
+    p.mortgages.splice(k, 1);
+    return { ok: true, amount: cost };
   };
 
   /** 拍卖出价：给 `pending` 队首；收齐即落槌并继续（可能新开一块继续挂起） */
@@ -1077,6 +1204,7 @@ export function createGame(opts: GameOptions = {}): Game {
   return {
     state, rollDice, moveCurrent, settleCurrent, buyCurrent, upgradeCurrent, endTurn,
     useCard, trade, skipTurn, clearEvent, sellEstate, bidAuction, autoResolveAuction,
+    deposit, withdraw, takeLoan, repayLoan, takeMortgage, redeemMortgage,
   };
 }
 
@@ -1093,6 +1221,11 @@ export function playerById(state: GameState, id: number): Player | null {
 /** 未破产玩家数（胜负判定用） */
 export function activeCount(state: GameState): number {
   return state.players.filter((p) => !p.bankrupt).length;
+}
+
+/** 该地块是否被任一玩家的抵押贷款锁定（抵押期间锁出售 / 锁升级，仍可收租；spec §3.4） */
+export function creditLocked(state: GameState, index: number): boolean {
+  return state.players.some((p) => p.mortgages.some((m) => m.index === index));
 }
 
 /** 净资产 = 现金 + 地产账面投入 + 股票市值（胜负排名口径，与变卖价区分） */
