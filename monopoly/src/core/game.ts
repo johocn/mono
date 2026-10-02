@@ -7,7 +7,7 @@ import {
   CHANCE_DECK, FATE_DECK, FREE_UPGRADE_REFUND, ITEM_CARDS, PARDON_REFUND,
   type ChanceCardDef, type FateCardDef, type ItemCardKind,
 } from '../data/cards';
-import { STOCK_TILE_INDEX, STOCKS } from '../data/stocks';
+import { LEVERAGES, LIQUIDATION_RATIO, MARGIN_RATE, STOCK_TILE_INDEX, STOCKS } from '../data/stocks';
 import { advance, type Advance } from './board-path';
 import {
   barrierAt, bombDown, clearBarrier, createDeck, demolishDown, grant, has, placeBarrier,
@@ -20,7 +20,7 @@ import {
 } from './estate';
 import {
   buyShares, createMarket, marketValue, sellShares,
-  type Market, type Portfolio, type Quotes, type TradeOutcome as CoreTradeOutcome,
+  type Market, type Portfolio, type Quotes, type StockForce, type TradeOutcome as CoreTradeOutcome,
 } from './stocks';
 import { priceOf, resaleOf } from './item-shop';
 import {
@@ -41,6 +41,14 @@ import { aiBidFor, lotOf, resolveLot, type AuctionBid, type AuctionLot, type Auc
 /** 回合阶段机（spec §5.1）：idle → rolled → moved → settled → (endTurn) → idle */
 export type Phase = 'idle' | 'rolled' | 'moved' | 'settled';
 
+/** M20.3-B 保证金借款（null = 无负债）。抵押物 = 该玩家**整个股票账户**（B-D5） */
+export interface MarginBook {
+  /** 借入本金（轮末按 `MARGIN_RATE` 复利） */
+  principal: number;
+  /** 每轮利率 */
+  rate: number;
+}
+
 export interface Player {
   /** 1..4，与 `piece.p1..p4` / `tokens.owner1..owner4` 对齐 */
   id: number;
@@ -55,6 +63,9 @@ export interface Player {
   loan: DebtBook | null;
   /** 抵押贷款（可多笔，按 `index` 升序） */
   mortgages: MortgageBook[];
+  /* —— M20.3-B 股票杠杆（spec §5.1）—— */
+  /** 保证金借款（null = 无）；爆仓判定与卖出自动还债都作用于此 */
+  margin: MarginBook | null;
 }
 
 /** 最近一次抽卡（翻牌动画消费）：`deck` + 卡面 id + 标题/文案（取自 `cards.ts` 数据） */
@@ -148,8 +159,8 @@ export interface GameState {
   jail: number[];
   /** 每玩家租金翻倍 buff */
   doubleRent: boolean[];
-  /** 每玩家「内幕消息」标的（一次 tick 内生效后清空） */
-  stockTip: (string | null)[];
+  /** 每玩家「强制方向」标的（M20.3-B：内幕消息 / 涨跌卡同源；一次 tick 内生效后清空） */
+  stockForce: (StockForce | null)[];
   /** 当前股价（结果快照） */
   quotes: Quotes;
   /** 每支标的的历史价（含发行价；轮末 tick 追加）——行情走势折线的数据源 */
@@ -214,7 +225,9 @@ export type EventLog =
   | { kind: 'card'; card: ItemCardKind; target: number | null }
   | { kind: 'trade'; code: string; shares: number }
   | { kind: 'item-shop'; action: 'buy' | 'sell'; card: ItemCardKind; price: number }
-  | { kind: 'sell'; index: number; price: number };
+  | { kind: 'sell'; index: number; price: number }
+  /** M20.3-B 爆仓强平：`debt` = 清仓后仍不足、已转入信用贷款的余债；`refund` = 还清后返还现金 */
+  | { kind: 'marginCall'; player: number; debt: number; refund: number };
 
 /** 细分落格结果的具名别名（供 lastEvent 精确赋值） */
 type FateSettle = Extract<SettleResult, { kind: 'fate' }>;
@@ -291,8 +304,8 @@ export interface Game {
   endTurn(): void;
   /** 打出手牌（炸弹/路障/免罚/迁点/租金翻倍） */
   useCard(kind: ItemCardKind, target?: number): CardOutcome;
-  /** 股票交易：shares > 0 买 / < 0 卖（须站在 index 19 股票交易所） */
-  trade(code: string, shares: number): TradeOutcome;
+  /** 股票交易：shares > 0 买 / < 0 卖（须站在 index 19 股票交易所）；杠杆买入给 `leverage`（2 / 3，默认 1） */
+  trade(code: string, shares: number, leverage?: number): TradeOutcome;
   /** 自由出售自有地块：价 = `sellAt()`（变卖价 100%）；售出地块删键回归「可购买」 */
   sellEstate(index: number): SellOutcome;
   /** 拍卖出价（给 `pending` 队首的真人）；amount = 0 表示放弃 */
@@ -366,6 +379,7 @@ export function createGame(opts: GameOptions = {}): Game {
       deposit: 0,
       loan: null,
       mortgages: [],
+      margin: null,
     })),
     current: 0,
     round: 1,
@@ -377,7 +391,7 @@ export function createGame(opts: GameOptions = {}): Game {
     barriers: {},
     jail: Array.from({ length: count }, () => 0),
     doubleRent: Array.from({ length: count }, () => false),
-    stockTip: Array.from({ length: count }, () => null as string | null),
+    stockForce: Array.from({ length: count }, () => null as StockForce | null),
     quotes: market.quotes(),
     priceHistory: market.history(),
     portfolios: Array.from({ length: count }, () => ({} as Portfolio)),
@@ -1070,7 +1084,7 @@ export function createGame(opts: GameOptions = {}): Game {
       }
       default: {
         const code = STOCKS[Math.floor(cardRng() * STOCKS.length)].code;
-        state.stockTip[i] = code;
+        state.stockForce[i] = { code, dir: 1 };      // 内幕消息 = 必涨（语义与 M20.3-B 前一致）
         effect = { kind: 'stockTip', code };
         break;
       }
@@ -1145,19 +1159,82 @@ export function createGame(opts: GameOptions = {}): Game {
     }
   };
 
-  const trade = (code: string, shares: number): TradeOutcome => {
+  const trade = (code: string, shares: number, leverage = 1): TradeOutcome => {
     const p = currentPlayer(state);
     if (p.pos !== STOCK_TILE_INDEX) return { ok: false, reason: 'not-at-market' };
-    if (shares === 0) return { ok: false, reason: 'bad-lot' };
+    if (shares === 0 || !Number.isInteger(shares)) return { ok: false, reason: 'bad-lot' };
     const i = p.id - 1;
-    const out = shares > 0
-      ? buyShares(state.portfolios[i], state.quotes, code, shares, p.cash)
-      : sellShares(state.portfolios[i], state.quotes, code, -shares, p.cash);
-    if (out.ok) {
-      p.cash = out.cash;
-      state.lastEvent = { kind: 'trade', code, shares };
+
+    /* —— 买入 —— */
+    if (shares > 0) {
+      /* 杠杆买入（spec §5.2）：自有资金 = ⌈成本 / 倍数⌉，差额由保证金账户借入 */
+      if (leverage > 1) {
+        if (!(LEVERAGES as readonly number[]).includes(leverage)) return { ok: false, reason: 'bad-lot' };
+        const price = state.quotes[code];
+        if (price === undefined) return { ok: false, reason: 'unknown-code' };
+        const cost = price * shares;
+        const own = Math.ceil(cost / leverage);
+        const borrowed = cost - own;
+        if (p.cash < own) return { ok: false, reason: 'not-enough-cash' };
+        p.cash -= own;
+        const pf = state.portfolios[i];
+        const h = pf[code] ?? { code, shares: 0, cost: 0 };
+        h.shares += shares;
+        h.cost += own;                       // 成本只计自有资金（借入不计，便于展示真实盈亏）
+        pf[code] = h;
+        p.margin = p.margin
+          ? { ...p.margin, principal: p.margin.principal + borrowed }
+          : { principal: borrowed, rate: MARGIN_RATE };
+        state.lastEvent = { kind: 'trade', code, shares };
+        return { ok: true, code, shares, price, cost: own, cash: p.cash };
+      }
+      /* 无杠杆（逐字节沿用既有路径，零回归） */
+      const out = buyShares(state.portfolios[i], state.quotes, code, shares, p.cash);
+      if (out.ok) {
+        p.cash = out.cash;
+        state.lastEvent = { kind: 'trade', code, shares };
+      }
+      return out;
     }
-    return out;
+
+    /* —— 卖出（spec §5.2）：有保证金负债时，卖出所得**先冲抵借入**，余额才入现金 —— */
+    const base = sellShares(state.portfolios[i], state.quotes, code, -shares, p.cash);
+    if (!base.ok) return base;
+    const proceeds = base.cost;              // `sellShares` 复用 `cost` 字段承载卖出所得
+    let cash = p.cash + proceeds;
+    if (p.margin) {
+      const rest = p.margin.principal - proceeds;
+      if (rest > 0) {
+        p.margin = { ...p.margin, principal: rest };
+        cash = p.cash;                       // 全部用于还债，现金不变
+      } else {
+        p.margin = null;
+        cash = p.cash - rest;                // 还清后余额入现金
+      }
+    }
+    p.cash = cash;
+    state.lastEvent = { kind: 'trade', code, shares };
+    return { ...base, cash };
+  };
+
+  /**
+   * 爆仓强平（M20.3-B spec §5.3）：清空该玩家股票账户 → 先还保证金借入 →
+   * 还有余额则返还现金 → 不足则余债转入信用贷款（不动现金 / 存款，B-D3）。
+   */
+  const liquidate = (p: Player): void => {
+    if (!p.margin) return;
+    const proceeds = marketValue(state.portfolios[p.id - 1], state.quotes);
+    state.portfolios[p.id - 1] = {};
+    const rest = p.margin.principal - proceeds;
+    p.margin = null;
+    if (rest > 0) {
+      p.loan = p.loan
+        ? { ...p.loan, principal: p.loan.principal + rest }
+        : { principal: rest, rate: LOAN_RATE, due: state.round + LOAN_TERM, overdue: 0, freeFirstRound: false };
+    } else {
+      p.cash += -rest;
+    }
+    state.lastEvent = { kind: 'marginCall', player: p.id, debt: Math.max(0, rest), refund: Math.max(0, -rest) };
   };
 
   /** 自由出售（spec §3.5）：价 = 变卖价 100%，只作用于当前玩家；售出地块删键回归「可购买」 */
@@ -1320,13 +1397,26 @@ export function createGame(opts: GameOptions = {}): Game {
     }
   };
 
-  /** 轮末统一 tick 股价 + 清空「内幕消息」标的 */
+  /**
+   * 轮末统一收口（M20.3-B spec §5.3，顺序固定、全确定性）：
+   * ① 存款 / 信用贷款 / 抵押计息 → ② 保证金借入复利 → ③ 股价 tick（强制方向短路，不消耗随机源）
+   * → ④ 爆仓判定（强平）→ ⑤ 清空强制方向表。
+   */
   const onRoundBoundary = (): void => {
     settleBooks();
-    const tips = state.stockTip.filter((c): c is string => c !== null);
-    state.quotes = market.tick(tips);
+    for (const p of state.players) {
+      if (p.bankrupt || !p.margin) continue;
+      p.margin.principal = Math.round(p.margin.principal * (1 + MARGIN_RATE));
+    }
+    const force = state.stockForce.filter((f): f is StockForce => f !== null);
+    state.quotes = market.tick(force);
     state.priceHistory = market.history();
-    state.stockTip = state.stockTip.map(() => null);
+    for (const p of state.players) {
+      if (p.bankrupt || !p.margin) continue;
+      const value = marketValue(state.portfolios[p.id - 1], state.quotes);
+      if (value < p.margin.principal * LIQUIDATION_RATIO) liquidate(p);
+    }
+    state.stockForce = state.stockForce.map(() => null);
   };
 
   /** 轮末拍卖挂起时暂存的「未提交的换手目标」（spec §3.4：挂起期间不得推进玩家） */

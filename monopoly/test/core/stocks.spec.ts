@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  buyShares, createMarket, holdingOf, marketValue, sellShares, type Portfolio,
+  buyShares, createMarket, holdingOf, lotShares, marketValue, sellShares, type Portfolio,
 } from '../../src/core/stocks';
 import { makeRng } from '../../src/core/dice';
 import { STOCKS } from '../../src/data/stocks';
@@ -39,12 +39,27 @@ describe('stocks 盘面与涨跌（spec §5.5）', () => {
     for (const s of STOCKS) expect(seen.get(s.code)!.size).toBe(2);
   });
 
-  it('tips 标的强制按上限上涨（仍在幅度约束内）', () => {
+  it('force 标的定向走到幅度上限：dir=1 涨停、dir=-1 跌停', () => {
     const m = createMarket(makeRng(5));
     const prev = m.quotes();
-    const next = m.tick(['SY01']);
-    expect(next.SY01).toBeGreaterThan(prev.SY01);
-    expect(next.SY01).toBe(Math.round(prev.SY01 * (1 + 0.12)));
+    const vol = STOCKS.find((s) => s.code === 'SY01')!.vol;
+    const up = m.tick([{ code: 'SY01', dir: 1 }]);
+    expect(up.SY01).toBe(Math.round(prev.SY01 * (1 + vol)));
+    expect(up.SY01).toBeGreaterThan(prev.SY01);
+    const down = m.tick([{ code: 'SY02', dir: -1 }]);
+    const vol2 = STOCKS.find((s) => s.code === 'SY02')!.vol;
+    expect(down.SY02).toBe(Math.round(up.SY02 * (1 - vol2)));
+    expect(down.SY02).toBeLessThan(up.SY02);
+  });
+
+  it('命中 force 的标的不消耗 rng：同一 seed 下其余标的涨跌与强制方向无关', () => {
+    const up = createMarket(makeRng(9));
+    const down = createMarket(makeRng(9));
+    const a = up.tick([{ code: 'SY01', dir: 1 }]);
+    const b = down.tick([{ code: 'SY01', dir: -1 }]);
+    expect(a.SY01).toBeGreaterThan(b.SY01);
+    /* SY02..SY04 走的是同一批 rng 值 ⇒ 两次结果逐字节相同（证明 SY01 未抢走随机数） */
+    for (const s of STOCKS.filter((d) => d.code !== 'SY01')) expect(a[s.code]).toBe(b[s.code]);
   });
 
   it('history()：首点 = 发行价；每 tick 追加一点且末点 === quotes()', () => {
@@ -53,7 +68,7 @@ describe('stocks 盘面与涨跌（spec §5.5）', () => {
     for (const s of STOCKS) expect(h0[s.code]).toEqual([s.price0]);
 
     const q1 = m.tick();
-    const q2 = m.tick(['SY02']);
+    const q2 = m.tick([{ code: 'SY02', dir: 1 }]);
     const h = m.history();
     for (const s of STOCKS) {
       expect(h[s.code]).toHaveLength(3);
@@ -102,6 +117,23 @@ describe('stocks 买卖（spec §5.5）', () => {
     const q: Portfolio = { SY01: { code: 'SY01', shares: 2, cost: 240 } };
     expect(sellShares(q, quotes, 'SY01', 0, 0)).toEqual({ ok: false, reason: 'bad-lot' });
     expect(q.SY01.shares).toBe(2);
+  });
+});
+
+describe('stocks 数量档 lotShares（M20.3-B spec §6.1）', () => {
+  it('定值档按方向截断到上限；all 按现金 / 持股推导；held = 0 卖侧归零', () => {
+    /* 买侧上限 = floor(现金 / 现价) */
+    expect(lotShares(1, 120, 1000, 0, 'buy')).toBe(1);
+    expect(lotShares(5, 120, 1000, 0, 'buy')).toBe(5);
+    expect(lotShares(5, 120, 300, 0, 'buy')).toBe(2);        // 现金只够 2 股
+    expect(lotShares('all', 120, 1000, 0, 'buy')).toBe(8);
+    expect(lotShares('all', 120, 100, 0, 'buy')).toBe(0);    // 连 1 股都买不起
+    expect(lotShares('all', 0, 1000, 0, 'buy')).toBe(0);     // 价格非正 ⇒ 0
+    /* 卖侧上限 = 持股 */
+    expect(lotShares(5, 120, 1000, 3, 'sell')).toBe(3);
+    expect(lotShares('all', 120, 0, 3, 'sell')).toBe(3);
+    expect(lotShares('all', 120, 0, 0, 'sell')).toBe(0);     // 空仓不出除零
+    expect(lotShares(1, 120, 0, 0, 'sell')).toBe(0);
   });
 });
 

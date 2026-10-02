@@ -5,11 +5,19 @@
  * tick **按「轮」而非「回合」**（每位玩家各完成一次回合 = round+1 时统一 tick 一次），
  * 避免四人局里先手玩家每轮吃到多次波动的先手优势，也让 seed 复现稳定。
  *
- * `tips`：`c-stockTip` 的「内幕消息」标的，下一次 tick 强制按上限 +vol 上涨（仍落在幅度约束内）。
+ * `force`：下一轮 tick 的**强制方向表**（`c-stockTip` 内幕消息 / M20.3-B 涨跌卡同源）——
+ * 命中的标的按下限幅度定向走动（`dir = 1` 按上限 +vol、`dir = -1` 按 −vol），
+ * **命中时不调用 `rng()`**，故不改变未命中标的的既有随机序列（seed 回放逐字节一致）。
  */
-import { SHARE_LOT, STOCKS, type StockDef } from '../data/stocks';
+import { SHARE_LOT, STOCKS, type LotTier, type StockDef } from '../data/stocks';
 
 export type Quotes = Record<string, number>;
+
+/** 强制方向（下一轮 tick 生效一次）：`dir = 1` 必涨 / `-1` 必跌 */
+export interface StockForce {
+  code: string;
+  dir: 1 | -1;
+}
 
 export interface Holding {
   code: string;
@@ -25,8 +33,8 @@ export interface Market {
   quotes(): Quotes;
   /** 每支标的的历史价（首点 = 发行价，每 tick 追加一点）——供行情走势折线消费 */
   history(): Record<string, number[]>;
-  /** 统一 tick 一次（轮末）；`tips` 内的标的下次必涨 */
-  tick(tips?: string[]): Quotes;
+  /** 统一 tick 一次（轮末）；`force` 内的标的按下限幅度定向走动 */
+  tick(force?: StockForce[]): Quotes;
 }
 
 export function createMarket(rng: () => number, defs: StockDef[] = STOCKS): Market {
@@ -43,10 +51,12 @@ export function createMarket(rng: () => number, defs: StockDef[] = STOCKS): Mark
       for (const d of defs) out[d.code] = [...series[d.code]];
       return out;
     },
-    tick: (tips: string[] = []): Quotes => {
+    tick: (force: StockForce[] = []): Quotes => {
       for (const d of defs) {
         const prev = prices[d.code];
-        const delta = tips.includes(d.code) ? d.vol : d.vol * (2 * rng() - 1);
+        /* 命中强制方向 ⇒ 走定点幅度、**不消耗 `rng()`**；未命中才摇随机（与既有 tips 短路逐字节一致） */
+        const f = force.find((x) => x.code === d.code);
+        const delta = f ? d.vol * f.dir : d.vol * (2 * rng() - 1);
         prices[d.code] = Math.max(1, Math.round(prev * (1 + delta)));
         series[d.code].push(prices[d.code]);
       }
@@ -99,4 +109,18 @@ export function marketValue(portfolio: Portfolio, quotes: Quotes): number {
     sum += portfolio[code].shares * (quotes[code] ?? 0);
   }
   return sum;
+}
+
+/**
+ * 数量档 → 股数（M20.3-B spec §6.1 纯函数，零随机）。
+ * - 定值档（1 手 / 5 手）：返回 `tier` 本身，但按方向截断到上限；
+ * - `'all'`：买侧 = `floor(现金 / 现价)`（连 1 股都买不起 → 0），卖侧 = 全部持股；
+ * - 上限：买侧 = 现金可买股数（`price ≤ 0` → 0），卖侧 = `held`（**`held = 0` 返回 0，不出除零**）。
+ */
+export function lotShares(
+  tier: LotTier, price: number, cash: number, held: number, side: 'buy' | 'sell',
+): number {
+  const cap = side === 'buy' ? (price > 0 ? Math.floor(cash / price) : 0) : held;
+  const want = tier === 'all' ? cap : tier;
+  return Math.max(0, Math.min(want, cap));
 }

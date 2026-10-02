@@ -179,7 +179,7 @@ useCard(kind: ItemCardKind, target?: number, stock?: StockPlay): CardOutcome
 - 命中区 `data-target` 编码为 `` `${code}:${tier}` ``（`tier ∈ '1' | '5' | 'all'`），由 `main.ts` 解析。
 - 新增 UI 态：`stockSel`（默认 `STOCKS[0].code`）、`stockLev`（默认 1）。
 - 新增纯函数：`stockRows(state, sel)`（带 `selected`）、`stockDetail(state, code)`（现价/涨跌/持股/市值/现金/借款）、
-  `lotShares(tier, price, cash, held)`（档位 → 股数；`'all'` 按买入用现金、卖出用持股推导）。
+  `lotShares(tier, price, cash, held, side)`（档位 → 股数；`side = 'buy'` 时 `'all'` 按买入用现金、`'sell'` 按持股推导，且定值档也按方向上限截断）。
 
 ### 6.2 涨跌卡浮层
 
