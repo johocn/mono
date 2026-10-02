@@ -5,7 +5,8 @@ import { STOCKS } from '../../src/data/stocks';
 import { createGame, type Game, type GameState, type PendingAuction } from '../../src/core/game';
 import { REGISTRY } from '../../src/skin/registry';
 import {
-  auctionBidTiers, auctionDebtView, drawCard, handSlots, overlayOf, panelHitAreas, panelSpecs, settlePanel, stockRows,
+  auctionBidTiers, auctionDebtView, bankDebtView, bankDetail, bankRows, drawCard, handSlots, overlayOf,
+  panelHitAreas, panelSpecs, settlePanel, stockRows,
 } from '../../src/ui/panels';
 
 /** 固定点数骰：每步走 2 格 */
@@ -328,5 +329,151 @@ describe('panels：破产拍卖浮层（M20.1 版式 B）', () => {
         w: boxes.w * sc, h: boxes.h * sc,
       }).toEqual({ x: hits[i].x, y: hits[i].y, w: hits[i].w, h: hits[i].h });
     });
+  });
+});
+
+describe('panels：银行浮层（M20.2 版式 C：左列表右详情）', () => {
+  /** 站 9 号格（鹿乡银行）且已结算的 state */
+  const atBank = (): Game => {
+    const g = createGame({ dice: fixed(1, 1) });
+    stepTo(g, 9);
+    return g;
+  };
+  const BANK = { open: true, sel: 'deposit' as const };
+
+  it('overlayOf：银行压股票盘，拍卖/结算压银行；默认（不传 opts）零回归', () => {
+    const g = atBank();
+    /* 零回归：不开银行键时，站银行格不产生浮层 */
+    expect(overlayOf(g.state)).toBeNull();
+    expect(overlayOf(g.state, { bankOpen: true })).toBe('bank');
+
+    /* 银行压股票：把站位换成股票交易所（bankOpen 在 phase 检查之前） */
+    g.state.players[0].pos = 19;
+    expect(overlayOf(g.state)).toBe('stock');
+    expect(overlayOf(g.state, { bankOpen: true })).toBe('bank');
+
+    /* 结算压银行 */
+    g.state.over = true;
+    expect(overlayOf(g.state, { bankOpen: true })).toBe('settle');
+    g.state.over = false;
+
+    /* 拍卖压银行 */
+    g.state.auction = {
+      trigger: 'bankrupt', payerId: 1, creditorId: 2, amount: 700,
+      queue: [3], lot: { index: 3, level: 3, startPrice: 330 },
+      bids: [], pending: [1], results: [],
+    };
+    expect(overlayOf(g.state, { bankOpen: true })).toBe('auction');
+  });
+
+  it('bankRows：三行摘要与选中态（无信贷 → 默认文案；有信贷 → 数值）', () => {
+    const g = atBank();
+    const rows = bankRows(g.state);
+    expect(rows.map((r) => r.kind)).toEqual(['deposit', 'loan', 'mortgage']);
+    expect(rows.map((r) => r.title)).toEqual(['存款', '信用贷款', '抵押']);
+    expect(rows.map((r) => r.summary)).toEqual(['无存款', '无债务', '无抵押']);
+    expect(rows.map((r) => r.selected)).toEqual([true, false, false]);
+    expect(bankRows(g.state, 'loan').map((r) => r.selected)).toEqual([false, true, false]);
+
+    const p = g.state.players[0];
+    p.deposit = 1240;
+    p.loan = { principal: 500, rate: 0.06, due: 9, overdue: 0 };
+    p.mortgages = [{ principal: 200, rate: 0.04, due: 7, overdue: 0, index: 3 }];
+    expect(bankRows(g.state).map((r) => r.summary)).toEqual(['￥1240', '欠 ￥500', '1 块锁定']);
+  });
+
+  it('bankDetail：字段行随选中切换 + 按钮可点性与引擎边界一致', () => {
+    const g = atBank();
+    const dep = bankDetail(g.state, 'deposit');
+    expect(dep.title).toBe('存款');
+    expect(dep.primary).toEqual({ label: '存入', enabled: true });        // 现金 3000 > 0
+    expect(dep.secondary).toEqual({ label: '取出', enabled: false });     // 无存款
+    expect(dep.lines[2]).toBe('轮息 +3%（轮末复利）');
+
+    const loan = bankDetail(g.state, 'loan');
+    expect(loan.title).toBe('信用贷款');
+    expect(loan.primary).toEqual({ label: '借款', enabled: true });       // 站 9 号格 + 无贷款 + 额度 > 0
+    expect(loan.secondary).toEqual({ label: '还款', enabled: false });    // 无债务
+    expect(loan.lines[1]).toBe('利率 6%/轮 · 期限 8 轮');
+    expect(loan.lines[3]).toBe('首轮免息 · 须站在 9 号格');
+
+    const mg = bankDetail(g.state, 'mortgage');
+    expect(mg.title).toBe('抵押');
+    expect(mg.lines[2]).toBe('成数 80% 变卖价');
+    expect(mg.primary.enabled).toBe(false);                              // 无可抵押地块
+    expect(mg.secondary.enabled).toBe(false);                            // 无抵押
+
+    /* 有自有地块 → 抵押可点；离开 9 号格 → 借款/抵押不可点（引擎只在 9 号格限贷） */
+    g.state.estates[3] = { index: 3, owner: 1, level: 1, processing: false };
+    expect(bankDetail(g.state, 'mortgage').primary.enabled).toBe(true);
+    g.state.players[0].pos = 3;
+    expect(bankDetail(g.state, 'loan').primary.enabled).toBe(false);
+    expect(bankDetail(g.state, 'mortgage').primary.enabled).toBe(false);
+  });
+
+  it('specs：底板 + 角标 + 左 3 行 + 右 4 详情行 + 两键 + 关闭键，全命中注册表', () => {
+    const g = atBank();
+    const specs = panelSpecs(g.state, false, null, BANK);
+    expect(specs.every((s) => Boolean(REGISTRY[s.id]))).toBe(true);
+    expect(specs.find((s) => s.id === 'ui.badge')!.state?.text).toBe('鹿乡银行 · 9 号格');
+    const rows = specs.filter((s) => s.id === 'ui.bankRow' && s.state?.variant === 'row');
+    expect(rows.map((s) => s.state?.title)).toEqual(['存款', '信用贷款', '抵押']);
+    expect(rows.map((s) => s.state?.selected)).toEqual([true, false, false]);
+    const lines = specs.filter((s) => s.id === 'ui.bankRow' && s.state?.variant === 'line');
+    expect(lines).toHaveLength(4);
+    expect(lines.every((s) => typeof s.state?.text === 'string')).toBe(true);
+    expect(specs.filter((s) => s.id === 'ui.button.primary')).toHaveLength(1);
+    expect(specs.filter((s) => s.id === 'ui.button.secondary')).toHaveLength(1);
+    expect(specs.find((s) => s.id === 'ui.qk')!.state?.label).toBe('关闭');
+  });
+
+  it('命中区：三行选中 + 两枚操作键（动作随选中切换）+ 关闭键，与可见键逐像素对齐', () => {
+    const g = atBank();
+    const hits = panelHitAreas(g.state, false, null, BANK);
+    expect(hits.map((h) => h.action)).toEqual([
+      'bank:select', 'bank:select', 'bank:select', 'bank:deposit', 'bank:withdraw', 'bank:close',
+    ]);
+    expect(hits.slice(0, 3).map((h) => h.target)).toEqual(['deposit', 'loan', 'mortgage']);
+
+    const mg = panelHitAreas(g.state, false, null, { open: true, sel: 'mortgage' });
+    expect(mg.map((h) => h.action)).toEqual([
+      'bank:select', 'bank:select', 'bank:select', 'bank:mortgage', 'bank:redeem', 'bank:close',
+    ]);
+
+    const specs = panelSpecs(g.state, false, null, BANK);
+    const pairs: [string, string][] = [
+      ['ui.button.primary', 'bank:deposit'],
+      ['ui.button.secondary', 'bank:withdraw'],
+      ['ui.qk', 'bank:close'],
+    ];
+    for (const [id, action] of pairs) {
+      const s = specs.find((x) => x.id === id)!;
+      const box = REGISTRY[id].box;
+      const sc = s.fixed?.s ?? 1;
+      const h = hits.find((x) => x.action === action)!;
+      expect({
+        x: s.fixed!.cx - (box.w * sc) / 2, y: s.fixed!.cy - (box.h * sc) / 2, w: box.w * sc, h: box.h * sc,
+      }).toEqual({ x: h.x, y: h.y, w: h.w, h: h.h });
+    }
+    /* 命中区都落在舞台宽度内 */
+    for (const h of hits) {
+      expect(h.x).toBeGreaterThanOrEqual(0);
+      expect(h.x + h.w).toBeLessThanOrEqual(390);
+    }
+  });
+
+  it('bankDebtView：存款/债务/抵押块数/逾期（多笔取最大逾期）', () => {
+    const g = atBank();
+    expect(bankDebtView(g.state, 1)).toEqual({ deposit: 0, debt: 0, mortgageCount: 0, overdue: 0 });
+
+    const p = g.state.players[0];
+    p.deposit = 300;
+    p.loan = { principal: 1000, rate: 0.06, due: 5, overdue: 1 };
+    p.mortgages = [
+      { principal: 150, rate: 0.04, due: 3, overdue: 2, index: 3 },
+      { principal: 90, rate: 0.04, due: 4, overdue: 0, index: 7 },
+    ];
+    expect(bankDebtView(g.state, 1)).toEqual({ deposit: 300, debt: 1240, mortgageCount: 2, overdue: 2 });
+    expect(bankDebtView(g.state, 99)).toEqual({ deposit: 0, debt: 0, mortgageCount: 0, overdue: 0 });
   });
 });

@@ -39,6 +39,8 @@ export const HUD_QK_W = 72;
 export const HUD_QK_H = 22;
 export const HUD_QK_FAST_X = 211;
 export const HUD_QK_SKIP_X = 287;
+/** M20.2 银行键：底坞右侧三枚快捷键行（135..207 / 211..283 / 287..359，不重叠） */
+export const HUD_QK_BANK_X = 135;
 /** 快捷键顶边 y；中心 = HUD_LABEL_Y（状态行中心），即右侧 211..359 / 287..359 */
 export const HUD_QK_Y = 607;
 /** AI 回合把状态行文字左移，给右侧快捷键让位 */
@@ -46,6 +48,13 @@ export const HUD_LABEL_SHIFT_X = -90;
 /** 性格徽标相对资产条中心的偏移（贴右上角，右缘与资产条右缘齐平） */
 export const HUD_PERSONA_DX = 26;
 export const HUD_PERSONA_DY = -11;
+
+/* —— M20.2 HUD 债务条（spec §3.8）：底坞状态行已被三枚快捷键占满，故放顶部 HUD 条中段，
+   避开分享键 8..86 与静音键 324..384 —— */
+export const HUD_DEBT_X = 88;
+export const HUD_DEBT_Y = 4;
+export const HUD_DEBT_W = 234;
+export const HUD_DEBT_H = 22;
 
 /** 默认皮肤几何（= public/skins/default/skin.json 的 geo；供渲染层免写死引用）
  *  v6：棋盘由 9×9 正方形改为 11×7 倾斜长方形 —— `cols+rows` 仍为 18，
@@ -183,6 +192,28 @@ export const PANEL_DEBT_CX = PANEL_CX;           // 债务条中心 x（= 195）
 export const PANEL_DEBT_CY = 350;                // 债务条中心 y
 export const PANEL_DEBT_W = 346;                 // 债务条宽
 export const PANEL_DEBT_H = 34;                  // 债务条高
+
+/* —— M20.2 银行浮层（版式 C · 左列表右详情；spec §3.8）——
+   底板复用 370×300 的 `showcase.panel`（PANEL_X/Y），角标复用 `ui.badge`；
+   左列 3 行 `ui.bankRow`（row 变体）、右列详情文本行（同元素 line 变体）+ 两枚 `ui.button.*`；
+   右上「关闭」复用 `ui.qk`（72×22）。 */
+export const PANEL_BANK_ROW_X = 20;              // 左列行左缘
+export const PANEL_BANK_ROW_W = 152;
+export const PANEL_BANK_ROW_H = 40;
+export const PANEL_BANK_ROW_GAP = 8;
+export const PANEL_BANK_ROW_Y0 = 344;            // 首行顶边（三行 344..384 / 392..432 / 440..480）
+export const PANEL_BANK_DETAIL_CX = 277;         // 右列中心 x（右列 184..370）
+export const PANEL_BANK_LINE_Y0 = 350;           // 详情首行中心 y
+export const PANEL_BANK_LINE_DY = 22;            // 详情行距（最多 5 行 → 350..438，落在按钮之上）
+export const PANEL_BANK_BTN_W = 98;              // = 注册表 ui.button.primary 宽
+export const PANEL_BANK_BTN_X = 228;             // 主键左缘（右列居中：277 − 98/2）→ 228..326
+export const PANEL_BANK_BTN_Y = 456;             // 主键顶边
+export const PANEL_BANK_BTN2_W = 110;            // = 注册表 ui.button.secondary 宽
+export const PANEL_BANK_BTN2_X = 222;            // 次键左缘（277 − 110/2）→ 222..332
+export const PANEL_BANK_BTN2_Y = 510;            // 次键顶边
+export const PANEL_BANK_BTN_H = 46;              // = 注册表两枚操作键的高（与 HUD 同源）
+export const PANEL_BANK_CLOSE_X = 300;           // 右上「关闭」键左缘（复用 72×22 的 ui.qk）
+export const PANEL_BANK_CLOSE_Y = 307;           // 关闭键顶边（中心 y 与 PANEL_BADGE_Y 同线）
 
 /* 浮层关闭键（抽卡翻牌用）：卡面放大后移到卡面正下方、水平居中（卡底 476.8 → 键 488..524） */
 export const PANEL_CLOSE_W = 140;
