@@ -37,13 +37,16 @@ export const HUD_BTN_AI_X = 31;
 export const HUD_BTN_AI_W = 328;
 export const HUD_QK_W = 72;
 export const HUD_QK_H = 22;
-export const HUD_QK_FAST_X = 211;
-export const HUD_QK_SKIP_X = 287;
-/** M20.3 商店键：底坞右侧四枚快捷键行（59..131 / 135..207 / 211..283 / 287..359，两两留 4px 间隙） */
-export const HUD_QK_STORE_X = 59;
-/** M20.2 银行键：底坞右侧快捷键行（135..207 / 211..283 / 287..359，不重叠） */
-export const HUD_QK_BANK_X = 135;
-/** 快捷键顶边 y；中心 = HUD_LABEL_Y（状态行中心），即右侧 211..359 / 287..359 */
+/* —— M20.4 快键行由 4 槽重排为 5 槽（spec §6.3 / F-D15）——
+   步距 76 = HUD_QK_W(72) + 4 间隙；x0 = 7 ⇒ 7 / 83 / 159 / 235 / 311（右缘 383 ≤ 390）。
+   既有四枚的**相对顺序不变**（设施 < 商店 < 银行 < 出售 < 手牌），只整体平移——
+   故既有「相对顺序」断言随常量自动通过，只有字面坐标 / 计数断言需同步。 */
+export const HUD_QK_FACILITY_X = 7;              // 设施（M20.4 新增）
+export const HUD_QK_STORE_X = 83;                // 商店
+export const HUD_QK_BANK_X = 159;                // 银行
+export const HUD_QK_FAST_X = 235;                // 出售 / AI 加速
+export const HUD_QK_SKIP_X = 311;                // 手牌 / AI 跳过本次
+/** 快捷键顶边 y；中心 = HUD_LABEL_Y（状态行中心），即 7..383（5 槽） */
 export const HUD_QK_Y = 607;
 /** AI 回合把状态行文字左移，给右侧快捷键让位 */
 export const HUD_LABEL_SHIFT_X = -90;
@@ -89,6 +92,14 @@ export const LABEL_RING = { in: 1.5, out: 3, inW: 1.6, outW: 3, outA: 0.3 };
 /** 楼体屏幕缩放与基线偏移（= `Scene` placement 的 buildingScale / buildingYOffset，同源一份值） */
 export const BUILDING_SCALE = 0.72;
 export const BUILDING_Y_OFFSET = 1;
+
+/* —— M20.4 新闻条（spec §6.2 / F-D11）：落在棋盘底（≈406）与落地地块卡（508）之间的自由带，
+   474..500；该带在 play 模式为空（被 300..600 的浮层覆盖），浮层展开时新闻条被自然盖住。
+   新闻条是**信息条**（不吃事件），故不进任何命中区。 —— */
+export const NEWS_TICKER_X = 10;                 // 左上
+export const NEWS_TICKER_Y = 474;
+export const NEWS_TICKER_W = 370;
+export const NEWS_TICKER_H = 26;
 
 /* —— 落地地块卡（spec §7.3）：位于棋盘（底 ≈312）与底坞（顶 606）之间 —— */
 export const TILE_CARD_X = 8;

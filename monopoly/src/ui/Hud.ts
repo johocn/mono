@@ -15,14 +15,14 @@ import {
   HUD_DEBT_H, HUD_DEBT_W, HUD_DEBT_X, HUD_DEBT_Y,
   AUDIO_BGM_BOX, AUDIO_KEY_SIZE, AUDIO_SFX_BOX,
   HUD_DOCK_H, HUD_LABEL_SHIFT_X, HUD_LABEL_Y, HUD_PERSONA_DX, HUD_PERSONA_DY,
-  HUD_QK_BANK_X, HUD_QK_FAST_X, HUD_QK_H, HUD_QK_SKIP_X, HUD_QK_STORE_X, HUD_QK_W, HUD_QK_Y, STAGE_W,
+  HUD_QK_BANK_X, HUD_QK_FACILITY_X, HUD_QK_FAST_X, HUD_QK_H, HUD_QK_SKIP_X, HUD_QK_STORE_X, HUD_QK_W, HUD_QK_Y, STAGE_W,
   TILE_CARD_BTN_Y, TILE_CARD_H, TILE_CARD_W, TILE_CARD_X, TILE_CARD_Y,
 } from '../skin/layout';
 
 /** 主按钮在四个阶段里的动作（spec §5.1 回合流程的显式化）；监狱禁行时为 `skip` */
 export type HudPrimaryAction = 'roll' | 'move' | 'settle' | 'end' | 'skip';
 export type HudActionId =
-  HudPrimaryAction | 'buy' | 'upgrade' | 'hand' | 'sell' | 'bank' | 'store'
+  HudPrimaryAction | 'buy' | 'upgrade' | 'hand' | 'sell' | 'bank' | 'store' | 'facility'
   | 'ai:fast' | 'ai:skip' | 'audio:sfx' | 'audio:bgm';
 
 /**
@@ -32,6 +32,7 @@ export type HudActionId =
  * - `callout`：顶部状态条播报（有气泡时替换轮次文案，让「谁前进几步」在大屏顶部也读得到）
  * - `bankOpen`：银行浮层是否展开（仅切「银行」键标签；浮层可见性由 `panels.overlayOf` 派生）
  * - `storeOpen`：商店浮层是否展开（仅切「商店」键标签；同上）
+ * - `facilityOpen`：设施浮层是否展开（M20.4；仅切「设施」键标签；同上）
  */
 export interface HudUiOpts {
   tileCard?: boolean;
@@ -39,6 +40,7 @@ export interface HudUiOpts {
   callout?: string;
   bankOpen?: boolean;
   storeOpen?: boolean;
+  facilityOpen?: boolean;
 }
 
 export interface HitArea {
@@ -141,13 +143,13 @@ export function hudSpecs(
   const aiSeat = state.over ? null : (seats[state.current] ?? null);
 
   /* 两枚静音键常驻于顶部右侧（spec §7.3）：必须在 AI 分支早退之前推入，且 r 继续递增
-     （10 主按钮、11/12 次要键、13 牌袋键、14 出售键、15 商店键、16 银行键、17/18 静音键、
-     19 地块卡、20/21 卡上键、22 债务条） */
+     （10 主按钮、11/12 次要键、13 牌袋键、14 出售键、15 商店键、16 银行键、17 设施键、
+     18/19 静音键、20 地块卡、21/22 卡上键、23 债务条） */
   const pushAudioKeys = (): void => {
     const half = AUDIO_KEY_SIZE / 2;
-    bar(audio.sfx ? 'ui.sound.on' : 'ui.sound.off', 17,
+    bar(audio.sfx ? 'ui.sound.on' : 'ui.sound.off', 18,
       AUDIO_SFX_BOX.left + half, AUDIO_SFX_BOX.top + half, { on: audio.sfx });
-    bar(audio.bgm ? 'ui.music.on' : 'ui.music.off', 18,
+    bar(audio.bgm ? 'ui.music.on' : 'ui.music.off', 19,
       AUDIO_BGM_BOX.left + half, AUDIO_BGM_BOX.top + half, { on: audio.bgm });
   };
   /* 牌袋键（spec §7.3）：复用状态行右侧「跳过本次」键位（不新增 id）；仅真人回合推入 */
@@ -178,13 +180,20 @@ export function hudSpecs(
       label: ui.bankOpen === true ? '银行 ✓' : '银行', enabled: true,
     });
   };
+  /* 「设施」键（M20.4 spec §6.3 / F-D15）：真人回合常开（与银行 / 商店三方互斥），
+     落在新建的 `HUD_QK_FACILITY_X` 位（快键行最左，与「商店」83..155 留 4px 间隙） */
+  const pushFacilityKey = (): void => {
+    bar('ui.qk', 17, HUD_QK_FACILITY_X + HUD_QK_W / 2, HUD_QK_Y + HUD_QK_H / 2, {
+      label: ui.facilityOpen === true ? '设施 ✓' : '设施', enabled: true,
+    });
+  };
   /* 债务条（M20.2 spec §3.8）：顶部 HUD 条中段，四段读当前玩家信贷口径；
      无信贷（存款 / 贷款 / 抵押全空）时**整条隐藏**，保老对局画面逐像素不变（零回归） */
   const pushDebtBar = (): void => {
     const p = currentPlayer(state);
     if (p.deposit <= 0 && p.loan === null && p.mortgages.length === 0) return;
     const v = bankDebtView(state, p.id);
-    bar('ui.debtBar', 22, HUD_DEBT_X + HUD_DEBT_W / 2, HUD_DEBT_Y + HUD_DEBT_H / 2, {
+    bar('ui.debtBar', 23, HUD_DEBT_X + HUD_DEBT_W / 2, HUD_DEBT_Y + HUD_DEBT_H / 2, {
       deposit: v.deposit, debt: v.debt, mortgageCount: v.mortgageCount, overdue: v.overdue,
       /* 逾期段用警示色（spec §3.8B）：由 preset 依 `warn` 选语义色，HUD 只给口径 */
       warn: v.overdue > 0,
@@ -260,11 +269,12 @@ export function hudSpecs(
   pushSellKey();
   pushStoreKey();
   pushBankKey();
+  pushFacilityKey();
   pushAudioKeys();
 
   if (card) {
     const e = state.estates[pos];
-    bar('ui.tileCard', 19, TILE_CARD_X + TILE_CARD_W / 2, TILE_CARD_Y + TILE_CARD_H / 2, {
+    bar('ui.tileCard', 20, TILE_CARD_X + TILE_CARD_W / 2, TILE_CARD_Y + TILE_CARD_H / 2, {
       title: `停在 ${brandAt(pos)} · 你在这里`,
       sub: e
         ? `等级 L${e.level} · 持有 ${PLAYER_NAME[e.owner - 1]}`
@@ -272,12 +282,12 @@ export function hudSpecs(
     });
     const by = TILE_CARD_BTN_Y + HUD_BTN_H / 2;
     if (buy) {
-      bar('ui.button.secondary', 20, HUD_BTN_BUY_X + HUD_BTN_SECONDARY_W / 2, by, {
+      bar('ui.button.secondary', 21, HUD_BTN_BUY_X + HUD_BTN_SECONDARY_W / 2, by, {
         action: 'buy', label: `买地 ￥${buy.price}`, enabled: buy.enabled,
       });
     }
     if (up) {
-      bar('ui.button.secondary', 21, HUD_BTN_UPGRADE_X + HUD_BTN_SECONDARY_W / 2, by, {
+      bar('ui.button.secondary', 22, HUD_BTN_UPGRADE_X + HUD_BTN_SECONDARY_W / 2, by, {
         action: 'upgrade', label: `升级 ￥${up.cost}`, enabled: up.enabled,
       });
     }
@@ -317,6 +327,11 @@ export function hitAreas(state: GameState, seats: readonly Seat[] = [], ui: HudU
   /* 「商店」键（M20.3 spec §5.1）：真人回合常开；落在 `HUD_QK_STORE_X` */
   out.push({
     action: 'store', x: HUD_QK_STORE_X, y: HUD_QK_Y, w: HUD_QK_W, h: HUD_QK_H, enabled: true,
+  });
+  /* 「设施」键（M20.4 spec §6.3 / F-D15）：真人回合常开；落在快键行最左 `HUD_QK_FACILITY_X`
+     （AI 回合不出，与手牌 / 出售 / 银行 / 商店一致） */
+  out.push({
+    action: 'facility', x: HUD_QK_FACILITY_X, y: HUD_QK_Y, w: HUD_QK_W, h: HUD_QK_H, enabled: true,
   });
   const pa = primaryAction(state);
   if (pa) {

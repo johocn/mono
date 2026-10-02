@@ -336,5 +336,6 @@
   "ui.bidDebt",
   "ui.bankRow",
   "ui.debtBar",
-  "ui.handBar"
+  "ui.handBar",
+  "ui.newsTicker"
 ]

@@ -20,10 +20,13 @@ import { loanLimitOf, mortgageLimitOf } from '../core/bank';
 import { priceOf, resaleOf } from '../core/item-shop';
 import { creditLocked, currentPlayer, netWorth, winnerOf, type Game, type GameState, type PendingAuction } from '../core/game';
 import { STORE_CATALOG } from '../data/item-shop';
+import { FACILITIES, type FacilityId } from '../data/facilities';
+import { canSubscribe, estimateDividend, newsCoefOf, soldSharesOf } from '../core/facility';
 import { previewFor, type PickKind } from '../core/targeting';
 import type { ElementSpec } from '../skin/instantiate';
 import {
   HUD_QK_H, HUD_QK_W,
+  NEWS_TICKER_H, NEWS_TICKER_W, NEWS_TICKER_X, NEWS_TICKER_Y,
   PANEL_BADGE_DRAW_Y, PANEL_BADGE_Y,
   PANEL_BANK_BTN2_W, PANEL_BANK_BTN2_X, PANEL_BANK_BTN2_Y, PANEL_BANK_BTN_H,
   PANEL_BANK_BTN_W, PANEL_BANK_BTN_X, PANEL_BANK_BTN_Y, PANEL_BANK_CLOSE_X, PANEL_BANK_CLOSE_Y,
@@ -63,7 +66,9 @@ export type PanelActionId =
   | 'bank:select' | 'bank:deposit' | 'bank:withdraw' | 'bank:borrow' | 'bank:repay'
   | 'bank:mortgage' | 'bank:redeem' | 'bank:close'
   /* M20.3 道具商店（spec §5.4）：选中商品行 + 买 / 卖 + 关闭（`data-target` 一律给 kind） */
-  | 'store:select' | 'store:buy' | 'store:sell' | 'store:close';
+  | 'store:select' | 'store:buy' | 'store:sell' | 'store:close'
+  /* M20.4 公共设施入股（spec §6.1）：选中设施行 + 认购 1 / 5 股 + 关闭（`data-target` 一律给 FacilityId） */
+  | 'facility:select' | 'facility:buy1' | 'facility:buy5' | 'facility:close';
 
 /** M19-D2 选目标态（view → 纯函数的入参；`hovered` 为当前悬停/预选候选格号）；M20.1 增 `sell` 口径 */
 export interface TargetingView {
@@ -102,13 +107,22 @@ export interface BullbearUiState {
 /** 涨跌卡浮层 UI 态缺省值（收起、押涨） */
 export const BULLBEAR_UI_DEFAULTS: BullbearUiState = { open: false, dir: 'up' };
 
+/** M20.4 设施浮层 UI 态（`main.ts` 持有；`sel` = 左列选中设施） */
+export interface FacilityUiState {
+  open: boolean;
+  sel: FacilityId;
+}
+
+/** 设施浮层 UI 态缺省值（收起、选中表序第一处「鹿乡银行」） */
+export const FACILITY_UI_DEFAULTS: FacilityUiState = { open: false, sel: FACILITIES[0].id };
+
 /** 方向分段（押涨 / 押跌）——可见键与命中区同源一份，避免标签漂移 */
 export function bullbearDirs(): { dir: 'up' | 'down'; label: string }[] {
   return [{ dir: 'up', label: '押涨' }, { dir: 'down', label: '押跌' }];
 }
 
-/** 浮层可见态（优先级：拍卖 > 结算 > 银行 > 商店 > 股票盘 > 涨跌卡 > 抽卡翻牌；无 → null） */
-export type OverlayKind = 'auction' | 'settle' | 'bank' | 'store' | 'stock' | 'bullbear' | 'draw';
+/** 浮层可见态（优先级：拍卖 > 结算 > 银行 > 商店 > 设施 > 股票盘 > 涨跌卡 > 抽卡翻牌；无 → null） */
+export type OverlayKind = 'auction' | 'settle' | 'bank' | 'store' | 'facility' | 'stock' | 'bullbear' | 'draw';
 
 /* —— 目标解析（「可点性」真源） —— */
 
@@ -395,15 +409,17 @@ export function auctionDebtView(a: PendingAuction): { total: number; raised: num
 /** 当前应展开的浮层（未结算 / 无触发 → null，即默认收起）；待拍态优先于一切浮层。
  *  M20.2：`opts.bankOpen` 为真且未结束时返回 `'bank'`（银行键在 idle / settled 均可开）
  *  M20.3：`opts.storeOpen` 紧随其后（商店同为常驻 HUD 入口，与银行互斥，只开一个）
+ *  M20.4：`opts.facilityOpen` 排在商店之后、股票盘之前（设施同属常驻入口，与银行 / 商店互斥）
  *  M20.3-B：`opts.bullbearOpen` 夹在股票盘与抽卡之间（手牌打涨跌卡 → 展开选方向与标的，随时可开） */
 export function overlayOf(
   state: GameState,
-  opts: { bankOpen?: boolean; storeOpen?: boolean; bullbearOpen?: boolean } = {},
+  opts: { bankOpen?: boolean; storeOpen?: boolean; facilityOpen?: boolean; bullbearOpen?: boolean } = {},
 ): OverlayKind | null {
   if (state.auction) return 'auction';
   if (state.over) return 'settle';
   if (opts.bankOpen) return 'bank';
   if (opts.storeOpen) return 'store';
+  if (opts.facilityOpen) return 'facility';
   const settled = state.phase === 'settled';
   /* 站在股票交易所（index 19）→ 盘面常开（买卖后仍停留，便于连续操作） */
   if (settled && currentPlayer(state).pos === STOCK_TILE_INDEX) return 'stock';
@@ -605,6 +621,79 @@ export function storeDetail(state: GameState, kind: ItemCardKind): StoreDetailVi
   };
 }
 
+/* —— M20.4 公共设施入股浮层（版式 100% 复用银行 C：左列 5 行设施 + 右列详情 + 两枚认购键；spec §6.1）—— */
+
+export interface FacilityRowView {
+  id: FacilityId;
+  title: string;
+  /** 摘要：`￥{price} · 已售 {sold}/{total}` */
+  summary: string;
+  price: number;
+  sold: number;
+  selected: boolean;
+}
+
+export interface FacilityDetailView {
+  id: FacilityId;
+  title: string;
+  /** 5 行详情（`ui.bankRow` 的 line 变体）：名称/认购价 → 已售 → 你的持股 → 预估分红 → 现金 */
+  lines: string[];
+  primary: BankButtonView;
+  secondary: BankButtonView;
+}
+
+/** 设施左列（**顺序恒等 `FACILITIES`**，不因售罄与否移动——与商店目录同一口径，避免点击目标漂移） */
+export function facilityRows(state: GameState, selected: FacilityId = FACILITIES[0].id): FacilityRowView[] {
+  return FACILITIES.map((def) => {
+    const sold = soldSharesOf(state.players, def.id);
+    return {
+      id: def.id,
+      title: def.name,
+      summary: `￥${def.price} · 已售 ${sold}/${def.shares}`,
+      price: def.price,
+      sold,
+      selected: def.id === selected,
+    };
+  });
+}
+
+/** 设施右列详情（5 行文本 + 两枚认购键）；可点性与引擎 `buyFacility` 的边界一致（售罄 / 现金不足 → 禁用） */
+export function facilityDetail(state: GameState, id: FacilityId): FacilityDetailView {
+  const def = FACILITIES.find((f) => f.id === id) ?? FACILITIES[0];
+  const p = currentPlayer(state);
+  const sold = soldSharesOf(state.players, def.id);
+  const mine = p.facilities[def.id] ?? 0;
+  const coef = newsCoefOf(state.news, def.id);
+  const cashflow = state.facilityCashflow[def.id] ?? 0;
+  const perRound = estimateDividend(def.id, mine, cashflow, coef);
+  const buy1 = canSubscribe(state.players, def.id, 1, p.cash);
+  const buy5 = canSubscribe(state.players, def.id, 5, p.cash);
+  return {
+    id: def.id,
+    title: def.name,
+    lines: [
+      `${def.name} · 每股 ￥${def.price}`,
+      `已售 ${sold}/${def.shares} 股 · 基础分红 5%/轮`,
+      `你的持股 ${mine} 股`,
+      `预估分红 ￥${perRound}/轮${coef === 1 ? '' : ` · 新闻 ×${coef}`}`,
+      `现金 ￥${p.cash}`,
+    ],
+    primary: { label: `认购 1 股 ￥${def.price}`, enabled: buy1.ok },
+    secondary: { label: `认购 5 股 ￥${def.price * 5}`, enabled: buy5.ok },
+  };
+}
+
+/** M20.4 新闻条（spec §6.2）：`state.news === null` → 不出（`null`）；否则 1 条（深度 0 ⇒ 浮层自然盖住） */
+export function newsTickerSpecOf(state: GameState): ElementSpec | null {
+  const news = state.news;
+  if (!news) return null;
+  return {
+    id: 'ui.newsTicker', slot: null, c: 0, r: 0, pass: 4,
+    fixed: { cx: NEWS_TICKER_X + NEWS_TICKER_W / 2, cy: NEWS_TICKER_Y + NEWS_TICKER_H / 2 },
+    state: { sentiment: news.sentiment, scope: news.scope, target: news.target, title: news.title, coef: newsCoefOf(state.news, news.target as FacilityId) },
+  };
+}
+
 /* —— 视图组装（pass 4 + 定格台位；c 恒 0，depth = r 递增即绘制序） —— */
 
 /** 手牌行第 i 槽的中心 x（`scroll` = 已 clamp 的横滑量；spec §4.2 版式 A） */
@@ -618,6 +707,7 @@ export function panelSpecs(
   store: StoreUiState = { open: false, sel: STORE_CATALOG[0].kind },
   stock: StockUiState = STOCK_UI_DEFAULTS,
   bullbear: BullbearUiState = BULLBEAR_UI_DEFAULTS,
+  facility: FacilityUiState = FACILITY_UI_DEFAULTS,
 ): ElementSpec[] {
   const out: ElementSpec[] = [];
   let r = 0;
@@ -652,7 +742,9 @@ export function panelSpecs(
     }
   }
 
-  const overlay = overlayOf(state, { bankOpen: bank.open, storeOpen: store.open, bullbearOpen: bullbear.open });
+  const overlay = overlayOf(state, {
+    bankOpen: bank.open, storeOpen: store.open, facilityOpen: facility.open, bullbearOpen: bullbear.open,
+  });
   if (overlay === 'auction' && state.auction) {
     const a = state.auction;
     const lots = a.results.length + a.queue.length;
@@ -721,6 +813,31 @@ export function panelSpecs(
       push('ui.bankRow', PANEL_BANK_DETAIL_CX, lineY,
         i === 0 ? { variant: 'line', text: line, wrapW: PANEL_STORE_LINE_W } : { variant: 'line', text: line });
       lineY += i === 0 ? PANEL_STORE_DESC_DY : PANEL_BANK_LINE_DY;
+    });
+    push('ui.button.primary',
+      PANEL_BANK_BTN_X + PANEL_BANK_BTN_W / 2, PANEL_BANK_BTN_Y + PANEL_BANK_BTN_H / 2,
+      { label: detail.primary.label, enabled: detail.primary.enabled });
+    push('ui.button.secondary',
+      PANEL_BANK_BTN2_X + PANEL_BANK_BTN2_W / 2, PANEL_BANK_BTN2_Y + PANEL_BANK_BTN_H / 2,
+      { label: detail.secondary.label, enabled: detail.secondary.enabled });
+    push('ui.qk', PANEL_BANK_CLOSE_X + HUD_QK_W / 2, PANEL_BANK_CLOSE_Y + HUD_QK_H / 2,
+      { label: '关闭', enabled: true });
+  } else if (overlay === 'facility') {
+    /* 版式 100% 复用银行 C（spec §6.1 / F-D12）：左列 5 行设施（`ui.bankRow` row 变体）
+       + 右列 5 行详情（line 变体）+ 两枚认购键 + 右上关闭键。
+       5 行 344..576、两键 456..502 / 510..556 均在底板 300..600 内，且整段收在 606 之上
+       ⇒ 不与 HUD 快键行（607..629，画在浮层之上）冲突。 */
+    push('showcase.panel', PANEL_X, PANEL_Y);
+    push('ui.badge', PANEL_CX, PANEL_BADGE_Y, { text: '公共设施 · 入股' });
+    facilityRows(state, facility.sel).forEach((row, i) => {
+      push('ui.bankRow', PANEL_BANK_ROW_X + PANEL_BANK_ROW_W / 2,
+        PANEL_BANK_ROW_Y0 + PANEL_BANK_ROW_H / 2 + i * (PANEL_BANK_ROW_H + PANEL_BANK_ROW_GAP),
+        { variant: 'row', title: row.title, summary: row.summary, selected: row.selected });
+    });
+    const detail = facilityDetail(state, facility.sel);
+    detail.lines.forEach((line, i) => {
+      push('ui.bankRow', PANEL_BANK_DETAIL_CX, PANEL_BANK_LINE_Y0 + i * PANEL_BANK_LINE_DY,
+        { variant: 'line', text: line });
     });
     push('ui.button.primary',
       PANEL_BANK_BTN_X + PANEL_BANK_BTN_W / 2, PANEL_BANK_BTN_Y + PANEL_BANK_BTN_H / 2,
@@ -825,6 +942,7 @@ export function panelHitAreas(
   store: StoreUiState = { open: false, sel: STORE_CATALOG[0].kind },
   stock: StockUiState = STOCK_UI_DEFAULTS,
   bullbear: BullbearUiState = BULLBEAR_UI_DEFAULTS,
+  facility: FacilityUiState = FACILITY_UI_DEFAULTS,
 ): PanelHit[] {
   const out: PanelHit[] = [];
   if (sel !== null) {
@@ -834,7 +952,9 @@ export function panelHitAreas(
     });
     return out;
   }
-  const overlay = overlayOf(state, { bankOpen: bank.open, storeOpen: store.open, bullbearOpen: bullbear.open });
+  const overlay = overlayOf(state, {
+    bankOpen: bank.open, storeOpen: store.open, facilityOpen: facility.open, bullbearOpen: bullbear.open,
+  });
   if (!overlay) {
     /* 抽屉收起时手牌不可点（画面也没画）；牌袋键由 `Hud.ts` 提供 */
     if (!handOpen) return out;
@@ -922,6 +1042,31 @@ export function panelHitAreas(
       action: 'store:close', x: PANEL_BANK_CLOSE_X, y: PANEL_BANK_CLOSE_Y,
       w: HUD_QK_W, h: HUD_QK_H, enabled: true,
     });
+  } else if (overlay === 'facility') {
+    /* 与 `panelSpecs` 设施分支同源：左列 5 行（`data-target` = FacilityId）+ 两枚认购键（target = FacilityId）
+       + 关闭键。行 / 键台位一律复用 `PANEL_BANK_*`（5 行 344..576、两键 456..556），全段收在 606 之上。 */
+    facilityRows(state, facility.sel).forEach((row, i) => {
+      out.push({
+        action: 'facility:select', target: row.id,
+        x: PANEL_BANK_ROW_X, y: PANEL_BANK_ROW_Y0 + i * (PANEL_BANK_ROW_H + PANEL_BANK_ROW_GAP),
+        w: PANEL_BANK_ROW_W, h: PANEL_BANK_ROW_H, enabled: true,
+      });
+    });
+    const detail = facilityDetail(state, facility.sel);
+    out.push({
+      action: 'facility:buy1', target: facility.sel,
+      x: PANEL_BANK_BTN_X, y: PANEL_BANK_BTN_Y, w: PANEL_BANK_BTN_W, h: PANEL_BANK_BTN_H,
+      enabled: detail.primary.enabled,
+    });
+    out.push({
+      action: 'facility:buy5', target: facility.sel,
+      x: PANEL_BANK_BTN2_X, y: PANEL_BANK_BTN2_Y, w: PANEL_BANK_BTN2_W, h: PANEL_BANK_BTN_H,
+      enabled: detail.secondary.enabled,
+    });
+    out.push({
+      action: 'facility:close', x: PANEL_BANK_CLOSE_X, y: PANEL_BANK_CLOSE_Y,
+      w: HUD_QK_W, h: HUD_QK_H, enabled: true,
+    });
   } else if (overlay === 'draw') {
     out.push({
       action: 'card:close', x: PANEL_CLOSE_X, y: PANEL_CLOSE_Y,
@@ -1002,7 +1147,8 @@ export function mountPanels(
   root: HTMLElement, game: Game, act: PanelAct,
   view: () => {
     handOpen: boolean; sel?: TargetingView | null; bank?: BankUiState;
-    store?: StoreUiState; stock?: StockUiState; bullbear?: BullbearUiState; handScroll?: number;
+    store?: StoreUiState; stock?: StockUiState; bullbear?: BullbearUiState;
+    facility?: FacilityUiState; handScroll?: number;
   } = () => ({ handOpen: false }),
 ): PanelHandle {
   const layer = document.createElement('div');
@@ -1014,7 +1160,7 @@ export function mountPanels(
     layer.textContent = '';
     const v = view();
     const scroll = v.handScroll ?? 0;
-    for (const a of panelHitAreas(game.state, v.handOpen, v.sel ?? null, v.bank, scroll, v.store, v.stock, v.bullbear)) {
+    for (const a of panelHitAreas(game.state, v.handOpen, v.sel ?? null, v.bank, scroll, v.store, v.stock, v.bullbear, v.facility)) {
       const b = document.createElement('button');
       b.dataset.action = a.action;
       if (a.target !== undefined) b.dataset.target = String(a.target);

@@ -21,7 +21,7 @@ import { candidatesFor, canTarget, type PickKind } from './core/targeting';
 import { bboxOf, choreography, frameFor, landingPose, type CamPose, type Cell, type ChoreographyOpts, type View } from './core/framing';
 import { createCamera, toWorld } from './render/camera';
 import { hudSpecs, mountHud, type HudActionId, type HudHandle } from './ui/Hud';
-import { handLayout, mountPanels, overlayOf, panelSpecs, parseTierKey, tierShares, type BankProductKind, type BullbearUiState, type PanelActionId, type PanelHandle, type StockUiState, type StoreUiState, type TargetingView } from './ui/panels';
+import { handLayout, mountPanels, newsTickerSpecOf, overlayOf, panelSpecs, parseTierKey, tierShares, type BankProductKind, type BullbearUiState, type FacilityUiState, type PanelActionId, type PanelHandle, type StockUiState, type StoreUiState, type TargetingView } from './ui/panels';
 import { createAiDriver, type AiDriver } from './ui/aiDriver';
 import { createAudioEngine } from './ui/audio';
 import { mountSetup, readPlan, resolveSeats, type SeatPlan } from './ui/setup';
@@ -38,6 +38,7 @@ import { DEMO_OWNER, PLAYER_NAME, type BuildLevel } from './data/board';
 import { STOCKS, STOCK_TILE_INDEX } from './data/stocks';
 import { BANK_TILE_INDEX } from './data/bank';
 import { STORE_CATALOG } from './data/item-shop';
+import { FACILITIES, type FacilityId } from './data/facilities';
 import { BUILDING_SCALE, BUILDING_Y_OFFSET, BUBBLE_HOLD_MS, BUBBLE_MOVE_HOLD_MS, CAM_AI_SCALE, CAM_BACK_MS, CAM_FALLBACK_MAX_ZOOM, CAM_FOLLOW_ZOOM, CAM_IDLE_ZOOM, CAM_MAX_ZOOM, CAM_MIN_ZOOM, CAM_PUSH_MS, CAM_SETTLE_MS, CAM_TILE_PAD, CAM_VIEW_CX, CAM_VIEW_CY, CAM_VIEW_H, CAM_VIEW_W, DEFAULT_GEO, FX_FRAMES, FX_LAND_BACK_MS, FX_LAND_PUNCH_MS, FX_LAND_PUSH_MS, FX_LEVELS, FX_NOFX_SPEED, LABEL_GROUND, PANEL_HAND_Y, PANEL_SLOT_H, STAGE_H, STAGE_W, TILE_PICK_TOL, UI_BREAK_W } from './skin/layout';
 import { SHOP_DEFAULTS, parseShopConfig, type ShopConfig } from './skin/shop-config';
 import { allElementIds } from './skin/registry';
@@ -476,6 +477,10 @@ export async function boot(): Promise<void> {
      `sel` = 左列选中商品（顺序恒等 `STORE_CATALOG`）；`handScroll` = 手牌横滑量（clamp 由 `handLayout` 兜） —— */
   let storeOpen = false;
   let storeSel: ItemCardKind = STORE_CATALOG[0].kind;
+  /* —— M20.4 设施浮层 UI 态（spec §6.1）：`open` 由 HUD「设施」键驱动，与 `bankOpen` / `storeOpen` 三方互斥；
+     `sel` = 左列选中设施（顺序恒等 `FACILITIES`） —— */
+  let facilityOpen = false;
+  let facilitySel: FacilityId = FACILITIES[0].id;
   let handScroll = 0;
   /* —— M20.3-B 股票 / 涨跌卡浮层 UI 态（spec §6.1/§6.2）：`stockSel` = 逐行选中的标的（换回合保留）、
      `stockLev` = 杠杆倍数（1 = 不加，换回合重置回 1）；`bullbearOpen` / `bullbearDir` = 涨跌卡浮层
@@ -493,12 +498,14 @@ export async function boot(): Promise<void> {
     && !handOpenEff() && !(seats[g.state.current] ?? null);
   /** 商店 UI 态快照（`panelSpecs` / `panelHitAreas` / `mountPanels` view 共用同一口径） */
   const storeUi = (): StoreUiState => ({ open: storeOpen, sel: storeSel });
+  /** 设施 UI 态快照（同规） */
+  const facilityUi = (): FacilityUiState => ({ open: facilityOpen, sel: facilitySel });
   /** 股票 / 涨跌卡浮层 UI 态快照（同上，与 `storeUi` 同规） */
   const stockUi = (): StockUiState => ({ sel: stockSel, lev: stockLev });
   const bullbearUi = (): BullbearUiState => ({ open: bullbearOpen, dir: bullbearDir });
-  /** `overlayOf` 入参快照（三个非模态浮层的开合；所有可见性仲裁共用同一口径，避免漏传一个） */
-  const overlays = (): { bankOpen: boolean; storeOpen: boolean; bullbearOpen: boolean } =>
-    ({ bankOpen, storeOpen, bullbearOpen });
+  /** `overlayOf` 入参快照（四个非模态浮层的开合；所有可见性仲裁共用同一口径，避免漏传一个） */
+  const overlays = (): { bankOpen: boolean; storeOpen: boolean; facilityOpen: boolean; bullbearOpen: boolean } =>
+    ({ bankOpen, storeOpen, facilityOpen, bullbearOpen });
 
   /**
    * 地砖归属色 / 楼体业主色 / 楼顶名牌名色 **共用同一个归属口**（M18 D1/D3）。
@@ -547,6 +554,8 @@ export async function boot(): Promise<void> {
     }));
     /* 顶部状态条播报：气泡在场时把「谁 · 做了什么」也搬到屏幕顶部（小屏上头顶气泡可能被棋盘元素压住） */
     const callout = calloutOf(g) ?? undefined;
+    /* M20.4 新闻条（spec §6.2）：`state.news === null` → null（不出） */
+    const newsTick = newsTickerSpecOf(g.state);
     return [
       ...boardTileSpecs(currentPlayer(g.state).pos, ownedOf),
       ...innerSpecs(),
@@ -564,11 +573,14 @@ export async function boot(): Promise<void> {
       /* spec §7.2：play 版式不再常驻中部橱窗（`?show=b|c` 演示版式完整保留），
          中部条带交给环境层近景街市带；落地时由地块卡（`ui.tileCard`）滑入 */
       ...hudSpecs(g.state, fxPending || fx.busy(), seats, driver?.isFast() ?? false, audio.prefs(),
-        { tileCard: tileCardOn(g), handOpen: handOpenEff(), callout, bankOpen, storeOpen }),
+        { tileCard: tileCardOn(g), handOpen: handOpenEff(), callout, bankOpen, storeOpen, facilityOpen }),
+      /* M20.4 新闻条（spec §6.2）：每轮 1 条，落 474..500 的空带；夹在 `hudSpecs` 与 `panelSpecs` 之间
+         ⇒ 浮层（含设施浮层）自然盖住它；`state.news === null` 时不出 */
+      ...(newsTick ? [newsTick] : []),
       /* M5 浮层：手牌抽屉（默认收起）+ 抽卡翻牌 / 股票盘 / 结算面板（未触发时为空）；
          M20.2 银行浮层（版式 C）由 `{ open, sel }` 驱动、M20.3 商店浮层同理，可见性仍由 `overlayOf` 统一仲裁 */
       ...panelSpecs(g.state, handOpenEff(), uiSel, { open: bankOpen, sel: bankSel }, handScroll, storeUi(),
-        stockUi(), bullbearUi()),
+        stockUi(), bullbearUi(), facilityUi()),
     ];
   };
 
@@ -782,9 +794,9 @@ export async function boot(): Promise<void> {
     if (step.kind === 'settle') autoBankOf(g);
   };
 
-  /** HUD 点击 → AiStep（`hand` / `sell` / `bank` / `store` / `ai:fast` / `ai:skip` / `audio:*` 已在回调里拦截，不会传到这里） */
+  /** HUD 点击 → AiStep（`hand` / `sell` / `bank` / `store` / `facility` / `ai:fast` / `ai:skip` / `audio:*` 已在回调里拦截，不会传到这里） */
   const stepOfHud = (
-    a: Exclude<HudActionId, 'hand' | 'sell' | 'bank' | 'store' | 'ai:fast' | 'ai:skip' | 'audio:sfx' | 'audio:bgm'>,
+    a: Exclude<HudActionId, 'hand' | 'sell' | 'bank' | 'store' | 'facility' | 'ai:fast' | 'ai:skip' | 'audio:sfx' | 'audio:bgm'>,
   ): AiStep =>
     a === 'buy' ? { kind: 'buy' } : a === 'upgrade' ? { kind: 'upgrade' } : { kind: a };
 
@@ -914,6 +926,19 @@ export async function boot(): Promise<void> {
       }
       return null;
     }
+    /* M20.4 设施浮层（spec §6.1）：`facility:select` 只切 UI 选中态；两枚认购键**直接落库**到
+       `Game.buyFacility`（与银行六 API / 商店同构：不推进回合、不进 `AiStep`、无动效与气泡）。 */
+    if (a === 'facility:select') { facilitySel = target as FacilityId; paint(); return null; }
+    if (a === 'facility:close') { facilityOpen = false; paint(); return null; }
+    if (a.startsWith('facility:')) {
+      const g = game;
+      if (g) {
+        if (a === 'facility:buy1') g.buyFacility(facilitySel, 1);
+        else if (a === 'facility:buy5') g.buyFacility(facilitySel, 5);
+        paint();
+      }
+      return null;
+    }
     /* M20.1 破产拍卖：`data-target` 带出出价金额；「放弃」= amount 0（落槌给其余报价） */
     if (a === 'auction:bid') return { kind: 'auctionBid', amount: Number(target) };
     if (a === 'auction:pass') return { kind: 'auctionBid', amount: 0 };
@@ -949,15 +974,16 @@ export async function boot(): Promise<void> {
       if (a === 'hand') { handOpen = !handOpen; paint(); return; }
       /* 自由出售入口（spec §3.5）：进入 M19 选目标态，等待棋盘点选自有地块 */
       if (a === 'sell') { uiSel = { kind: 'sell', hovered: null }; paint(); return; }
-      /* 银行 / 商店浮层开合（M20.2 §3.8 / M20.3 §5.1）：只改 UI 态、不推进状态，故不走 `dispatch`
-         （也就不吃动效与气泡）；两者互斥——开启一方即收起另一方 */
-      if (a === 'bank') { bankOpen = !bankOpen; storeOpen = false; paint(); return; }
-      if (a === 'store') { storeOpen = !storeOpen; bankOpen = false; paint(); return; }
+      /* 银行 / 商店 / 设施浮层开合（M20.2 §3.8 / M20.3 §5.1 / M20.4 §6.1）：只改 UI 态、不推进状态，
+         故不走 `dispatch`（也就不吃动效与气泡）；三者互斥——开启一方即收起另两方 */
+      if (a === 'bank') { bankOpen = !bankOpen; storeOpen = false; facilityOpen = false; paint(); return; }
+      if (a === 'store') { storeOpen = !storeOpen; bankOpen = false; facilityOpen = false; paint(); return; }
+      if (a === 'facility') { facilityOpen = !facilityOpen; bankOpen = false; storeOpen = false; paint(); return; }
       if (fx.busy()) fx.skip();   // 点屏加速：状态早已落库，跳过只影响观感时长
       if (a === 'ai:fast') { if (driver) driver.setFast(!driver.isFast()); paint(); return; }
       if (a === 'ai:skip') { driver?.skipRest(); return; }
       dispatch(stepOfHud(a));
-    }, () => ({ seats, fast: driver?.isFast() ?? false, ui: { tileCard: tileCardOn(g), handOpen: handOpenEff(), bankOpen, storeOpen } }));
+    }, () => ({ seats, fast: driver?.isFast() ?? false, ui: { tileCard: tileCardOn(g), handOpen: handOpenEff(), bankOpen, storeOpen, facilityOpen } }));
     /* 浮层动作：关浮层 / 股票买卖 / 打手牌 / 银行信贷 / 道具商店买卖（目标由命中区 `data-target` 带出） */
     panels = mountPanels(fitRoot, g, (a: PanelActionId, target?: number | string) => {
       if (fx.busy()) fx.skip();
@@ -965,7 +991,7 @@ export async function boot(): Promise<void> {
       if (step) dispatch(step);
     }, () => ({
       handOpen: handOpenEff(), sel: uiSel, bank: { open: bankOpen, sel: bankSel },
-      store: storeUi(), stock: stockUi(), bullbear: bullbearUi(), handScroll,
+      store: storeUi(), stock: stockUi(), bullbear: bullbearUi(), facility: facilityUi(), handScroll,
     }));
     /* —— M20.3 手牌横滑手势（spec §4.3）：画布上无法用原生滚动（视觉在 Canvas、命中在 DOM），
        故在 `#mono-panels` 层做指针拖拽。落手牌行带且确有可滚量才进拖拽态；水平位移超过
@@ -1022,9 +1048,9 @@ export async function boot(): Promise<void> {
       onFlush: () => fx.play({ kind: 'end' }, () => paint()),
       /* 「跳过本次」= 整席位一次落库，中间几步的取景没有观感价值（spec §6 P1 第 13 项）⇒ 直接归位 */
       onSkip: () => { if (camOn) camera.reset(0); },
-      /* 银行 / 商店 / 涨跌卡浮层展开时与拍卖同语义挂起（M20.2 §3.8 / M20.3 §5.1 / M20.3-B §6.2）：
+      /* 银行 / 商店 / 设施 / 涨跌卡浮层展开时与拍卖同语义挂起（M20.2 §3.8 / M20.3 §5.1 / M20.4 §6.1 / M20.3-B §6.2）：
          面板在场时不推进 AI 走位 */
-      paused: () => bankOpen || storeOpen || bullbearOpen,
+      paused: () => bankOpen || storeOpen || facilityOpen || bullbearOpen,
     });
     driver.start();
     /* BGM 起播（spec §6.2）：未解锁时只记「想要」，首次手势 `unlock()` 时随解锁一起起播 */
@@ -1171,7 +1197,7 @@ export async function boot(): Promise<void> {
     setBank: (open: boolean, sel?: BankProductKind) => {
       bankOpen = open;
       if (sel) bankSel = sel;
-      if (open) storeOpen = false;      // 与商店互斥
+      if (open) { storeOpen = false; facilityOpen = false; }   // 与商店 / 设施互斥
       paint();
     },
     /* 道具商店（M20.3 spec §5.1）：`store()` 读 UI 态；`setStore(open, sel?)` 供 e2e / 取证脚本直接开面板 */
@@ -1179,7 +1205,15 @@ export async function boot(): Promise<void> {
     setStore: (open: boolean, sel?: ItemCardKind) => {
       storeOpen = open;
       if (sel) storeSel = sel;
-      if (open) bankOpen = false;       // 与银行互斥
+      if (open) { bankOpen = false; facilityOpen = false; }    // 与银行 / 设施互斥
+      paint();
+    },
+    /* 公共设施入股（M20.4 spec §6.1）：`facility()` 读 UI 态；`setFacility(open, sel?)` 供 e2e / 取证脚本直接开面板 */
+    facility: () => facilityUi(),
+    setFacility: (open: boolean, sel?: FacilityId) => {
+      facilityOpen = open;
+      if (sel) facilitySel = sel;
+      if (open) { bankOpen = false; storeOpen = false; }       // 与银行 / 商店互斥
       paint();
     },
     /* 股票浮层（M20.3-B spec §6.1）：`stock()` 读 UI 态（选中标的 + 杠杆档）；

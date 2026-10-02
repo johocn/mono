@@ -1,5 +1,6 @@
 import {
-  AUDIO_KEY_SIZE, BUBBLE_H, BUBBLE_W, HUD_BAR_W, HUD_DEBT_H, HUD_DEBT_W, PANEL_BANK_ROW_H,
+  AUDIO_KEY_SIZE, BUBBLE_H, BUBBLE_W, HUD_BAR_W, HUD_DEBT_H, HUD_DEBT_W, NEWS_TICKER_H, NEWS_TICKER_W,
+  PANEL_BANK_ROW_H,
   PANEL_BANK_ROW_W, PANEL_BID_H, PANEL_BID_W, PANEL_CANCEL_W,
   PANEL_CLOSE_H, PANEL_CLOSE_W, PANEL_DEBT_H, PANEL_DEBT_W,
   PANEL_HAND_BAR_H, PANEL_HAND_BAR_W,
@@ -245,6 +246,9 @@ reg['ui.bankRow'] = showcaseEntry('ui.bankRow', { w: PANEL_BANK_ROW_W, d: 1, h: 
 reg['ui.debtBar'] = showcaseEntry('ui.debtBar', { w: HUD_DEBT_W, d: 1, h: HUD_DEBT_H });
 /* M20.3 手牌滑动条（spec §4.2 版式 A）：手牌行上方的 3px 细条，一屏放得下时整条隐藏 */
 reg['ui.handBar'] = showcaseEntry('ui.handBar', { w: PANEL_HAND_BAR_W, d: 1, h: PANEL_HAND_BAR_H });
+/* M20.4 新闻条（spec §6.2）：每轮 1 条（`state.news !== null` 时出），利好金底 / 利空灰底两态；
+   信息条不吃事件 ⇒ 不进任何命中区 */
+reg['ui.newsTicker'] = showcaseEntry('ui.newsTicker', { w: NEWS_TICKER_W, d: 1, h: NEWS_TICKER_H });
 
 export const REGISTRY: Record<string, RegistryEntry> = reg;
 

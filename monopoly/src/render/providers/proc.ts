@@ -131,6 +131,7 @@ import { diceBody, diceFace, uiButton, uiDock, uiLabel, uiPanel, uiPlayerBar } f
 import { uiMusicOff, uiMusicOn, uiSoundOff, uiSoundOn } from './proc-audio';
 import {
   tileCard, uiBadge, uiBankRow, uiBid, uiBidDebt, uiCard, uiCardBack, uiDebtBar, uiHandBar, uiHandSlot,
+  uiNewsTicker,
   uiPreview, uiSettleRow, uiStockChart, uiStockRow,
 } from './proc-panel';
 import { fxCoin, fxDust, fxPulse, fxRubble, fxScaffold, fxShard, fxShine, fxSpark, fxStamp } from './proc-fx';
@@ -205,6 +206,7 @@ export const PROC_PRESETS: Record<string, ProcPreset> = {
   uiDebtBar,
   uiBankRow,
   uiHandBar,
+  uiNewsTicker,
   fxCoin,
   fxStamp,
   fxDust,

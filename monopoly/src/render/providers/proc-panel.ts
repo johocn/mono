@@ -81,6 +81,11 @@ export const PANEL_D = fb({
      位移 = (轨道宽 − 滑块宽) × offset（两者由 UI 层算好传入 `state.ratio / state.offset`） */
   handBarTrack: 'rgba(255,255,255,.10)', handBarThumb: '#f5c451', handBarR: 2,
   handBarMinW: 1,                                  // 滑块最小宽（内容极宽时仍可见）
+  /* M20.4 新闻条（ui.newsTicker）：深底圆角 + 左对齐单行「利好/利空 · 标题」；利好金底 / 利空灰底 */
+  newsR: 8, newsGoodFill: 'rgba(43,36,22,.92)', newsBadFill: 'rgba(26,31,28,.92)',
+  newsGoodEdge: '#f5c451', newsBadEdge: '#5b6b63', newsEdgeW: 1,
+  newsFs: 12, newsTextGoodFill: '#ffe9b0', newsTextBadFill: '#9fb3a8',
+  newsPadX: 14, newsMarkGood: '利好', newsMarkBad: '利空',
 });
 
 const G = (p: Record<string, unknown>, k: keyof typeof PANEL_D): number => num(p, k, PANEL_D[k] as number);
@@ -400,4 +405,24 @@ export const uiHandBar: ProcPreset = (g, ctx) => {
   const offset = Math.min(Math.max(typeof state.offset === 'number' ? state.offset : 0, 0), 1);
   const tw = Math.max(w * ratio, G(params, 'handBarMinW') * s);
   g.roundRect(x0 + (w - tw) * offset, y0, tw, h, r).fill({ color: S(params, 'handBarThumb') });
+};
+
+/* —— M20.4 新闻条（spec §6.2）：深底圆角 + 单行「利好/利空 · 标题」（左对齐）。
+   利好金底 / 利空灰底由 `state.sentiment` 选语义色；标题由 UI 层组装传入（UI 不写死文案）。
+   信息条不吃事件 ⇒ 无命中区。 —— */
+export const uiNewsTicker: ProcPreset = (g, ctx) => {
+  const { cx, cy, box, params, state, s, text } = ctx;
+  const good = state.sentiment === 'good';
+  const w = box.w * s;
+  const h = box.h * s;
+  g.roundRect(cx - w / 2, cy - h / 2, w, h, G(params, 'newsR'))
+    .fill({ color: good ? S(params, 'newsGoodFill') : S(params, 'newsBadFill') })
+    .stroke({ color: good ? S(params, 'newsGoodEdge') : S(params, 'newsBadEdge'), width: G(params, 'newsEdgeW') });
+  if (!text) return;
+  const mark = good ? S(params, 'newsMarkGood') : S(params, 'newsMarkBad');
+  text({
+    text: `${mark} · ${typeof state.title === 'string' ? state.title : ''}`,
+    x: cx - w / 2 + G(params, 'newsPadX'), y: cy, size: G(params, 'newsFs'),
+    fill: good ? S(params, 'newsTextGoodFill') : S(params, 'newsTextBadFill'), align: 'left',
+  });
 };
