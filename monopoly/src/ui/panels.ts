@@ -40,6 +40,7 @@ import {
   PANEL_CARD_CX, PANEL_CARD_CY, PANEL_CARD_S,
   PANEL_CHART_H, PANEL_CHART_W, PANEL_CHART_X, PANEL_CHART_Y, PANEL_CLOSE_H, PANEL_CLOSE_W,
   PANEL_CLOSE_X, PANEL_CLOSE_Y, PANEL_CX, PANEL_DEBT_CX, PANEL_DEBT_CY, PANEL_DRAW_X, PANEL_DRAW_Y,
+  PANEL_FACILITY_CTA_FS,
   PANEL_HAND_BAR_H, PANEL_HAND_BAR_W, PANEL_HAND_BAR_Y, PANEL_HAND_Y,
   PANEL_PREVIEW_W, PANEL_PREVIEW_X,
   PANEL_ROW_H, PANEL_ROW_W, PANEL_ROW_X, PANEL_SETTLE_ROW_GAP,
@@ -826,7 +827,10 @@ export function panelSpecs(
     /* 版式 100% 复用银行 C（spec §6.1 / F-D12）：左列 5 行设施（`ui.bankRow` row 变体）
        + 右列 5 行详情（line 变体）+ 两枚认购键 + 右上关闭键。
        5 行 344..576、两键 456..502 / 510..556 均在底板 300..600 内，且整段收在 606 之上
-       ⇒ 不与 HUD 快键行（607..629，画在浮层之上）冲突。 */
+       ⇒ 不与 HUD 快键行（607..629，画在浮层之上）冲突。
+       两枚键仅字号逐实例覆写为 `PANEL_FACILITY_CTA_FS`（`state.fs`）：标签「认购 1 股 ￥200」/
+       「认购 5 股 ￥1000」比银行键标签长，默认 15px 会溢出键宽（详见 `layout.ts` 同名常量注释），
+       台位 / 键宽仍与银行版式逐位相同。 */
     push('showcase.panel', PANEL_X, PANEL_Y);
     push('ui.badge', PANEL_CX, PANEL_BADGE_Y, { text: '公共设施 · 入股' });
     facilityRows(state, facility.sel).forEach((row, i) => {
@@ -841,10 +845,10 @@ export function panelSpecs(
     });
     push('ui.button.primary',
       PANEL_BANK_BTN_X + PANEL_BANK_BTN_W / 2, PANEL_BANK_BTN_Y + PANEL_BANK_BTN_H / 2,
-      { label: detail.primary.label, enabled: detail.primary.enabled });
+      { label: detail.primary.label, enabled: detail.primary.enabled, fs: PANEL_FACILITY_CTA_FS });
     push('ui.button.secondary',
       PANEL_BANK_BTN2_X + PANEL_BANK_BTN2_W / 2, PANEL_BANK_BTN2_Y + PANEL_BANK_BTN_H / 2,
-      { label: detail.secondary.label, enabled: detail.secondary.enabled });
+      { label: detail.secondary.label, enabled: detail.secondary.enabled, fs: PANEL_FACILITY_CTA_FS });
     push('ui.qk', PANEL_BANK_CLOSE_X + HUD_QK_W / 2, PANEL_BANK_CLOSE_Y + HUD_QK_H / 2,
       { label: '关闭', enabled: true });
   } else if (overlay === 'stock') {

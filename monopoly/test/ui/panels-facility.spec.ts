@@ -8,7 +8,7 @@ import {
   NEWS_TICKER_H, NEWS_TICKER_W, NEWS_TICKER_X, NEWS_TICKER_Y,
   PANEL_BANK_BTN2_Y, PANEL_BANK_BTN_H, PANEL_BANK_BTN_Y, PANEL_BANK_CLOSE_Y,
   PANEL_BANK_ROW_GAP, PANEL_BANK_ROW_H, PANEL_BANK_ROW_X, PANEL_BANK_ROW_Y0,
-  PANEL_H, PANEL_Y,
+  PANEL_FACILITY_CTA_FS, PANEL_H, PANEL_Y,
 } from '../../src/skin/layout';
 import {
   facilityDetail, facilityRows, newsTickerSpecOf, overlayOf, panelHitAreas, panelSpecs,
@@ -122,6 +122,20 @@ describe('panels：设施浮层画面与命中区', () => {
     expect(specs.filter((s) => s.id === 'ui.button.secondary')).toHaveLength(1);
     expect(specs.filter((s) => s.id === 'ui.qk')).toHaveLength(1);          // 关闭键
     expect(specs.some((s) => s.id === 'ui.handBar')).toBe(false);           // 浮层压住手牌行
+  });
+
+  it('两枚认购键逐实例压字号：`state.fs = PANEL_FACILITY_CTA_FS`（银行 / 商店分支不受影响）', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    const specs = specsWith(g, 'bank');
+    const primary = specs.find((s) => s.id === 'ui.button.primary')!;
+    const secondary = specs.find((s) => s.id === 'ui.button.secondary')!;
+    expect(primary.state!.fs).toBe(PANEL_FACILITY_CTA_FS);
+    expect(secondary.state!.fs).toBe(PANEL_FACILITY_CTA_FS);
+    /* 字号覆写只在设施分支：银行浮层两枚键不带 `fs`（沿用 skin 参数默认） */
+    const bankSpecs = panelSpecs(g.state, true, null, { open: true, sel: 'deposit' });
+    for (const s of bankSpecs.filter((x) => x.id === 'ui.button.primary' || x.id === 'ui.button.secondary')) {
+      expect(s.state!.fs).toBeUndefined();
+    }
   });
 
   it('命中区：5 行 facility:select（target = FacilityId）+ buy1 / buy5 + close', () => {

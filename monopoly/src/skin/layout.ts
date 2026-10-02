@@ -278,6 +278,11 @@ export const PANEL_BANK_BTN2_Y = 510;            // 次键顶边
 export const PANEL_BANK_BTN_H = 46;              // = 注册表两枚操作键的高（与 HUD 同源）
 export const PANEL_BANK_CLOSE_X = 300;           // 右上「关闭」键左缘（复用 72×22 的 ui.qk）
 export const PANEL_BANK_CLOSE_Y = 307;           // 关闭键顶边（中心 y 与 PANEL_BADGE_Y 同线）
+/* M20.4 设施浮层两枚认购键的字号覆写（`state.fs`，见 `render/providers/proc-hud.ts` 的 `uiButton`）：
+   标签「认购 1 股 ￥200」/「认购 5 股 ￥1000」较银行键标签长——15px 下实测 110.4 / 119.7 宽，
+   溢出 98 / 110 的键宽 ⇒ 深色字压到深色底板上，肉眼像被裁切。压到 12px 后 88.3 / 95.7，两侧各留 ≥ 5px。
+   台位 / 键宽仍 100% 复用银行版式（F-D12），仅字号逐实例覆写。 */
+export const PANEL_FACILITY_CTA_FS = 12;
 
 /* —— M20.3 道具商店浮层（版式 100% 复用银行 C 的左右分栏、元素与键位，仅纵向排版更紧）——
    银行左列只有 3 行（行盒 152×40 / 间距 8），而商店目录有 8 项（M20.3-B 追加两种后）。

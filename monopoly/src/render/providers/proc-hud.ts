@@ -113,9 +113,12 @@ export const uiButton: ProcPreset = (g, ctx) => {
     .fill({ color: enabled ? S(params, 'btnFill') : S(params, 'btnFillDisabled') })
     .stroke({ color: S(params, 'btnEdge'), width: G(params, 'btnEdgeW') });
   if (!text) return;
+  /* 字号默认取 skin 参数 `btnFs`；个别键（如设施浮层「认购 1 股 ￥200」= 11 字）标签比键宽长，
+     由 UI 层用 `state.fs` 逐实例压小，避免深色字压到深色底上像被裁切（台位 / 键宽仍复用银行版式）。 */
+  const fs = typeof state.fs === 'number' ? state.fs : G(params, 'btnFs');
   text({
     text: typeof state.label === 'string' ? state.label : '',
-    x: cx, y: cy + G(params, 'btnLabelDy'), size: G(params, 'btnFs'),
+    x: cx, y: cy + G(params, 'btnLabelDy'), size: fs,
     fill: enabled ? S(params, 'btnTextFill') : S(params, 'btnTextFillDisabled'),
   });
 };

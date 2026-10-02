@@ -991,6 +991,71 @@ $env:MONO_ORIGIN='http://127.0.0.1:52302'; node local/mono-e2e-playthrough.mjs #
 
 **取证脚本**：[local/mono-shots-m20-3b.mjs](file:///d:/zhao/monopoly/local/mono-shots-m20-3b.mjs)（14 项机器闸门：`stock_rows` / `stock_chart_follows` / `stock_tiers` / `stock_lev_locked` / `overlay_panel` / `lev_unlocked` / `lev_selected` / `lev_buy_split` / `lev_chart_debt` / `bullbear_open` / `bullbear_panel` / `bullbear_play` / `dividend_holding` / `dividend_paid`）。关键口径：打 `?play=1&seed=20261002&nofx=1&humans=4&tour=0` 真实对局，停格走「真实掷骰 + 反推起点」落到 19 号股票格，全程点 `#mono-hud` / `#mono-panels` 命中层（唯一例外是 M20.3-A 就登记的 `__monoMain.setHandScroll` 取证 API，用于手牌横滑）。
 
+### M20.4 公共设施入股与每轮新闻（经济闭环第 4 轨道 · 收官）2026-10-02
+
+**范围**：对齐上位路线图 `docs/superpowers/specs/2026-10-01-monopoly-interaction-roadmap-design.md` §4.3 / **D25–D29**（诉求 ④「公共设施入股」+「每轮新闻」），落地细化见 spec `docs/superpowers/specs/2026-10-02-monopoly-m20-4-facility-and-news-design.md` 的 **F-D1..F-D15**。只新增设施股本 / 分红与新闻两条链，**17 个商家格一个不动**；**不提供设施股退出**（F-D14：本轮认购即持有到终局，退出机制留给 M21「动态要约收购」）。
+
+**两项需求与落点**：
+
+| # | 需求（D） | 落点 | 结果 |
+|---|---|---|---|
+| 1 | 公共设施入股 + 轮末分红（D25–D27） | [facilities.ts](file:///d:/zhao/monopoly/src/data/facilities.ts) 数值真源 / [facility.ts](file:///d:/zhao/monopoly/src/core/facility.ts) 纯函数 / [game.ts](file:///d:/zhao/monopoly/src/core/game.ts) `buyFacility` · `payFacilityDividends` · `facilityCashflow` / [panels.ts](file:///d:/zhao/monopoly/src/ui/panels.ts) 设施浮层 | 5 处设施**按 id 建模**（福利中心占 7 与 27 两格但算**一处**，F-D1）；每处 **20 股**；认购价 银行 ￥200 / 交易所 ￥180 / 医院 ￥150 / 乐透 ￥120 / 福利 ￥100；基础分红 **5%/轮**；HUD 第 5 枚常驻快键「设施」开浮层，认购 1 股 / 5 股 |
+| 2 | 每轮新闻（D28） | [news.ts](file:///d:/zhao/monopoly/src/data/news.ts) 固定表 / [game.ts](file:///d:/zhao/monopoly/src/core/game.ts) `onRoundBoundary` 第 6 步 `rollNews` / [panels.ts](file:///d:/zhao/monopoly/src/ui/panels.ts) `newsTickerSpecOf` | 开局发布第 1 轮新闻（F-D8）；此后**每轮末先结算再抽下一条**；固定表 10 条（设施 6 + 个股 4）；棋盘下缘 474..500 横条展示（利好金底 / 利空灰底） |
+
+**分红公式（F-D3）**：
+
+```text
+分红 = round( (shares × price × 0.05  +  cashflow × shares / 20) × coef )
+```
+
+`coef` = 该设施**当期**新闻系数（利好 ×1.5 / 利空 ×0.5 / 无关 ×1，由 `newsCoefOf` 判定）；`cashflow` = 该设施当期累计现金流（见下）。
+
+**四个现金流挂载点（F-D4）——关键取舍**：
+
+| 设施 | 现金流来源 | 本轮取值 | 零余额回归怎么保证 |
+|---|---|---|---|
+| 银行 | 轮末**贷款利息**（`interestOf`，含信用 + 抵押） | 实际累计 | 利息是**资本化记账**：`settleBooks` 只改 `p.loan` / `p.mortgages` 本金，**不动任何玩家现金** ⇒ 分成不动现金净额 |
+| 乐透 | 入场费 `LOTTERY_STAKE` | 实际累计 | 入场费现为**凭空扣除**（不进任何人账户）⇒ 分成只加不扣 |
+| 交易所 | 交易手续费 | **0**（`STOCK_FEE_RATIO = 0`） | 恒 0 |
+| 医院 | 住院罚金 | **0**（现无罚金） | 恒 0 |
+| 福利中心 | — | **0** | 恒 0 |
+
+> ⚠️ **明示（F-D4 代价）**：四项现金流都做成「**不改任何玩家现金净额**」的挂载，是为了让本轮**不影响既有平衡与既有回归基线**（设施未售出时整条分红链恒为 0，逐值不变）。代价是「大股东吃现金流」在演示局**体感偏弱**（只有基础分红 5%/轮）；等 M21 接入板块租金与新的收费口径后，现金流分成才会显著。
+
+**新闻三影响面（F-D5 / F-D6 / F-D10）**：
+
+1. **设施分红系数**：`scope === 'facility'` 时命中设施的 `coef` = 1.5 / 0.5（当期生效，轮末分红用**当期**倍数 ⇒ 分红与新闻同一轮闭环）。
+2. **股价**：`scope === 'stock'` 时写入 `state.stockForce[code] = { code, dir }`，下轮 `market.tick` 按方向强制涨跌 —— **复用既有通道，`market.tick` 的短路结构逐字节不变**（命中 force 时**不调用 `rng()`**，F-D10，零回归）。
+3. **板块租金 ×1.25**：**本轮裁剪**（F-D6，D28 原文标「可裁剪」）。`PROPOSED_TILE_TIER`（商圈 tier）在 [board.ts](file:///d:/zhao/monopoly/src/data/board.ts) 注释明确「**未接入代码**」，无板块归属真源；M21 商圈连锁落地时一并接入。
+
+**设施浮层版式（F-D12）**：**100% 复用银行版式 C**——底板 `showcase.panel`（370×300 @ 10,300）+ 角标「公共设施 · 入股」+ 左列 5 行 `ui.bankRow`（row 变体，含行内 `selected` 与 summary `￥{price} · 已售 {sold}/20`）+ 右列 5 行 line 变体（名称 / 每股价 / 已售 / 你的持股 / 预估分红（含新闻系数提示）+ 现金）+ 两枚 `ui.button.primary`/`secondary`（「认购 1 股 ￥{price}」/「认购 5 股 ￥{price×5}」）+ 右上 `ui.qk`「关闭」。台位 / 键宽**逐位复用 `PANEL_BANK_*`**（F-D12：零新增 layout 常量）。
+
+> **必要偏差（已回填 spec §6.1）**：两枚认购键的标签比银行键标签长，默认 `btnFs = 15` 下实测宽 110.4 / 119.7px **溢出键宽** 98 / 110px；而 `uiButton` 的标签色 `#1b1b1b`（为金底设计的深色）压到深色底板上会**肉眼像被裁切**。修法：`uiButton` 支持逐实例字号覆写 `state.fs`（[proc-hud.ts](file:///d:/zhao/monopoly/src/render/providers/proc-hud.ts)），设施分支两枚键传 `PANEL_FACILITY_CTA_FS = 12`（[layout.ts](file:///d:/zhao/monopoly/src/skin/layout.ts)）→ 压到 88.3 / 95.7px，两侧各留 ≥ 5px。**台位 / 键宽仍 100% 复用银行版式**，仅字号逐实例覆写。
+
+**新闻条版式（F-D11）**：新增注册元素 `ui.newsTicker`（370×26 @ 10,474），落在棋盘底（≈406）与落地地块卡（508）之间的**自由带**；play 模式下该带为空（被 300..600 的浮层覆盖），故浮层展开时新闻条被**自然盖住**（`hudSpecs` 在 `panelSpecs` 之前合并）。新闻条是**信息条**（不吃事件），**不进任何命中区**。
+
+**HUD 第 5 枚快键（F-D15）**：快键行由 4 槽重排为 **5 槽**（步距 76 = `HUD_QK_W(72) + 4`，x0 = 7）→ **设施 7 / 商店 83 / 银行 159 / 出售 235 / 手牌 311**（右缘 383 ≤ 390）。既有四枚的**相对顺序不变**（设施 < 商店 < 银行 < 出售 < 手牌），只整体平移 ⇒ 既有「相对顺序」断言随常量自动通过，只有字面坐标 / 计数断言需同步。设施键与银行 / 商店键**同属常驻入口、三者互斥**（开一个先把另两个关掉）。
+
+**AI 策略（spec §7）**：`pickFacility` 带 `FACILITY_RESERVE = 500`（现金 < ￥500 不认购）；按 `FACILITIES` **表序**取第一处「未售罄 且 现金 ≥ `price × 2`」的设施**认购 1 股**；已满仓 / 无合适 → null。`settledPlan` 插入**第 ④ 步**：买地 → 升级 → 股票 → **设施** → 银行 → 商店 → 投机 → 卡片。
+
+**确定性**：新增**独立随机流** `newsRng = makeRng((seed ^ 0x2468ace) >>> 0)`（F-D7）——不动既有 `cardRng` / `marketRng` ⇒ 既有回放序列**逐字节不变**；`rollNews` 为固定表上的纯取模，全程无 `Math.random`（`test/smoke.spec.ts` 源码闸门通过）。
+
+**四级回退**：唯一新增可见元素 `ui.newsTicker` 已在 [registry.ts](file:///d:/zhao/monopoly/src/skin/registry.ts) 登记 + L4 内建 `fb({...})` 兜底，`npm run lint:skin` 通过（`registry-ids.json` 由 338 → **339 ids**）；设施浮层**零新增皮肤元素**（100% 复用 `showcase.panel` / `ui.badge` / `ui.bankRow` / `ui.button.primary` / `ui.button.secondary` / `ui.qk`）；几何集中在 [layout.ts](file:///d:/zhao/monopoly/src/skin/layout.ts) 的 `HUD_QK_*` / `NEWS_TICKER_*` / `PANEL_FACILITY_CTA_FS`，`src/render` 内零裸值（`tools/check-hardcoded.mjs` clean）。
+
+**回归口径（本轮实测）**：
+
+```powershell
+npx tsc --noEmit                                 # 退出码 0、无输出
+npm run check                                    # eslint 0 错；[theme] OK / [skin:default] OK / [skin:photo] OK；registry-ids.json: 339 ids；78 文件 / 856 例全绿
+npm run build                                    # [check-hardcoded] clean（29 个文件）→ ✓ built in 4.38s
+$env:MONO_ORIGIN='http://127.0.0.1:4178'; node local/mono-shots-m20-4.mjs      # [m20-4-shots] PASS · 12 项 gate 全 true、errors: []
+$env:MONO_ORIGIN='http://127.0.0.1:4178'; node local/mono-e2e-playthrough.mjs  # [e2e:play] PASS · round=61 · clicks=985 · 退出码 0 · tally 含 facility:buy1、18 项 gate 全 true
+```
+
+**截图清单（5 张，均 390×844 @dpr2 手机视口，出 780×1688 PNG，入 `docs/verify/`）**：`mono-m20-4-01-facility`（设施浮层：角标「公共设施 · 入股」+ 左列 5 行「鹿乡银行 ￥200 · 已售 0/20 / 股票交易所 ￥180 / 医院 ￥150 / 乐透彩 ￥120 / 福利中心 ￥100」+ 右列 5 行详情「鹿乡银行 · 每股 ￥200 / 已售 0/20 股 · 基础分红 5%/轮 / 你的持股 0 股 / 预估分红 ￥0/轮 / 现金 ￥3000」+ 「认购 1 股 ￥200」/「认购 5 股 ￥1000」+ 关闭键；HUD 快键行 5 槽「设施 ✓ / 商店 / 银行 / 出售 / 手牌」）/ `mono-m20-4-02-subscribed`（点「认购 1 股」后：已售 1/20、你的持股 1 股、预估分红 ￥10/轮、现金 ￥2800）/ `mono-m20-4-03-news-good`（新闻条「**利好** · 鹿乡银行揽储大增，股东分红看涨」）/ `mono-m20-4-03-news-bad`（新闻条「**利空** · 银行坏账暴露，股东分红缩水」）/ `mono-m20-4-04-dividend`（轮末分红后：预估分红 ￥**15**/轮 **· 新闻 ×1.5**、现金 ￥**2845**（+45））。另整局 e2e 新增 `mono-e2e-09-facility.png`。目视复核要点：① 两枚认购键与「关闭」键均**点得中**（浮层内可点元素底 576 ≤ HUD 快键行顶 607）；② 新闻条（474..500）不与棋盘底角 / 战报条（342..406）重叠；③ 第 5 枚快键「设施」不压状态行文字到不可读。
+
+**取证脚本**：[local/mono-shots-m20-4.mjs](file:///d:/zhao/monopoly/local/mono-shots-m20-4.mjs)（12 项机器闸门：`panel_open` / `panel_rows` / `panel_detail` / `panel_keys` / `panel_hits` / `panel_no_overlap` / `subscribe_paid` / `subscribe_detail` / `news_good` / `news_bad` / `dividend_paid` / `dividend_view`）。关键口径：打 `?play=1&seed=20261002&nofx=1&humans=4&tour=0` 真实对局，全程点 `#mono-hud` / `#mono-panels` 命中层；新闻两条用**表外合成 id**（`shot-good` / `shot-bad`）注入，以便确定性证明「轮末换新闻」（表内 id 均以 `n-` 开头）；分红取证经 `state.current = 3` + `state.phase = 'settled'` + `game.endTurn()` 触发跨圈轮末，并对齐 `state.facilityCashflow.bank = 400`（现金增量恰为分红 `0.05×200×1.5 + 400×1/20×1.5 = 45`，`settleBooks` 存款复利只写 `p.deposit` 不动现金）。
+
 ### 最终验收（对照 spec §11 硬性标准）
 
 | # | spec §11 条目 | 证据 |
