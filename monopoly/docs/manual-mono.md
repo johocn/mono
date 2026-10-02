@@ -1056,6 +1056,112 @@ $env:MONO_ORIGIN='http://127.0.0.1:4178'; node local/mono-e2e-playthrough.mjs  #
 
 **取证脚本**：[local/mono-shots-m20-4.mjs](file:///d:/zhao/monopoly/local/mono-shots-m20-4.mjs)（12 项机器闸门：`panel_open` / `panel_rows` / `panel_detail` / `panel_keys` / `panel_hits` / `panel_no_overlap` / `subscribe_paid` / `subscribe_detail` / `news_good` / `news_bad` / `dividend_paid` / `dividend_view`）。关键口径：打 `?play=1&seed=20261002&nofx=1&humans=4&tour=0` 真实对局，全程点 `#mono-hud` / `#mono-panels` 命中层；新闻两条用**表外合成 id**（`shot-good` / `shot-bad`）注入，以便确定性证明「轮末换新闻」（表内 id 均以 `n-` 开头）；分红取证经 `state.current = 3` + `state.phase = 'settled'` + `game.endTurn()` 触发跨圈轮末，并对齐 `state.facilityCashflow.bank = 400`（现金增量恰为分红 `0.05×200×1.5 + 400×1/20×1.5 = 45`，`settleBooks` 存款复利只写 `p.deposit` 不动现金）。
 
+### M20.5 经济平衡与风险增强轮（存取款金额键盘 · 爆仓提示与补仓 · 景气度 · 查税 · 3 件经济道具）2026-10-02
+
+**范围**：M20 经济闭环的**平衡与风险增强轮**。M20.1–M20.4 只铺出四条**收益**轨道（破产拍卖 / 银行信贷 / 股票轨 / 设施入股+新闻），本轮补齐**风险侧**（查税、经济不景气）与**平衡阀**（风险↔收益对等：景气度浮动租金、杠杆爆仓提示与补仓通道），并新增**经济类道具**。客户端原话六条诉求逐条落地；决策编号 **D38–D48**（承接 D1–D37），细化见 spec `docs/superpowers/specs/2026-10-02-monopoly-m20-5-economy-balance-design.md`、计划 `docs/superpowers/plans/2026-10-02-monopoly-m20-5-economy-balance-plan.md`。
+
+**六项需求与落点**：
+
+| # | 需求（客户端原话） | 落点 | 结果 |
+|---|---|---|---|
+| 1 | 「银行存取款需要输入金额，不能一次都存入，或都取出」 | [layout.ts](file:///d:/zhao/monopoly/src/skin/layout.ts) 几何 / [registry.ts](file:///d:/zhao/monopoly/src/skin/registry.ts) 三枚新元素 / [panels.ts](file:///d:/zhao/monopoly/src/ui/panels.ts) 纯函数 / [main.ts](file:///d:/zhao/monopoly/src/main.ts) UI 态 | 存款页改为**金额键盘**（示数条 + 12 键 + 3 快捷档 + **存入 / 取出两枚独立确认键**），移除「一键全存 / 全取」；金额 0 两键禁用；确认时按可用现金（存入）/ 存款（取出）**截断** |
+| 2 | 「股票使用杠杆应该提示爆仓点，允许抵押贷款等追加保证金，不然贷款没人使用」 | [stocks.ts](file:///d:/zhao/monopoly/src/core/stocks.ts) `marginLineOf`/`marginGapPctOf` + [panels.ts](file:///d:/zhao/monopoly/src/ui/panels.ts) `bankMarginView`/`stockBadgeView` + [game.ts](file:///d:/zhao/monopoly/src/core/game.ts) `addMargin` | 新增**第 4 张银行产品卡「保证金」**：借款 / 持仓市值 / **爆仓线** / 距爆仓 + **现金追加 / 抵押补仓**两枚键；股票盘角标在市值 < 借款 × 1.5 时改显 **`⚠爆仓 N%`** |
+| 3 | 「经济上要有平衡机制，风险收益平衡」 | [cycle.ts](file:///d:/zhao/monopoly/src/core/cycle.ts) 景气纯函数 / [economy.ts](file:///d:/zhao/monopoly/src/data/economy.ts) 数值真源 | **景气度 `economyIndex`**（起点 1.0、区间 [0.7, 1.3]、每轮末游走）→ **租金 = `round(原租金 × 景气度)`**：经济好肥料足、经济差收益缩水，与查税构成「收益越大风险越大」的对等 |
+| 4 | 「增加经济相关道具」 | [cards.ts](file:///d:/zhao/monopoly/src/data/cards.ts) + [item-shop.ts](file:///d:/zhao/monopoly/src/data/item-shop.ts) | 新增 3 件：**避税凭证**（￥350，被动免疫一次查税）/ **惠农补贴**（￥400，立即领 ￥300）/ **造势**（￥500，本轮景气 +0.2）；商店 8 → **11 项** |
+| 5 | 「风险收益怕查税，租地收益怕经济不景气，收益变少」 | [game.ts](file:///d:/zhao/monopoly/src/core/game.ts) `settleAudits` + `onRoundBoundary` | **查税**：轮末按该玩家**本轮累计收租**抽概率 `clamp(租金 × 0.0002, 0, 0.4)`，命中补税 **30%**（走既有清算链）；**不景气**：景气度下行时全场租金同步缩水 |
+| 6 | 「新闻对经济有影响，但要随机公平出现」 | [news.ts](file:///d:/zhao/monopoly/src/data/news.ts) 大盘条目 + [core/news.ts](file:///d:/zhao/monopoly/src/core/news.ts) 公平抽取 | 新闻表 10 → **12 条**（新增「消费回暖」「市场遇冷」大盘条目，±0.15 驱动景气）；抽取升级为**公平三律**：① 最近 4 条不重复 ② 连续同向最多 3 条后收窄为反向 ③ 规则与「谁持有得多」无关 |
+
+**经济平衡机制（D42 / D45 / D48）——景气度模型**：
+
+```text
+每轮末：economyIndex ← clamp( economyIndex + (2·rng()−1) × 0.08 + 新闻偏置 , 0.7 , 1.3 )
+新闻偏置 = 大盘利好 +0.15 / 大盘利空 −0.15 / 其余利好 +0.05 / 其余利空 −0.05 / 无新闻 0
+收租：  实际租金 = round( 原租金表值 × economyIndex )
+```
+
+- `ECON_INDEX_START = 1.0` ⇒ **第 1 轮租金逐值等于旧口径**（零回归基线）。
+- 「造势」道具把景气度当场 `+0.2`（`BOOM_DELTA`，仍 clamp 在 [0.7, 1.3]），是玩家能**主动干预**景气度的唯一手段。
+- 数值取舍：区间 ±30% 让「不景气」可感知但不致命；`±0.08` 随机叠 `±0.15` 新闻偏置，使大盘新闻**成为主导变量**（呼应需求 6）。
+
+**查税模型（D43 / D44）**：
+
+| 项 | 口径 |
+|---|---|
+| 被查概率 | `clamp(本轮累计收租 × 0.0002, 0, 0.4)`（每 ￥100 租金 +2%，封顶 40%） |
+| 补税额 | `round(本轮累计收租 × 0.3)`（本轮租金收入的 30%） |
+| 触发时机 | **轮末第 ⑥ 步**，逐玩家按 id 升序；`p.roundRent` 当晚清零 |
+| 免疫 | 持 **避税凭证** 者**命中后**免疫一次并消耗（**未命中不消耗**，`useCard` 返回 `{ok:false, reason:'passive'}` 且槽位置灰） |
+| 清算 | 复用既有 `settleDebt` 链（现金不足 → 变卖 → 拍卖 → 破产），故查税不会绕过任何已有违约链 |
+| 零回归 | `chance === 0` 时**不调用 `auditRng()`**（短路保序列，与 `market.tick` 的 force 短路同法） |
+
+**追加保证金（D41）**——需求 2 的关键：**只作用于当前玩家**。
+
+| 来源 | 前置 | 效果 |
+|---|---|---|
+| `cash`（「现金追加」） | 有保证金借款 + 现金 > 0 | `added = min(现金, 借款)` **直接冲减借款** |
+| `mortgage`（「抵押补仓」） | 有保证金借款 + **站 9 号格** + 有可抵押自有地块 | 借入 `added = min(最大可抵押额度, 借款)`，**直接补仓不落现金**；超出部分**不进抵押**（避免「补仓名义无上限套现」绕开信用额度） |
+
+爆仓线 `marginLineOf(principal) = round(principal × 120%)`，与轮末强平判定**同源**（提示的线 = 真正强平的线）；警示阈值 `MARGIN_WARN_RATIO = 1.5`（**提示早于强平线**，给玩家补仓窗口）。AI 侧：`MARGIN_TOPUP_RATIO = 1.3`（市值 < 借款 × 1.3）时优先「现金追加」，现金不足且站银行格则转「抵押补仓」。
+
+**轮末流水 7 → 9 步（D45，顺序固定、全确定性）**：① 存贷 / 抵押计息 → ② 保证金复利 → ③ 股价 tick → ④ 爆仓强平 → ⑤ 设施分红 → **⑥ 税务抽查（新）** → **⑦ 景气度游走（新）** → ⑧ 抽下一条新闻并记历史 → ⑨ 清空强制方向表。
+
+**存款页版式（D39，spec §6.1）**：底板 `showcase.panel`（370×300 @ 10,300）+ 角标「鹿乡银行 · 9 号格」+ 右上 `ui.qk`「关闭」+ 左列 4 行 `ui.bankRow`（存款 / 信用贷款 / 抵押 / **保证金**）+ 右列自上而下：
+
+| 元素 | 台位（中心 / 顶边） | 说明 |
+|---|---|---|
+| `ui.amount` 示数条（186×30） | 中心 277 / 351（336..366） | 大字 `￥N` + 右上小字 `现金 N · 存款 N`（`align:'right'`，为 M20.5 新增的第三种对齐） |
+| `ui.key` 数字键 ×12（56×34） | x0 187、y0 372，step 65 / 38 | `1 2 3 / 4 5 6 / 7 8 9 / 清空 0 ⌫` |
+| `ui.key` 快捷档 ×3（同尺寸） | y 524（524..558） | `+100 / +500 / +1000`，在现值上累加（非覆盖），到 6 位上限即禁用 |
+| `ui.keyWide` 确认键 ×2（89×24） | x0 184、y 564（564..588） | 「存入 ￥N」主键 / 「取出 ￥N」次键，**两枚独立入口**（客户端补充需求「取款交易也需要入口」）；金额 0 → 两键全禁用 |
+
+> **必要偏差（取证截图暴露，已回填 layout.ts）**：初版示数条中心 y = 334（319..349）会**压住角标（305..331）与右上关闭键（307..329）**——`mono-m20-5-01` 首拍肉眼可见「￥600」与「现金 N · 存款 N」叠在角标与关闭键上。修法：存款页整段下移 17px（示数条 351、键盘 372、快捷档 524、确认键 564），确认键底 588 < 底板底 600、且全部 ≤ HUD 快键行顶 607。**只挪存款页四个常量，其它产品页台位逐位不变**（几何断言与命中区由同一常量推导，故自动同步）。
+
+**保证金页版式**：复用同版式 C 的「4 行文本 + 两枚键」——行文案 `借款 ￥N / 持仓市值 ￥N / 爆仓线 ￥N（借款 × 120%） / 距爆仓 N%（已爆仓时改为「已爆仓 · 轮末将被强制平仓」）`；两枚键为 `ui.button.primary`「现金追加」/ `ui.button.secondary`「抵押补仓」（无借款时两键禁用，行文案改为「当前无保证金借款 / 加杠杆买入后此处显示爆仓线」）。
+
+**HUD 债务条（D40）**：**不新增第 5 段**——`p.margin.principal` 并入既有「债务」段；仅当「信用贷款 + 抵押 + **保证金**」三者为 0 时整条隐藏（可见性条件加 `(p.margin?.principal ?? 0) > 0`）。
+
+**商店版式（D46）**：底板由 `showcase.panel`(370×300) 换为 **`showcase.panelTall`(370×480 @ 10,174)**，容纳 **11 行**商品（行盒缩 `PANEL_STORE_ROW_S = 0.8`）；**零新增可见元素**。
+
+**新闻条（D48）**：`ui.newsTicker` 增 `state.prefix`，前置景气度摘要 → 形如「**景气 120%** · 利好 · 消费回暖，全城租金水涨船高」。
+
+**四级回退**：新增 3 枚可见元素 `ui.amount`(186×30) / `ui.key`(56×34) / `ui.keyWide`(89×24) 均已在 [registry.ts](file:///d:/zhao/monopoly/src/skin/registry.ts) 登记 + [skin.json](file:///d:/zhao/monopoly/public/skins/default/skin.json) 绑定 preset（`uiAmount` / `uiKey`）+ L4 内建 `fb({...})` 兜底；`npm run lint:skin` 通过（`registry-ids.json` 由 339 → **342 ids**）；几何全部集中在 [layout.ts](file:///d:/zhao/monopoly/src/skin/layout.ts)，`src/render` 内零裸值（`tools/check-hardcoded.mjs` clean）。`uiKey` 新增逐实例字号覆写 `state.fs`（确认键标签「存入 ￥999999」过宽），并新增 `TextRequest.align: 'right'`（[paint.ts](file:///d:/zhao/monopoly/src/render/paint.ts) anchor = 1）。
+
+**确定性**：新增**两条独立随机流** `econRng = makeRng(seed ^ 0x0ec0a11)` / `auditRng = makeRng(seed ^ 0x0a0d17)`——不动既有 `cardRng` / `marketRng` / `newsRng` ⇒ 既有回放序列**逐字节不变**；全程无 `Math.random`（`test/smoke.spec.ts` 源码闸门通过）。
+
+**⚠ 两条已知行为变更（M20.5 有意为之，需知会客户）**：
+
+1. **新闻序列变化**：抽取升级为「公平三律」后，**同 seed 下的新闻序列与 M20.4 不同**（`rollNews` 是唯一消费 `newsRng` 的消费点，改动即换序列）。影响面：仅新闻内容 / 景气度 / 设施分红系数，**不影响任何回合推进与胜负基线**。
+2. **开局每人自动持 1 张避税凭证**：手牌模型为 `HAND_SIZE = ITEM_CARDS.length` 且**开局全持有**，道具由 8 → 11 件后，每人开局自动持 11 张（含避税凭证）⇒ **第一次查税必被免疫一次**。这是既有手牌模型的必然结果，非本轮新增逻辑；若客户希望改为「开局不持有」，需单开一轮调整手牌初始化口径（本轮不动，避免破坏既有回归基线）。
+
+**回归口径（本轮实测）**：
+
+```powershell
+npx tsc --noEmit                                  # 退出码 0、无输出
+npm run check                                     # eslint 0 错；[theme] OK / [skin:default] OK / [skin:photo] OK；registry-ids.json: 342 ids；83 文件 / 912 例全绿
+npm run build                                     # [check-hardcoded] clean → ✓ built in 4.35s
+node local/mono-e2e-m205.mjs                      # 5 页（A 金额键盘 / B 保证金 / C 轮末查税景气 / D 经济道具 / E 商店 11 项）全 OK · problems: []
+$env:MONO_ORIGIN='http://127.0.0.1:52303'; node local/mono-shots-m205.mjs   # [m20-5-shots] PASS · 20 项 gate 全 true、errors: []
+```
+
+**截图清单（6 张，均 390×844 @dpr2 手机视口，出 780×1688 PNG，入 `docs/verify/`）**：
+
+| 文件 | 内容 |
+|---|---|
+| `mono-m20-5-01-amount` | 存款页金额键盘：角标「鹿乡银行 · 9 号格」+ 右列「`￥600` / 现金 3000 · 存款 0」+ 数字键 `1 2 3 / 4 5 6 / 7 8 9 / 清空 0 ⌫` + 快捷档 `+100 / +500 / +1000` + 「**存入 ￥600**」（可用）/「**取出 ￥600**」（灰，因存款为 0） |
+| `mono-m20-5-02-deposited` | 真实点「存入 ￥600」后：示数条右上变「现金 **2400** · 存款 **600**」，两枚确认键**均可用**（取款入口生效） |
+| `mono-m20-5-03-margin` | 保证金页（借款 ￥500 / 持仓市值 ￥720 / 爆仓线 ￥600（借款 × 120%）/ 距爆仓 20%）+「现金追加」/「抵押补仓」；HUD 债务条「债务 ￥500」已并入保证金 |
+| `mono-m20-5-04-stock-warn` | 股票盘角标警示 `⚠爆仓 20%`（市值 720 < 借款 500 × 1.5 = 750），走势图标题带「借款 ￥500」 |
+| `mono-m20-5-05-store` | 道具商店 **11 行**（免罚 / 避税凭证 / 租金翻倍 / 惠农补贴 / 炸弹 / 路障 / 迁点 / 造势 / 拆迁令 / 涨跌卡 / 红利卡）+ 高底板 `showcase.panelTall` |
+| `mono-m20-5-06-news-econ` | 新闻条大盘前缀「**景气 120%** · 利好 · 消费回暖，全城租金水涨船高」（金底） |
+
+目视复核要点：① 存款页示数条与角标 / 关闭键**无重叠**（第一版重叠已修，见上文「必要偏差」）；② 存款页全部可点元素底 588 ≤ HUD 快键行顶 607；③ 商店 11 行 + 买入 / 卖出 / 关闭键均点得中（命中底 598 ≤ 607）；④ 保证金页两枚补仓键与「关闭」键不重叠。
+
+**取证脚本**：[local/mono-shots-m205.mjs](file:///d:/zhao/monopoly/local/mono-shots-m205.mjs)（**20 项机器闸门**：`amount_view` / `amount_keys` / `amount_tiers` / `amount_confirm` / `amount_rows` / `amount_hits` / `amount_no_overlap` / `deposit_paid` / `deposited_view` / `withdraw_paid` / `margin_lines` / `margin_btns` / `margin_hits` / `margin_no_overlap` / `stock_badge` / `store_tall` / `store_rows` / `store_hits` / `store_no_overlap` / `news_prefix`）。关键口径：打 `?play=1&seed=20261002&nofx=1&humans=4&tour=0` 真实对局，金额键盘**逐键真实点击** `6 / 0 / 0` → 真实点「存入」→ 再点「取出」验证双向链路；保证金局面用 `__monoMain` 布置（`p.margin = {principal:500}` + `portfolios[0].SY01×6` + 站 9 号格 + 一块 L1 地产解锁「抵押补仓」）；新闻前缀直接改 `state.news` / `state.economyIndex` 后 `paint()`。
+
+**e2e 脚本**：[local/mono-e2e-m205.mjs](file:///d:/zhao/monopoly/local/mono-e2e-m205.mjs)（5 页：A 金额键盘全键位与截断边界 / B 保证金补仓两条路径 / C 轮末查税与景气游走 / D 经济道具三件 / E 商店 11 项），全部 `OK`、`problems: []`。
+
+**AI 策略（spec §7）**：① 存款改为**金额分档**（不再「一键全存」）；② 新增**保证金补仓分支**（市值 < 借款 × 1.3 → 优先「现金 + 现金追加」；现金不足且站银行格 → 「现金 + 抵押补仓」）；③ 新道具出牌：「惠农补贴」「造势」**抽到即用**（惠农补贴现金不足时优先），「避税凭证」**不出牌**（被动）；④ 存款判据加「无保证金借款」（有杠杆时不存款，先补仓）。
+
 ### 最终验收（对照 spec §11 硬性标准）
 
 | # | spec §11 条目 | 证据 |
