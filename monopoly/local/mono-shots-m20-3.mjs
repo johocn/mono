@@ -6,7 +6,7 @@ import { mkdirSync } from 'node:fs';
  *
  * 口径与 mono-shots-m20-2.mjs 同源：真实对局 + 真实 HUD / 浮层点击（不绕过命中层）。
  *   ① mono-m20-3-01-hand-sorted：手牌行（三键排序：持有在前 → 常用在前 → 表序兜底；未持有淡显在右）
- *   ② mono-m20-3-02-store-panel：道具商店浮层（6 目录行 + 4 详情行 + 买入 / 卖出 / 关闭）
+ *   ② mono-m20-3-02-store-panel：道具商店浮层（8 目录行 + 4 详情行 + 买入 / 卖出 / 关闭）
  *   ③ mono-m20-3-03-store-bought：真实点击「炸弹」行 + 买入 → 现金 −300、手牌新增炸弹
  *   ④ mono-m20-3-04-store-sold：真实点击「卖出」→ 回收 ￥150 到账、手牌移出炸弹
  *
@@ -21,8 +21,14 @@ mkdirSync(OUT, { recursive: true });
 
 const SEED = 20261002;
 const VIEW = { width: 390, height: 844 };
-/** `ITEM_CARDS.length`（本里程碑 6 种；M20.3-B 追加两种后自动变 8） */
-const CARD_KINDS = 6;
+/** `ITEM_CARDS.length`（M19 起 5→6 增「拆迁令」；M20.3-B 起 6→8 增「涨跌卡 / 红利卡」） */
+const CARD_KINDS = 8;
+/**
+ * 一屏可见的槽数：8 槽 `contentW = 8×55 + 7×6 = 482 > 390` ⇒ `maxScroll = 92`，
+ * `scroll = 0` 时槽 7 的 `cx = 15 + 27.5 + 7×61 = 469.5 > 390 + 27.5 = 417.5`（判据见 `handLayout`）
+ * ⇒ 只入画槽 0..6 共 7 个（半露的槽照常产出，故不是 6）。
+ */
+const VISIBLE_SLOTS = CARD_KINDS - 1;
 /** 商店右列详情行数（spec §5.4：用途 / 售价与回收 / 持有 / 现金） */
 const DETAIL_LINES = 4;
 const BOMB = 300;
@@ -67,7 +73,7 @@ const snap = (p) => p.evaluate(() => {
 /* ============ 页面 A：① 手牌排序 / ② 商店浮层 / ③ 买入后 / ④ 卖出后 ============ */
 const a = await openPage();
 
-/* ① 手牌行：玩家 0 持 3 张（pardon / bomb / teleport），其余 3 张未持有淡显在右 */
+/* ① 手牌行：玩家 0 持 3 张（pardon / bomb / teleport），其余 5 张未持有淡显在右 */
 facts.setupHand = await a.evaluate(() => {
   const m = window.__monoMain;
   const s = m.game.state;
@@ -88,9 +94,9 @@ facts.hand = {
   },
   scroll: await a.evaluate(() => window.__monoMain.handScroll()),
 };
-gate.hand_slots = facts.hand.ids.handSlot === CARD_KINDS;
-/* 6 张 × 55px + 5 × 6px 间隙 = 360 ≤ 390 → 恰好一屏：无滑动条、滚动量恒 0 */
-gate.hand_row_fits = facts.hand.ids.handBar === 0 && facts.hand.scroll === 0;
+gate.hand_slots = facts.hand.ids.handSlot === VISIBLE_SLOTS;
+/* 8 槽铺开 482 > 390 → 出一屏放不下：出滑动条（`ui.handBar` 入画）+ 初始滚动量 0 */
+gate.hand_row_fits = facts.hand.ids.handBar === 1 && facts.hand.scroll === 0;
 await a.screenshot({ path: `${OUT}/mono-m20-3-01-hand-sorted.png` });
 
 /* ② 商店浮层：直接开面板取景（选中「炸弹」行） */
@@ -116,7 +122,7 @@ facts.store = {
 gate.store_open = facts.store.ui.open === true && facts.store.ui.sel === 'bomb';
 gate.store_rows = facts.store.ids.bankRow === CARD_KINDS + DETAIL_LINES;
 gate.store_badge = facts.store.ids.badge === 1 && facts.store.ids.panel === 1;
-/* 命中层：6 行 `store:select`（`data-target` = kind，顺序恒等目录）+ 买 / 卖 / 关闭各 1；
+/* 命中层：8 行 `store:select`（`data-target` = kind，顺序恒等目录）+ 买 / 卖 / 关闭各 1；
    浮层展开时手牌行的 DOM 键位全部撤下（`panelHitAreas` 的浮层分支互斥） */
 facts.storeDom = await a.evaluate(() => {
   const btns = Array.from(document.querySelectorAll('#mono-panels button[data-action]'));

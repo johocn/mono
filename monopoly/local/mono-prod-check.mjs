@@ -618,17 +618,23 @@ gate.v9 = facts.v9.bars.length === 4
 facts.v11 = await vPage.evaluate(() => {
   const m = window.__monoMain;
   const slots = () => m.scene.instancesOf().filter((i) => i.id === 'ui.handSlot').length;
+  const bars = () => m.scene.instancesOf().filter((i) => i.id === 'ui.handBar').length;
   const click = (a) => document.querySelector(`#mono-hud button[data-action="${a}"]`)?.click();
   const closed = slots();
   click('hand');
   const opened = slots();
+  const handBar = bars();
+  const scroll = m.handScroll();
   const qk = m.scene.instancesOf().filter((i) => i.id === 'ui.qk').map((i) => i.state?.label);
   const actions = [...document.querySelectorAll('#mono-hud button')].map((b) => b.dataset.action);
   click('hand');
-  return { closed, opened, reclosed: slots(), qk, actions };
+  return { closed, opened, handBar, scroll, reclosed: slots(), qk, actions };
 });
-/* 手牌槽数 = `HAND_SIZE`（M19 起 5→6：新增「拆迁令」demolish） */
-gate.v11 = facts.v11.closed === 0 && facts.v11.opened === 6 && facts.v11.reclosed === 0
+/* 手牌槽数 = `ITEM_CARDS.length`（M19 起 5→6 增「拆迁令」；M20.3-B 起 6→8 增「涨跌卡 / 红利卡」）。
+   8 槽 `contentW = 8×55 + 7×6 = 482 > 390` ⇒ 一屏只实例化视野内 7 槽（槽 7 在视野外），
+   同时 `ui.handBar` 滑动条入画、初始滚动量 0 —— 这正是「新卡已入库且横滑已自动启用」的证据。 */
+gate.v11 = facts.v11.closed === 0 && facts.v11.opened === 7 && facts.v11.reclosed === 0
+  && facts.v11.handBar === 1 && facts.v11.scroll === 0
   && facts.v11.qk.includes('收起手牌')
   && !facts.v11.actions.some((a) => /handSlot/i.test(String(a)));
 

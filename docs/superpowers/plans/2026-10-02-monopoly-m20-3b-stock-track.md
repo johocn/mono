@@ -126,7 +126,7 @@
 - [x] `local/mono-shots-m5.mjs`：同步股票断言（`ui.stockRow` 计数、买键改点 `data-target="SY01:1"`、`buyLabels` 三档、`sellAfter` 3、底板 `showcase.panelStock`、`stock:select` 4 键）。
 - [x] 新增注册项 `showcase.panelStock`（`registry.ts` + `public/skins/default/skin.json`）与 `ui.stockRow` 选中态（`proc-panel.ts`）；`npm run lint:skin` 通过。
 - [x] 跑 `npx tsc --noEmit` 与 `npx vitest run test/ui/panels.spec.ts`（31 绿）。
-- [ ] 提交：`git -C d:\zhao add monopoly/src/skin/layout.ts monopoly/src/ui/panels.ts monopoly/test/ui/panels.spec.ts monopoly/local/mono-shots-m5.mjs` → `-m 'M20.3-B Task4: 股票浮层 A 版式（选中行 + 买三档/卖三档）'`。
+- [x] 提交：`git -C d:\zhao add monopoly/src/skin/layout.ts monopoly/src/ui/panels.ts monopoly/test/ui/panels.spec.ts monopoly/local/mono-shots-m5.mjs` → `-m 'M20.3-B Task4: 股票浮层 A 版式（选中行 + 买三档/卖三档）'`（7c792f2）。
 
 ## Task 5：涨跌卡浮层纯函数（`ui/panels.ts`）
 
@@ -165,10 +165,15 @@
 
 ## Task 8：e2e / 截图 / 手册 / 收尾闸门
 
-- [ ] `local/mono-e2e-playthrough.mjs`：确认 8 槽手牌与 `bullbear:` / `stock:buy` 三档路径不破坏既有整局（必要时补 `stock:buy` 三档代打分支）。
-- [ ] 新建 `local/mono-shots-m20-3b.mjs`（手机视口 390×844 @ dpr=2，`nofx`）：4 张截图 →
-      ① 股票浮层 A 选中行 + 三档；② 杠杆档位（第 8 轮）；③ 涨跌卡浮层；④ 红利卡结算前后手牌/现金。输出到 `docs/manual/shots/`。
-- [ ] `docs/manual-mono.md`：补「股票指定买卖与三档」「涨跌卡与红利卡」「杠杆与爆仓」三节 + 4 张手机截图。
-- [ ] 收尾闸门：`npm run check`（lint + lint:skin + test 全绿）→ `npm run build` → `npm run deploy` → `npm run check:prod`。
-- [ ] 提交：`git -C d:\zhao add monopoly/local/mono-e2e-playthrough.mjs monopoly/local/mono-shots-m20-3b.mjs monopoly/docs/manual-mono.md docs/manual/shots` → `-m 'M20.3-B Task8: 股票轨取证截图、操作手册与收尾闸门'`。
+- [x] **按钮级复核（截图取证时发现并修复 3 个「命中键被压」回归）**：取证拿到 PNG 后逐张目视复核，发现三处「元素被更高层命中键压住 ⇒ 点不中」，全部在本轮修掉并补单测：
+      ① 股票浮层**卖三档点不中**（卖档 598.6..625.2 被 HUD 快键行 607..629 压住，而快键行画在浮层之上且照常可点）→ 改**标题行**（角标居左 `PANEL_STOCK_BADGE_CX` + 杠杆分段右对齐同线）腾出纵向空间，买 / 卖两行上移到 547..573.6 / 576.6..603.2（底 603.2 < 607）；
+      ② 商店 **8 行越出底板**（沿银行 34/6 行距推到 618 > 600）→ 整行按 `PANEL_STORE_ROW_S = 0.8` 缩放（行盒 121.6×32、step 32 → 8 行 342..598），命中区与视觉同一表达式同源，新增 `test/ui/panels-store.spec.ts` 断言「行底 ≤ 面板底、行间不重叠」；
+      ③ 涨跌卡**取消键压住第 4 支标的**（取消 502..524 ⊂ 末行 490..524）→ `PANEL_BULLBEAR_CANCEL_Y` 由常量 502 改为**由末行底 + 12 缝推导**（= 536），新增 `test/ui/panels.spec.ts` 断言「取消键与末行命中区不相交且底 ≤ 600」。
+- [x] `local/mono-e2e-playthrough.mjs`：确认 8 槽手牌与 `bullbear:` / `stock:buy` 三档路径不破坏既有整局 —— 实跑 PASS（round=61 · clicks=984 · 退出码 0 · tally 含 `stock:buy`），无需补代打分支。
+- [x] 新建 `local/mono-shots-m20-3b.mjs`（手机视口 390×844 @ dpr=2，`nofx`，14 项机器闸门全 true）：4 张截图 →
+      ① 股票浮层 A 选中行 + 三档；② 杠杆档位（第 8 轮）；③ 涨跌卡浮层；④ 红利卡结算前后手牌/现金。
+      输出到 `docs/verify/`（同既有 `mono-*.png` 口径），并在手册中注明。
+- [x] `docs/manual-mono.md`：补「M20.3-B 股票轨」专节（三需求的落点表 + 优先级与互斥 + AI 策略 + 确定性 + 四级回退 + 三个回归的根因/修复表 + 回归口径命令 + 4 张截图清单 + 取证脚本闸门清单）；并回填 M20.3-A 节两处「6 槽 → 8 槽」的兑现说明（`hand_row_fits` 翻转、`store_rows = ITEM_CARDS.length + 4`）。
+- [ ] 收尾闸门：`npm run check`（74 文件 / 787 例全绿）→ `npm run build`（check-hardcoded clean）→ `npm run deploy` → `npm run check:prod`。
+- [ ] 提交：`git -C d:\zhao add monopoly/local/mono-shots-m20-3b.mjs monopoly/local/mono-shots-m20-3.mjs monopoly/local/mono-prod-check.mjs monopoly/src/skin/layout.ts monopoly/src/ui/panels.ts monopoly/test/ui/panels.spec.ts monopoly/test/ui/panels-store.spec.ts monopoly/docs/manual-mono.md monopoly/docs/verify docs/superpowers/plans/2026-10-02-monopoly-m20-3b-stock-track.md` → `-m 'M20.3-B Task8: 按钮级回归修复、股票轨取证截图、操作手册与收尾闸门'`。
 - [ ] `git -C d:\zhao push`。

@@ -159,10 +159,13 @@ export const PANEL_ROW_W = 342;
 export const PANEL_ROW_H = 34;
 /* —— 股票浮层 · 版式 A（M20.3-B spec §6.1）——
    底板换成新增注册项 `showcase.panelStock`（370×330），自面板顶 300 铺到 630：
-   与 `showcase.panelTall` 同口径——**不压底坞资产条（632）**，代价是盖住底坞状态行
-   606..630；骰子（684）与主按钮（738）不受影响。浮层本就盖住手牌行。
-   自上而下：角标 305..331 → 标的行 ×4 336..484 → 走势图 487..541 →
-   杠杆分段 544..566（`round < 8` 时整行不产出）→ 买三档 569..595.6 → 卖三档 598.6..625.2。 */
+   与 `showcase.panelTall` 同口径——**不压底坞资产条（632）**；骰子（684）与主按钮（738）不受影响。
+   浮层本就盖住手牌行（550..602），底板下缘 630 仍与「HUD 快键行 607..629」重叠
+   ——但快键行（手牌 / 出售 / 银行 / 商店）画在浮层**之上**且照常可点，
+   故**买 / 卖两行必须整段收在 606 之上**，否则整条「卖」行会被快键行压住、点不到
+   （M20.3-B 取证时发现的真实回归：旧版卖档 598.6..625.2 与快键行 607..629 重叠）。
+   自上而下：标题行（角标居左 + 杠杆分段居右同线，`round < 8` 时杠杆整段不产出）
+   → 标的行 ×4 336..484 → 走势图 487..541 → 买三档 547..573.6 → 卖三档 576.6..603.2。 */
 export const PANEL_STOCK_W = 370;                // = `showcase.panelStock` 的 box 宽
 export const PANEL_STOCK_PANEL_H = 330;          // = `showcase.panelStock` 的 box 高
 export const PANEL_STOCK_Y = PANEL_Y;            // 面板顶（与拍卖 / 结算 / 银行 / 商店同一基线）
@@ -172,10 +175,15 @@ export const PANEL_CHART_X = 45;                 // 走势图左上（原生 300
 export const PANEL_CHART_Y = 487;
 export const PANEL_CHART_W = 300;
 export const PANEL_CHART_H = 54;
-export const PANEL_STOCK_LEV_Y = 544;            // 杠杆分段顶（`ui.qk` 72×22）
 export const PANEL_STOCK_LEV_GAP = 6;
-export const PANEL_STOCK_LEV_X0 = 81;            // 居中：(390 − (72×3 + 6×2)) / 2
-export const PANEL_STOCK_BUY_Y = 569;            // 买三档顶
+/* 标题行：角标左移、杠杆分段右对齐（同一行，中心都在 `PANEL_BADGE_Y`）。
+   杠杆三枚（`ui.qk` 72×22）占 228 宽，右缘留 6 边距 → x0 = 10 + 370 − 6 − 228 = 146。
+   角标 120 宽，左缘留 8 → 中心 = 10 + 8 + 60 = 78（角标 18..138，与杠杆段 146..374 留 8 缝）。 */
+export const PANEL_STOCK_BADGE_CX = PANEL_X + 68;                                   // = 78
+export const PANEL_STOCK_LEV_Y = PANEL_BADGE_Y - HUD_QK_H / 2;                       // = 307 顶（中心 318）
+export const PANEL_STOCK_LEV_X0 = PANEL_X + PANEL_W - 6 - (HUD_QK_W * 3 + PANEL_STOCK_LEV_GAP * 2);  // = 146
+/* 买三档顶：走势图底 541 之下留 6 缝；买 / 卖两行底 603.2 < HUD 快键行顶 607（见上方说明） */
+export const PANEL_STOCK_BUY_Y = 547;
 /* 买卖档按键（作用于选中标的，`data-target` 编码为 `${code}:${tier}`）：
    基座 150×38（= 注册项 `ui.tradeBuy` / `ui.tradeSell` 的 box）三枚并排需 466 > 370，
    故整体缩到 0.7 → 105×26.6（三枚 + 两缝 = 331 ≤ 370 居中）。
@@ -192,12 +200,16 @@ export const PANEL_STOCK_TIER_X0 = 29.5;         // 居中：(390 − 331) / 2
 
 /* —— M20.3-B 涨跌卡浮层（spec §6.2）：底板复用 `showcase.panel`（370×300 @ 10,300）——
    内容比股票盘轻（段控 + 4 行 + 取消），300 高足够，不新增注册项。
-   自上而下：角标 318 → 方向分段 344..366 → 4 行标的 376..490 → 取消键 502..524。 */
+   自上而下：角标 318 → 方向分段 344..366 → 4 行标的 376..524 → 取消键 536..558。 */
 export const PANEL_BULLBEAR_DIR_Y = 344;         // 方向分段顶（`ui.qk` 72×22）
 export const PANEL_BULLBEAR_DIR_GAP = 8;
 export const PANEL_BULLBEAR_DIR_X0 = (STAGE_W - (HUD_QK_W * 2 + 8)) / 2;   // = 119（二段居中）
 export const PANEL_BULLBEAR_ROW_Y = 376;         // 4 行标的首行顶（行高 34 / 行距 4）
-export const PANEL_BULLBEAR_CANCEL_Y = 502;      // 取消键顶（`ui.qk` 72×22）
+/* 取消键顶：4 行标的底（376 + 3×38 + 34 = 524）之下留 12 缝。
+   旧值 502 会压在末行（490..524）上——取消键画在标的行之上，中心区被盖 ⇒ 第 4 支标的点不中
+   （M20.3-B 取证时发现的真实回归）；下移到 536..558 后仍在底板内（`showcase.panel` 300..600）。 */
+export const PANEL_BULLBEAR_CANCEL_Y = PANEL_BULLBEAR_ROW_Y + 3 * (PANEL_ROW_H + PANEL_STOCK_ROW_GAP)
+  + PANEL_ROW_H + 12;                            // = 536
 export const PANEL_BULLBEAR_CANCEL_X = (STAGE_W - HUD_QK_W) / 2;           // = 159（居中）
 
 /* 抽卡翻牌（事件卡 ×2）：卡面 66×88 × 3.2 = 211×282，370×300 的老底板装不下，
@@ -257,12 +269,17 @@ export const PANEL_BANK_CLOSE_X = 300;           // 右上「关闭」键左缘�
 export const PANEL_BANK_CLOSE_Y = 307;           // 关闭键顶边（中心 y 与 PANEL_BADGE_Y 同线）
 
 /* —— M20.3 道具商店浮层（版式 100% 复用银行 C 的左右分栏、元素与键位，仅纵向排版更紧）——
-   银行左列只有 3 行（高 40 / 间距 8），而商店目录有 6 项（M20.3-B 追加两种后为 8 项）；
-   沿用 40/8 会把第 6 行推到 624，越出 300..600 的底板，故商店单列一套更紧的行距。
-   两列的 x / 宽、右列详情中心、两枚操作键与关闭键台位**全部复用 `PANEL_BANK_*`**。
-   M20.3-B 扩到 8 项时把行高收到 28 / 间距 4（342 + 8×28 + 7×4 = 594）即可，版式不动。 */
-export const PANEL_STORE_ROW_H = 34;             // 商品行高（6 行 → 342..576）
-export const PANEL_STORE_ROW_GAP = 6;
+   银行左列只有 3 行（行盒 152×40 / 间距 8），而商店目录有 8 项（M20.3-B 追加两种后）。
+   沿用 40/8 会把第 6 行推到 624，越出 300..600 的底板，故商店整行按 `s = 0.8` 缩一档：
+   行盒 152×40 → 121.6×32，8 行 step 32 → 342..598，落在 300..600 之内（不压角标、不越底板）。
+   缩水只走 `panelSpecs` 的第 5 参 `s`（`uiBankRow` preset 的**行盒**随 `s` 缩放，字与行距是绝对值、
+   恰好仍然装得进 32 高的行盒），故**零新增皮肤元素**。命中区用同一组常量（`X` / `W` / `H` = 同一个
+   `s` 推导式），视觉与命中同源。x 中心不变（= 银行行中心），只收窄左右各 15.2。 */
+export const PANEL_STORE_ROW_S = 0.8;
+export const PANEL_STORE_ROW_W = PANEL_BANK_ROW_W * PANEL_STORE_ROW_S;   // 121.6
+export const PANEL_STORE_ROW_X = PANEL_BANK_ROW_X + (PANEL_BANK_ROW_W - PANEL_STORE_ROW_W) / 2;  // 35.2
+export const PANEL_STORE_ROW_H = PANEL_BANK_ROW_H * PANEL_STORE_ROW_S;   // 32（8 行铺满 342..598）
+export const PANEL_STORE_ROW_GAP = 0;            // 行盒已缩到 step 高度，行间不再留缝
 export const PANEL_STORE_ROW_Y0 = 342;           // 首行顶边
 export const PANEL_STORE_LINE_W = 186;           // 右列折行宽（= 右列净宽 370−184）
 export const PANEL_STORE_DESC_DY = 46;           // 用途描述占两行，故其下移量大于常规行距 22

@@ -41,11 +41,11 @@ import {
   PANEL_PREVIEW_W, PANEL_PREVIEW_X,
   PANEL_ROW_H, PANEL_ROW_W, PANEL_ROW_X, PANEL_SETTLE_ROW_GAP,
   PANEL_SETTLE_ROW_H, PANEL_SETTLE_ROW_Y, PANEL_SLOT_GAP, PANEL_SLOT_H, PANEL_SLOT_W,
-  PANEL_SLOT_X0, PANEL_STOCK_BUY_Y, PANEL_STOCK_LEV_GAP, PANEL_STOCK_LEV_X0, PANEL_STOCK_LEV_Y,
-  PANEL_STOCK_ROW_GAP, PANEL_STOCK_ROW_Y, PANEL_STOCK_SELL_Y,
+  PANEL_SLOT_X0, PANEL_STOCK_BADGE_CX, PANEL_STOCK_BUY_Y, PANEL_STOCK_LEV_GAP, PANEL_STOCK_LEV_X0,
+  PANEL_STOCK_LEV_Y, PANEL_STOCK_ROW_GAP, PANEL_STOCK_ROW_Y, PANEL_STOCK_SELL_Y,
   PANEL_STOCK_TIER_GAP, PANEL_STOCK_TIER_H, PANEL_STOCK_TIER_S, PANEL_STOCK_TIER_W,
   PANEL_STOCK_TIER_X0, PANEL_STOCK_Y, PANEL_STORE_DESC_DY, PANEL_STORE_LINE_W, PANEL_STORE_ROW_GAP,
-  PANEL_STORE_ROW_H, PANEL_STORE_ROW_Y0,
+  PANEL_STORE_ROW_H, PANEL_STORE_ROW_S, PANEL_STORE_ROW_W, PANEL_STORE_ROW_X, PANEL_STORE_ROW_Y0,
   PANEL_X, PANEL_Y, STAGE_W,
 } from '../skin/layout';
 
@@ -704,13 +704,15 @@ export function panelSpecs(
       { label: '关闭', enabled: true });
   } else if (overlay === 'store') {
     /* 版式与银行 C 同构：左列商品行（顺序恒等目录）+ 右列详情（首行用途描述折行）+ 两枚操作键 + 关闭键。
-       左列行距用商店专用常量（6 项装不进银行的 40/8）；右列 x / 键位全部复用 `PANEL_BANK_*`。 */
+       8 项装不进银行的 40/8 行距，故整行缩 `PANEL_STORE_ROW_S`（行盒与命中区同源，见 layout 注释）；
+       右列 x / 键位全部复用 `PANEL_BANK_*`。 */
     push('showcase.panel', PANEL_X, PANEL_Y);
     push('ui.badge', PANEL_CX, PANEL_BADGE_Y, { text: '道具商店' });
     storeRows(state, store.sel).forEach((row, i) => {
       push('ui.bankRow', PANEL_BANK_ROW_X + PANEL_BANK_ROW_W / 2,
         PANEL_STORE_ROW_Y0 + PANEL_STORE_ROW_H / 2 + i * (PANEL_STORE_ROW_H + PANEL_STORE_ROW_GAP),
-        { variant: 'row', title: row.title, summary: row.summary, selected: row.selected });
+        { variant: 'row', title: row.title, summary: row.summary, selected: row.selected },
+        PANEL_STORE_ROW_S);
     });
     const detail = storeDetail(state, store.sel);
     let lineY = PANEL_BANK_LINE_Y0;
@@ -730,10 +732,12 @@ export function panelSpecs(
       { label: '关闭', enabled: true });
   } else if (overlay === 'stock') {
     /* 版式 A（spec §6.1）：底板加高到 330（300..630，不压底坞资产条）。
-       自上而下：角标 → 四行标的（可点选中，恰一行高亮）→ 走势图（跟随选中标的）→
-       杠杆分段（第 8 轮起才产出）→ 买三档 → 卖三档。台位与 `panelHitAreas` 一一对应。 */
+       自上而下：**标题行**（角标居左 `PANEL_STOCK_BADGE_CX` + 杠杆分段居右同线）→
+       四行标的（可点选中，恰一行高亮）→ 走势图（跟随选中标的）→ 买三档 → 卖三档。
+       买 / 卖两行整段收在 606 之上——HUD 快键行（607..629）画在浮层之上且照常可点，
+       否则「卖」行会被压住、点不到（见 `layout.ts` 股票浮层段落说明）。台位与 `panelHitAreas` 一一对应。 */
     push('showcase.panelStock', PANEL_X, PANEL_STOCK_Y);
-    push('ui.badge', PANEL_CX, PANEL_BADGE_Y, { text: '股票交易所' });
+    push('ui.badge', PANEL_STOCK_BADGE_CX, PANEL_BADGE_Y, { text: '股票交易所' });
     stockRows(state, stock.sel).forEach((row, i) => {
       push('ui.stockRow', PANEL_ROW_X + PANEL_ROW_W / 2,
         PANEL_STOCK_ROW_Y + PANEL_ROW_H / 2 + i * (PANEL_ROW_H + PANEL_STOCK_ROW_GAP),
@@ -899,8 +903,8 @@ export function panelHitAreas(
     storeRows(state, store.sel).forEach((row, i) => {
       out.push({
         action: 'store:select', target: row.kind,
-        x: PANEL_BANK_ROW_X, y: PANEL_STORE_ROW_Y0 + i * (PANEL_STORE_ROW_H + PANEL_STORE_ROW_GAP),
-        w: PANEL_BANK_ROW_W, h: PANEL_STORE_ROW_H, enabled: true,
+        x: PANEL_STORE_ROW_X, y: PANEL_STORE_ROW_Y0 + i * (PANEL_STORE_ROW_H + PANEL_STORE_ROW_GAP),
+        w: PANEL_STORE_ROW_W, h: PANEL_STORE_ROW_H, enabled: true,
       });
     });
     const detail = storeDetail(state, store.sel);

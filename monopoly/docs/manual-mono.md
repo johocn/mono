@@ -921,7 +921,7 @@ $env:MONO_ORIGIN='http://127.0.0.1:52301'; node local/mono-shots-m20-2.mjs   # [
 
 **已知限制**：
 
-1. **滑动条本轮不入画（有意 · 待 M20.3-B 自动启用）**：6 张手牌 × 55px + 5 × 6px = 360px ≤ 390px，**恰好一屏** ⇒ `maxScroll = 0`、`ui.handBar` 不入画、`setHandScroll(v)` 恒被 clamp 到 0，横滑手势不进入拖拽态。M20.3-B 把 `ITEM_CARDS` 补到 8 种后（482px > 390px）滑动条与手势**自动启用、零版式返工**——本轮 e2e 闸门 `hand_row_fits` 即为此断言（防「为 8 槽留的横滑在 6 槽下误入画 / 误吞点击」）。
+1. **滑动条本轮不入画（有意 · 待 M20.3-B 自动启用）**：6 张手牌 × 55px + 5 × 6px = 360px ≤ 390px，**恰好一屏** ⇒ `maxScroll = 0`、`ui.handBar` 不入画、`setHandScroll(v)` 恒被 clamp 到 0，横滑手势不进入拖拽态。M20.3-B 把 `ITEM_CARDS` 补到 8 种后（482px > 390px）滑动条与手势**自动启用、零版式返工**——本轮 e2e 闸门 `hand_row_fits` 即为此断言（防「为 8 槽留的横滑在 6 槽下误入画 / 误吞点击」）。**M20.3-B 已兑现**：8 槽下 `contentW = 482`、`maxScroll = 92`、`ui.handBar` 入画（见 M20.3-B 节，`mono-shots-m20-3.mjs` 复拍）。
 2. **AI 只买不卖**：`pickStore` 不产出 `sellItem`（卖牌会与「保命线」规则相互抵消，收益不确定）。
 3. **买卖逐张无档位**：每次 1 张（单键动作），与股票「1 手 / 5 手 / 全仓」三档刻意区分，避免手感混淆。
 
@@ -944,9 +944,52 @@ $env:MONO_ORIGIN='http://127.0.0.1:52302'; node local/mono-e2e-playthrough.mjs  
 
 **P0 回归取证（相机取景下「点不上棋盘 / 道具不生效」）**：`local/mono-e2e-campick.mjs` **刻意不带 `nofx=1`**（既有 `mono-shots-*.mjs` 全带 `nofx` ⇒ `camOn = false` ⇒ `zoom ≡ 1`，恰好掩盖该缺陷），把相机顶到 `zoom = 3.4` 后走真实点击链「HUD 手牌键 → 炸弹槽 → 目标格屏幕坐标」，5 项机器闸门：`cam_zoom_active`（zoom > 1.5，确实处于取景态）/ `bomb_armed`（进入选目标态且 `#mono-pick` 可点）/ `pick_would_miss`（**旧算法**在同一像素上解出 7 号格 ≠ 目标 3 号格，证明用例有效、能捕获该缺陷）/ `bomb_landed`（`lastEvent = { kind:'card', card:'bomb', target:3 }`）/ `estate_demoted`（目标地块 L2 → L1、手牌不再含炸弹）。
 
-**截图清单（4 张，均 390×844 @dpr2 手机视口，出 780×1688 PNG，入 `docs/verify/`）**：`mono-m20-3-01-hand-sorted`（手牌行三键排序：持有的「免罚 / 炸弹 / 迁点」在前且亮显，未持有的「租金翻倍 / 路障 / 拆迁令」淡显在后 —— 正是 `priority` 10/30/50 ｜ 20/40/60 的两段）/ `mono-m20-3-02-store-panel`（道具商店浮层：角标「道具商店」+ 左列 6 行目录「免罚 ￥250 · 持有 / 租金翻倍 ￥250 · — / 炸弹 ￥300 · 持有 / 路障 ￥150 · 持有 / 迁点 ￥200 · — / 拆迁令 ￥500 · —」+ 右列 4 行详情「用途描述（折行）/ 售价 ￥300 · 回收 ￥150 / 持有 1 张 / 现金 ￥3000」+ 买入（置灰）/ 卖出 / 关闭）/ `mono-m20-3-03-store-bought`（真实点击「炸弹」行 + 买入 → 现金 ￥1000 → ￥700、炸弹转「持有 1 张」、买入键置灰、卖出键点亮、面板保持开启（非模态））/ `mono-m20-3-04-store-sold`（真实点击卖出 → 回收 ￥150 到账（￥850）、炸弹转「持有 0 张」、卖出键置灰、买入键点亮）。目视复核要点：①②③④ 同一手机视口下浮层不溢出、6 行目录与 4 行详情间距清晰；① 持有 / 未持有的亮暗对比可辨；③④ 键位置灰 / 点亮状态与「持有」列一致。
+**截图清单（4 张，均 390×844 @dpr2 手机视口，出 780×1688 PNG，入 `docs/verify/`）**：`mono-m20-3-01-hand-sorted`（手牌行三键排序：持有的「免罚 / 炸弹 / 迁点」在前且亮显，未持有的「租金翻倍 / 路障 / 拆迁令」淡显在后 —— 正是 `priority` 10/30/50 ｜ 20/40/60 的两段）/ `mono-m20-3-02-store-panel`（道具商店浮层：角标「道具商店」+ 左列目录（行数 = `ITEM_CARDS.length`，本轮 6 行；M20.3-B 追加两卡后已由 `mono-shots-m20-3.mjs` 复拍为 8 行，见下节）+ 右列 4 行详情「用途描述（折行）/ 售价 ￥300 · 回收 ￥150 / 持有 1 张 / 现金 ￥3000」+ 买入（置灰）/ 卖出 / 关闭）/ `mono-m20-3-03-store-bought`（真实点击「炸弹」行 + 买入 → 现金 ￥1000 → ￥700、炸弹转「持有 1 张」、买入键置灰、卖出键点亮、面板保持开启（非模态））/ `mono-m20-3-04-store-sold`（真实点击卖出 → 回收 ￥150 到账（￥850）、炸弹转「持有 0 张」、卖出键置灰、买入键点亮）。目视复核要点：①②③④ 同一手机视口下浮层不溢出、目录行与 4 行详情间距清晰；① 持有 / 未持有的亮暗对比可辨；③④ 键位置灰 / 点亮状态与「持有」列一致。
 
-**取证脚本**：[local/mono-shots-m20-3.mjs](file:///d:/zhao/monopoly/local/mono-shots-m20-3.mjs)（10 项机器闸门）与 [local/mono-e2e-campick.mjs](file:///d:/zhao/monopoly/local/mono-e2e-campick.mjs)（相机开启下的选目标回归）。关键口径：打 `?play=1&seed=20261002&nofx=1&humans=4&tour=0` 真实对局，全程走 `#mono-hud` / `#mono-panels` 命中层；闸门 `store_rows = ITEM_CARDS.length + 4 = 10`（6 目录行 + 4 详情行，均由 `ui.bankRow` 承载）、`store_buttons` 直查 DOM（`store:select` × 6 带 `data-target` = kind、`store:buy` / `store:sell` / `store:close` 各 1，且浮层展开时无其他 `#mono-panels` 键位残留）。
+**取证脚本**：[local/mono-shots-m20-3.mjs](file:///d:/zhao/monopoly/local/mono-shots-m20-3.mjs)（10 项机器闸门）与 [local/mono-e2e-campick.mjs](file:///d:/zhao/monopoly/local/mono-e2e-campick.mjs)（相机开启下的选目标回归）。关键口径：打 `?play=1&seed=20261002&nofx=1&humans=4&tour=0` 真实对局，全程走 `#mono-hud` / `#mono-panels` 命中层；闸门 `store_rows = ITEM_CARDS.length + 4`（本轮 10 = 6 目录行 + 4 详情行；M20.3-B 复拍后 12 = 8 + 4，均由 `ui.bankRow` 承载）、`store_buttons` 直查 DOM（`store:select` 数 = `ITEM_CARDS.length` 带 `data-target` = kind、`store:buy` / `store:sell` / `store:close` 各 1，且浮层展开时无其他 `#mono-panels` 键位残留）；`hand_row_fits` 在 8 槽口径下翻转为「出滑动条（`ui.handBar === 1`）+ 初始滚动量 0」。
+
+### M20.3-B 股票轨（浮层 A · 买三档 / 卖三档 · 涨跌卡 · 红利卡 · 杠杆与爆仓）2026-10-02
+
+**范围**：对齐 spec `docs/superpowers/specs/2026-10-02-monopoly-m20-3b-stock-track-design.md` 的口径 **B-D1 ～ B-D9**（股票轨主批，M20.3-A 已给出「手牌由 `ITEM_CARDS.length` 驱动」的干净底子）。三件事：① 股票**可指定标的与数量**（逐行选中 + 买三档 / 卖三档，支持只卖其中一支）；② 两张股票卡——涨跌卡 `bullBear` / 红利卡 `dividend`；③ 第 8 轮起**保证金杠杆**（2× / 3×）与**爆仓强平**。
+
+**三项需求与落点**：
+
+| # | 需求（B-D） | 落点 | 结果 |
+|---|---|---|---|
+| 1 | 指定标的与数量（B-D1 / B-D6） | [layout.ts](file:///d:/zhao/monopoly/src/skin/layout.ts) `PANEL_STOCK_*` / [panels.ts](file:///d:/zhao/monopoly/src/ui/panels.ts) 股票分支 / [main.ts](file:///d:/zhao/monopoly/src/main.ts) `stepOfPanel` | 浮层 A：4 行 `ui.stockRow`**可点选中**（恰一行金描边）+ `ui.stockChart` 跟随选中标的 + 买三档 / 卖三档各 3 键；命中区 `data-target` 编码 `` `${code}:${tier}` ``（`tier ∈ '1' \| '5' \| 'all'`）；档位→股数走纯函数 `lotShares`；**持有 0 股时卖档 3 键全禁用** |
+| 2 | 涨跌卡 / 红利卡（B-D2 / B-D7） | [cards.ts](file:///d:/zhao/monopoly/src/data/cards.ts) `ITEM_CARDS` 追加（priority 70 / 80，`target` 新增 `'stock'` / `'none'`）/ [game.ts](file:///d:/zhao/monopoly/src/core/game.ts) `useCard(kind, target?, stock?)` + `state.stockForce` / `panels.ts` `bullbear` 浮层 | 涨跌卡：**选方向（默认押涨）+ 点股票行即成交** → 写 `state.stockForce[i] = { code, dir }`，下一轮 `market.tick` 按方向强制涨跌；失败分支 `no-target` / `unknown-code`。红利卡：**点即结算、无浮层** —— 每股 ￥20，无持仓折现 ￥100 |
+| 3 | 杠杆与爆仓（B-D3 / B-D4 / B-D5 / B-D8 / B-D9） | [stocks.ts](file:///d:/zhao/monopoly/src/data/stocks.ts) 常量 / [game.ts](file:///d:/zhao/monopoly/src/core/game.ts) `MarginBook` · `trade` · `liquidate` · `onRoundBoundary` | `round >= 8` 才产出「无 / 2× / 3×」分段；杠杆**只在新买入时可选**（B-D4）；`own = ceil(cost / lev)`、`borrowed = cost − own`；借入 **6%/轮复利**；轮末固定 5 步：`settleBooks()` → 保证金复利 → `market.tick(force)` → 爆仓判定（`marketValue < principal × 1.2`）→ 清空强制方向表；爆仓**只用股票账户清偿**（清仓 → 先还借入 → 余债转信用贷款 / 有余额入现金），`lastEvent = { kind:'marginCall' }` |
+
+**优先级与互斥**：`overlayOf()` 得 `auction > settle > bank > store > stock > bullbear > draw` —— 涨跌卡**随时可开**（不再要求 `phase === 'settled'` 早退），但仍被股票盘压住；`bullbearOpen` 与银行 / 商店同为互斥的常驻浮层，AI 驱动在这三种浮层展开时暂停。
+
+**AI 策略**：`dividend` 无脑打出（Σ 持仓 > 0）、`bullBear` 押**自己持仓最重**那支为「涨」（并列取 `STOCKS` 表序小者，`heaviestHolding` / `heldShares` 两个纯函数）；股票交易恒 `trade(code, 1)`，**AI 不碰杠杆**（避免自杀式爆仓）。
+
+**确定性**：`market.tick(force)` 在 `force` 命中该标的时**不调用 `rng()`**（与既有 `tips.includes(code) ? … : …` 的短路结构逐字节一致），既有 seed 回放序列不变 —— 单测「同 seed 下用 force 与不传 force 的后续 `rng()` 序列一致」即此断言。
+
+**四级回退**：股票浮层 A **零新增皮肤元素**（复用 `ui.stockRow` / `ui.stockChart` / `ui.tradeBuy` / `ui.tradeSell` / `ui.qk` / `ui.badge`，底板是 M20.3-A 就登记的 `showcase.panelStock`）；涨跌卡浮层复用 `showcase.panel`（不新增注册项）；全部台位常量落 `src/skin/layout.ts`，`src/render` 内零裸值（`tools/check-hardcoded.mjs` clean）。
+
+**取证发现的三个真实回归（本轮修复）** —— 均为「元素被更高层的命中键压住 ⇒ 点不中」类：
+
+| 现象 | 根因 | 修复 |
+|---|---|---|
+| 股票浮层「卖」三档**点不中** | 卖档 598.6..625.2 与 HUD 快键行 607..629 重叠，而快键行（商店 / 银行 / 出售 / 手牌）画在浮层**之上**且照常可点 ⇒ 整条卖行被盖 | 改**标题行**（角标居左 `PANEL_STOCK_BADGE_CX` + 杠杆分段右对齐同线）腾出纵向空间；买 / 卖两行整体上移到 547..573.6 / 576.6..603.2（底 603.2 < 607） |
+| 商店 **8 行越出底板** | 沿用银行的 34 行高 / 6 行距，8 行推到 618 > 面板底 600 | 整行按 `s = 0.8` 缩放（行盒 121.6×32、step 32）→ 8 行铺满 342..598；命中区与视觉**同一表达式**同源；新增单测断言行底 ≤ 面板底、行间不重叠 |
+| 涨跌卡「取消」**压住第 4 支标的** | 取消键 502..524 与末行标的 490..524 重叠，取消画在行之上 ⇒ 中心区被盖、SY04 点不中 | 取消键下移到 536..558（末行底 524 + 12 缝，仍在 300..600 底板内）；新增单测断言「取消键与末行命中区不相交」 |
+
+**回归口径（本轮实测）**：
+
+```powershell
+npx tsc --noEmit                                 # 退出码 0、无输出
+npm run check                                    # eslint 0 错；[theme] OK / [skin:default] OK / [skin:photo] OK；registry-ids.json: 338 ids（M20.3-A 的 337 + 本轮 `showcase.panelStock`）；74 文件 / 787 例全绿
+npm run build                                    # [check-hardcoded] clean（29 个文件）→ ✓ built in 8.47s
+$env:MONO_ORIGIN='http://127.0.0.1:52302'; node local/mono-shots-m20-3b.mjs   # [m20-3b-shots] PASS（14 项 gate 全 true、errors: []）
+$env:MONO_ORIGIN='http://127.0.0.1:52302'; node local/mono-shots-m20-3.mjs    # [m20-3-shots] PASS（10 项 gate 全 true —— 8 槽手牌出入画滑动条、商店 8 目录行 + 4 详情行）
+$env:MONO_ORIGIN='http://127.0.0.1:52302'; node local/mono-e2e-playthrough.mjs # [e2e:play] PASS · round=61 · clicks=984 · 退出码 0 · tally 含 stock:buy（三档路径）
+```
+
+**截图清单（4 张，均 390×844 @dpr2 手机视口，出 780×1688 PNG，入 `docs/verify/`）**：① `mono-m20-3b-01-stock-panel`（浮层 A：SY02 选中行金描边 + 走势图角标「SY02 走势」+ 买三档「买 1 手 / 买 5 手 / 买全仓」+ 卖三档全灰禁用 —— 持股 0）；② `mono-m20-3b-02-leverage`（第 8 轮解锁杠杆分段「无 / 2× / 3×」选中 2×；2× 买 5 手后 `own ￥200 / 借入 ￥200`、持仓 5 股 ￥400、现金 ￥2800、走势图角标追加「借款 ￥200」）；③ `mono-m20-3b-03-bullbear`（涨跌卡浮层：角标 + 押涨 / 押跌（押跌金底选中）+ 4 行标的 + 取消键**落在末行之下不压盖**）；④ `mono-m20-3b-04-dividend`（红利卡结算后：手牌横滑到最右，红利卡槽转淡显、现金 ￥0 → ￥500 —— 25 股 × ￥20）。目视复核要点：①② 买 / 卖两行**整段在 HUD 快键行之上**、均可点；② 杠杆段与角标同一行不互相压盖；③ 取消键与第 4 行留缝；④ 8 槽手牌出现滑动条且槽 7..8 可滑入视野。
+
+**取证脚本**：[local/mono-shots-m20-3b.mjs](file:///d:/zhao/monopoly/local/mono-shots-m20-3b.mjs)（14 项机器闸门：`stock_rows` / `stock_chart_follows` / `stock_tiers` / `stock_lev_locked` / `overlay_panel` / `lev_unlocked` / `lev_selected` / `lev_buy_split` / `lev_chart_debt` / `bullbear_open` / `bullbear_panel` / `bullbear_play` / `dividend_holding` / `dividend_paid`）。关键口径：打 `?play=1&seed=20261002&nofx=1&humans=4&tour=0` 真实对局，停格走「真实掷骰 + 反推起点」落到 19 号股票格，全程点 `#mono-hud` / `#mono-panels` 命中层（唯一例外是 M20.3-A 就登记的 `__monoMain.setHandScroll` 取证 API，用于手牌横滑）。
 
 ### 最终验收（对照 spec §11 硬性标准）
 

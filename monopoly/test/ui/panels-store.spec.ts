@@ -3,6 +3,8 @@ import { ITEM_CARDS } from '../../src/data/cards';
 import { STORE_CATALOG } from '../../src/data/item-shop';
 import { createGame, type Game } from '../../src/core/game';
 import { resaleOf } from '../../src/core/item-shop';
+import { getEntry } from '../../src/skin/registry';
+import { PANEL_H, PANEL_Y } from '../../src/skin/layout';
 import { overlayOf, panelHitAreas, panelSpecs, storeDetail, storeRows } from '../../src/ui/panels';
 
 /** 固定点数骰：每步走 2 格 */
@@ -124,5 +126,31 @@ describe('panels：商店浮层画面与命中区', () => {
     expect(specs.find((s) => s.id === 'ui.button.primary')!.state!.enabled).toBe(false);
     const hits = panelHitAreas(g.state, false, null, { open: false, sel: 'deposit' }, 0, { open: true, sel: 'pardon' });
     expect(hits.find((h) => h.action === 'store:buy')!.enabled).toBe(false);
+  });
+
+  it('目录 8 行铺得进底板：行底 ≤ 面板底（M20.3-B spec §6.3 风险表「行高复核」）', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    emptyHand(g);
+    const bank = { open: false, sel: 'deposit' } as const;
+    const panelBottom = PANEL_Y + PANEL_H;
+    const store = { open: true, sel: 'bomb' } as const;
+
+    /* 命中区（= `PANEL_STORE_ROW_*` 推导）不得越出底板；行间不重叠 */
+    const hits = panelHitAreas(g.state, false, null, bank, 0, store).filter((h) => h.action === 'store:select');
+    expect(hits).toHaveLength(STORE_CATALOG.length);
+    expect(Math.max(...hits.map((h) => h.y + h.h))).toBeLessThanOrEqual(panelBottom);
+    for (let i = 1; i < hits.length; i++) expect(hits[i].y).toBeGreaterThanOrEqual(hits[i - 1].y + hits[i - 1].h);
+
+    /* 视觉行盒（注册表 152×40 × push 的第 5 参 `s`）同样落在底板内、且不互相压盖 */
+    const box = getEntry('ui.bankRow')!.box;
+    const rows = panelSpecs(g.state, false, null, bank, 0, store)
+      .filter((s) => s.id === 'ui.bankRow' && s.state?.variant === 'row');
+    expect(rows).toHaveLength(STORE_CATALOG.length);
+    const span = rows.map((s) => {
+      const h = box.h * (s.fixed!.s ?? 1);
+      return { top: (s.fixed!.cy ?? 0) - h / 2, bottom: (s.fixed!.cy ?? 0) + h / 2 };
+    });
+    expect(Math.max(...span.map((x) => x.bottom))).toBeLessThanOrEqual(panelBottom);
+    for (let i = 1; i < span.length; i++) expect(span[i].top).toBeGreaterThanOrEqual(span[i - 1].bottom);
   });
 });

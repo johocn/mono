@@ -465,6 +465,13 @@ describe('panels：涨跌卡浮层（M20.3-B spec §6.2）', () => {
       expect(h.x).toBeGreaterThanOrEqual(10);
       expect(h.x + h.w).toBeLessThanOrEqual(380);
     }
+    /* 取消键不得压在末行标的上（取证回归：旧值 502 与第 4 行 490..524 重叠 ⇒ 中心区被盖、SY04 点不中），
+       且整段收在 370×300 底板（300..600）之内 */
+    const cancel = hits.find((h) => h.action === 'bullbear:cancel')!;
+    const picks = hits.filter((h) => h.action === 'bullbear:pick');
+    const lastRow = picks[picks.length - 1];
+    expect(cancel.y).toBeGreaterThanOrEqual(lastRow.y + lastRow.h);
+    expect(cancel.y + cancel.h).toBeLessThanOrEqual(600);
   });
 });
 
