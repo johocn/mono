@@ -2,6 +2,7 @@ import {
   AUDIO_KEY_SIZE, BUBBLE_H, BUBBLE_W, HUD_BAR_W, HUD_DEBT_H, HUD_DEBT_W, PANEL_BANK_ROW_H,
   PANEL_BANK_ROW_W, PANEL_BID_H, PANEL_BID_W, PANEL_CANCEL_W,
   PANEL_CLOSE_H, PANEL_CLOSE_W, PANEL_DEBT_H, PANEL_DEBT_W,
+  PANEL_HAND_BAR_H, PANEL_HAND_BAR_W,
   PANEL_PREVIEW_H, PANEL_PREVIEW_W, PANEL_SLOT_H, PANEL_SLOT_W,
   PANEL_TALL_H, PANEL_TALL_W, TILE_CARD_H, TILE_CARD_W,
 } from './layout';
@@ -236,6 +237,8 @@ reg['ui.bidDebt'] = showcaseEntry('ui.bidDebt', { w: PANEL_DEBT_W, d: 1, h: PANE
    `ui.debtBar` = HUD 常驻债务条（无信贷时整条隐藏） */
 reg['ui.bankRow'] = showcaseEntry('ui.bankRow', { w: PANEL_BANK_ROW_W, d: 1, h: PANEL_BANK_ROW_H });
 reg['ui.debtBar'] = showcaseEntry('ui.debtBar', { w: HUD_DEBT_W, d: 1, h: HUD_DEBT_H });
+/* M20.3 手牌滑动条（spec §4.2 版式 A）：手牌行上方的 3px 细条，一屏放得下时整条隐藏 */
+reg['ui.handBar'] = showcaseEntry('ui.handBar', { w: PANEL_HAND_BAR_W, d: 1, h: PANEL_HAND_BAR_H });
 
 export const REGISTRY: Record<string, RegistryEntry> = reg;
 

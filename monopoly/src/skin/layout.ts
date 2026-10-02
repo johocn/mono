@@ -39,7 +39,9 @@ export const HUD_QK_W = 72;
 export const HUD_QK_H = 22;
 export const HUD_QK_FAST_X = 211;
 export const HUD_QK_SKIP_X = 287;
-/** M20.2 银行键：底坞右侧三枚快捷键行（135..207 / 211..283 / 287..359，不重叠） */
+/** M20.3 商店键：底坞右侧四枚快捷键行（59..131 / 135..207 / 211..283 / 287..359，两两留 4px 间隙） */
+export const HUD_QK_STORE_X = 59;
+/** M20.2 银行键：底坞右侧快捷键行（135..207 / 211..283 / 287..359，不重叠） */
 export const HUD_QK_BANK_X = 135;
 /** 快捷键顶边 y；中心 = HUD_LABEL_Y（状态行中心），即右侧 211..359 / 287..359 */
 export const HUD_QK_Y = 607;

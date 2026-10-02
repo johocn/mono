@@ -154,6 +154,7 @@
     "ui.bidDebt": { "kind": "proc", "preset": "uiBidDebt", "params": {} },
     "ui.debtBar": { "kind": "proc", "preset": "uiDebtBar", "params": {} },
     "ui.bankRow": { "kind": "proc", "preset": "uiBankRow", "params": {} },
+    "ui.handBar": { "kind": "proc", "preset": "uiHandBar", "params": {} },
 
     "ui.dock": { "kind": "proc", "preset": "uiDock", "params": {} },
     "ui.panel": { "kind": "proc", "preset": "uiPanel", "params": {} },

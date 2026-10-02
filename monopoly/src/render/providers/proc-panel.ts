@@ -75,6 +75,10 @@ export const PANEL_D = fb({
   bankRowPadX: 12, bankRowTitleDy: -9, bankRowTitleFs: 13, bankRowTitleFill: '#ffe9b0',
   bankRowSubDy: 10, bankRowSubFs: 11, bankRowSubFill: '#9fb3a8',
   bankLineFs: 12, bankLineFill: '#d8e4dc',
+  /* M20.3 手牌滑动条（ui.handBar）：3px 细条 = 半透明轨道 + 金滑块；滑块宽度 = 轨道宽 × ratio，
+     位移 = (轨道宽 − 滑块宽) × offset（两者由 UI 层算好传入 `state.ratio / state.offset`） */
+  handBarTrack: 'rgba(255,255,255,.10)', handBarThumb: '#f5c451', handBarR: 2,
+  handBarMinW: 1,                                  // 滑块最小宽（内容极宽时仍可见）
 });
 
 const G = (p: Record<string, unknown>, k: keyof typeof PANEL_D): number => num(p, k, PANEL_D[k] as number);
@@ -372,4 +376,21 @@ export const uiBankRow: ProcPreset = (g, ctx) => {
     x: tx, y: cy + G(params, 'bankRowSubDy'), size: G(params, 'bankRowSubFs'),
     fill: S(params, 'bankRowSubFill'), align: 'left',
   });
+};
+
+/* —— M20.3 手牌滑动条（spec §4.2 版式 A）：半透明轨道铺满 + 金滑块。
+   滑块宽 = 轨道宽 × `state.ratio`（下限 `handBarMinW`），左缘 = (轨道宽 − 滑块宽) × `state.offset`；
+   槽数 ≤ 6（一屏放得下）时 UI 层不出这条 spec，故此 preset 只在需要滑动时被调用。 —— */
+export const uiHandBar: ProcPreset = (g, ctx) => {
+  const { cx, cy, box, params, state, s } = ctx;
+  const w = box.w * s;
+  const h = box.h * s;
+  const x0 = cx - w / 2;
+  const y0 = cy - h / 2;
+  const r = G(params, 'handBarR') * s;
+  g.roundRect(x0, y0, w, h, r).fill({ color: S(params, 'handBarTrack') });
+  const ratio = Math.min(Math.max(typeof state.ratio === 'number' ? state.ratio : 1, 0), 1);
+  const offset = Math.min(Math.max(typeof state.offset === 'number' ? state.offset : 0, 0), 1);
+  const tw = Math.max(w * ratio, G(params, 'handBarMinW') * s);
+  g.roundRect(x0 + (w - tw) * offset, y0, tw, h, r).fill({ color: S(params, 'handBarThumb') });
 };
