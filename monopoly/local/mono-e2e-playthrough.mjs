@@ -105,6 +105,9 @@ const readState = () => page.evaluate(() => {
     cardDoubleRentEnabled: enabled(panels, 'button[data-action="card:doubleRent"]'),
     /* 牌袋抽屉（spec §7.3）：手牌默认收起，打牌前要先点这枚键展开 */
     handKeyEnabled: enabled(hud, 'button[data-action="hand"]'),
+    /* M20.4（spec §6.1 / §6.3）：设施快键（真人回合常开）+ 设施浮层展开判据（「关闭」键 = 浮层在） */
+    facilityKeyEnabled: enabled(hud, 'button[data-action="facility"]'),
+    facilityPanelOpen: Boolean(panels && panels.querySelector('button[data-action="facility:close"]')),
     /* 取景采样（G6）：整局跑在 `?nofx=1` 下，相机不介入 ⇒ `world.scale.x` 必须全程恒 1 */
     worldScaleX: window.__monoMain?.stage?.world?.scale?.x ?? null,
   };
@@ -164,7 +167,7 @@ const click = async (sel, sigBefore, real = false) => {
   return readState();
 };
 
-const used = { card: false, trade: false };
+const used = { card: false, trade: false, facility: false };
 /* 牌袋抽屉当前是否展开：打牌前展开、打完收起（开合不推进状态，故不走 `click()` 的签名校验） */
 let drawerOpen = false;
 let finalState = null;
@@ -210,6 +213,31 @@ try {
         : '#mono-panels button[data-action="auction:pass"]';
       action = s.auctionBidEnabled ? 'auction:bid' : 'auction:pass';
     } else {
+      /* M20.4 设施入股路径（spec §6.1 / F-D15）：真人局（humans=4）无 AI ⇒ 设施恒未售出，
+         默认选中「鹿乡银行」￥200 的 `facility:buy1` 必可用。开 / 关浮层不改游戏状态（走直接 click，
+         不经 `click()` 的签名校验）；仅「认购 1 股」改状态（现金 ↓），故认购那一步走 `click()`。 */
+      if (!used.facility && s.facilityPanelOpen) {
+        const beforeFac = sig(s);
+        const nextFac = await click('#mono-panels button[data-action="facility:buy1"]', beforeFac);
+        facts.clicks += 1;
+        facts.tally['facility:buy1'] = (facts.tally['facility:buy1'] ?? 0) + 1;
+        used.facility = true;
+        /* 浮层内详情随持股更新 → 先截一帧「已认购」态，再收起浮层 */
+        await settleFx();
+        await shot('09-facility');
+        await page.evaluate(() => { document.querySelector('#mono-panels button[data-action="facility:close"]')?.click(); });
+        await page.waitForTimeout(20);
+        s = await readState();
+        facts.minAudioKeys = Math.min(facts.minAudioKeys, s.audioKeys);
+        continue;
+      }
+      if (!used.facility && !s.facilityPanelOpen && s.phase === 'settled' && s.overlay === null
+        && s.facilityKeyEnabled) {
+        await page.evaluate(() => { document.querySelector('#mono-hud button[data-action="facility"]')?.click(); });
+        await page.waitForTimeout(20);
+        s = await readState();
+        continue;
+      }
       /* 牌袋抽屉：还没打过牌、停在格、无浮层时先展开抽屉（否则手牌键与牌面键都不在命中层） */
       if (!used.card && !drawerOpen && s.phase === 'settled' && s.overlay === null && s.handKeyEnabled) {
         await page.evaluate(() => { document.querySelector('#mono-hud button[data-action="hand"]')?.click(); });
@@ -307,11 +335,13 @@ try {
   gate.reached_by_clicks = facts.clicks > 0 && facts.tally.roll > 0;
   gate.used_card = used.card === true;
   gate.used_trade = used.trade === true;
+  gate.used_facility = used.facility === true;   // M20.4：设施入股真实点击路径（spec §6.1 / F-D15）
   gate.audio_keys = facts.minAudioKeys === 2;   // 静音键在每一阶段（含 over 结算）都常驻命中层
   gate.audio_unlocked = facts.audioUnlocked === true;   // 首个真实手势确实建起了 AudioContext（spec §4.3c）
 
-  /* 截图断言：7 张齐全、非空、两两不同 */
-  const labels = ['01-start', '02-firstbuy', '03-firstupgrade', '04-jail', '05-draw', '06-stock', '07-final'];
+  /* 截图断言：8 张齐全、非空、两两不同（09 为 M20.4 设施浮层「已认购」态） */
+  const labels = ['01-start', '02-firstbuy', '03-firstupgrade', '04-jail', '05-draw', '06-stock',
+    '07-final', '09-facility'];
   gate.shots_present = labels.every((l) => facts.shots[l] && facts.shots[l].bytes > 3000);
   gate.shots_nonblank = labels.every((l) => facts.shots[l] && facts.shots[l].hash !== blankHash);
   const hashes = labels.map((l) => facts.shots[l]?.hash);
