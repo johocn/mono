@@ -166,6 +166,9 @@ describe('game 破产清算（spec §5.4）', () => {
     /* 地块不再删除，而是转移给竞拍者（楼层保持） */
     expect(g.state.estates[3]).toEqual({ index: 3, owner: 2, level: 1, processing: false });
     expect(Object.keys(g.state.estates)).toEqual(['3', '4']);
+    /* M20.2 零回归：无信贷时破产不产生任何债务 / 抵押物清算 */
+    expect(g.state.players[0].loan).toBeNull();
+    expect(g.state.players[0].mortgages).toEqual([]);
   });
 
   it('拍卖筹够即停：剩余地块仍归原主，付清不破产', () => {

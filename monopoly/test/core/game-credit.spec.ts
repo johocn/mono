@@ -267,3 +267,74 @@ describe('M20.2 信贷 · 逾期付租罚息（spec §3.4 链一）', () => {
     expect(g.state.players[1].loan?.principal).toBe(500);
   });
 });
+
+describe('M20.2 信贷 · 两条违约链与破产清债务（spec §3.4 链二/链三 · §3.5）', () => {
+  /** 直接给 1 号玩家挂一笔抵押（免去走 9 号格办理） */
+  const giveMortgage = (g: Game, index: number, principal: number, due: number): void => {
+    g.state.players[0].mortgages.push({ principal, rate: MORTGAGE_RATE, due, overdue: 0, index });
+  };
+
+  it('链二：逾期满 3 轮 → 轮末强执未抵押地产，队列跳过抵押地块', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    const p = g.state.players[0];
+    giveEstate(g, 1);
+    giveEstate(g, 2);
+    giveMortgage(g, 2, 24, 99);
+    p.loan = { principal: 200, rate: LOAN_RATE, due: 1, overdue: 2 };
+    g.state.round = 1;
+    passRound(g);                                  // round → 2 ⇒ 逾期 3 ⇒ 触发强执
+    /* 只拍未抵押的 1 号；抵押中的 2 号原地不动 */
+    expect(g.state.estates[1]?.owner).not.toBe(1);
+    expect(g.state.estates[2]?.owner).toBe(1);
+    expect(p.mortgages.map((m) => m.index)).toEqual([2]);
+    /* settleBooks 先把本金复利到 212，成交款恰好冲抵 ⇒ 债务清零 */
+    expect(p.loan).toBeNull();
+    expect(g.state.auction).toBeNull();
+  });
+
+  it('链三：抵押超期 → 轮末开 mortgage-overdue 拍卖（起拍价 = 借款额）；挂起不换手', () => {
+    /* 2 号玩家为真人 ⇒ 拍卖挂起等其出价（验证「挂起期间不推进玩家」） */
+    const g = createGame({ dice: fixed(1, 1), seats: [null, null, 'conservative', 'conservative'] });
+    const p = g.state.players[0];
+    giveEstate(g, 1);
+    giveMortgage(g, 1, 24, 1);
+    p.cash = 3024;                                 // 3000 + 借款 24
+    g.state.round = 1;
+    passRound(g);
+    /* round → 2 > due(1) ⇒ 开拍；真人未出价 ⇒ 挂起，不换手 */
+    expect(g.state.current).toBe(g.state.players.length - 1);
+    expect(g.state.phase).toBe('settled');
+    const a = g.state.auction;
+    expect(a?.trigger).toBe('mortgage-overdue');
+    expect(a?.lot.index).toBe(1);
+    expect(a?.lot.startPrice).toBe(Math.round(24 * 1.04));   // 起拍价 = 复利后的借款额 25
+    /* 收尾：成交款先还该笔（25），余额归借款人 ⇒ 现金净增；抵押解除 */
+    g.autoResolveAuction();
+    expect(g.state.auction).toBeNull();
+    expect(g.state.current).toBe(0);               // 挂起解除后补上被暂存的换手
+    expect(g.state.phase).toBe('idle');
+    expect(p.mortgages).toEqual([]);
+    expect(g.state.estates[1]?.owner).not.toBe(1);
+    expect(p.cash).toBeGreaterThan(3024);
+  });
+
+  it('破产：债务清零且未赎回抵押物进清仓拍卖', () => {
+    const g = createGame({ dice: step(1) });
+    const p = g.state.players[0];
+    g.state.estates[1] = { index: 1, owner: 2, level: 1, processing: false };
+    giveEstate(g, 2);
+    giveMortgage(g, 2, 24, 99);
+    p.cash = 0;
+    p.loan = { principal: 50, rate: LOAN_RATE, due: 99, overdue: 0 };
+    g.state.hands[0] = g.state.hands[0].filter((k) => k !== 'pardon');
+    g.rollDice();
+    g.moveCurrent();
+    const r = g.settleCurrent();
+    expect(r.kind).toBe('rent');
+    expect(p.bankrupt).toBe(true);
+    expect(p.loan).toBeNull();
+    expect(p.mortgages).toEqual([]);
+    expect(g.state.estates[2]?.owner).not.toBe(1);
+    expect(g.state.auction).toBeNull();
+  });
+});

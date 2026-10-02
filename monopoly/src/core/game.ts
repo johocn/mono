@@ -26,7 +26,9 @@ import {
   BANK_CAP, BANK_RATE, HOSPITAL_TURNS, JAIL_TURNS, LOTTERY_STAKE, TAX_CAP, TAX_RATE,
   nextJail, rollBonus, rollLottery, specialAt, type BonusReward,
 } from './special';
-import { BANK_TILE_INDEX, DEPOSIT_RATE, LOAN_RATE, LOAN_TERM, MORTGAGE_RATE, MORTGAGE_TERM } from '../data/bank';
+import {
+  BANK_TILE_INDEX, DEPOSIT_RATE, LOAN_RATE, LOAN_TERM, MORTGAGE_RATE, MORTGAGE_TERM, OVERDUE_SEIZE_ROUNDS,
+} from '../data/bank';
 import {
   loanLimitOf, mortgageLimitOf, overdueOf, penaltyOf, type DebtBook, type MortgageBook,
 } from './bank';
@@ -120,6 +122,8 @@ export interface PendingAuction {
   pending: number[];
   /** 已落槌记录 */
   results: AuctionResult[];
+  /** 清仓拍卖（破产后处置抵押物）：不为「筹够欠款」提前收手，跑完队列才收尾（M20.2） */
+  sellAll?: boolean;
 }
 
 export interface GameState {
@@ -414,6 +418,8 @@ export function createGame(opts: GameOptions = {}): Game {
      全部为 createGame 内闭包。`lotOpen` 标记「当前拍品是否已收齐报价」：零报价流拍也必须翻牌，
      否则泵会反复「重开同一块」，故不能只用 `bids.length + pending.length > 0` 推断。 */
   let lotOpen = false;
+  /* 当前拍品的起拍价口径（M20.2）：抵押中地块用「借款额」，其余用变卖价；每场拍卖开始时重置 */
+  let lotPriceOf: (index: number) => number = (i) => sellAt(state.estates, i);
 
   /** 某席位的 AI 参数（真人席位在补算时也按默认保守档，见 autoResolveAuction） */
   const aiParamsOf = (id: number): AiParams => personaParams(state.seats[id - 1] ?? 'conservative');
@@ -459,7 +465,8 @@ export function createGame(opts: GameOptions = {}): Game {
     for (;;) {
       if (!lotOpen) {
         if (a.queue.length === 0) return false;
-        const lot = lotOf(state.estates, a.queue[0]);
+        const e = state.estates[a.queue[0]];
+        const lot: AuctionLot | null = e ? { index: e.index, level: e.level, startPrice: lotPriceOf(e.index) } : null;
         if (!lot) { a.queue.shift(); continue; }
         a.lot = lot;
         openLot(a);
@@ -467,7 +474,7 @@ export function createGame(opts: GameOptions = {}): Game {
       if (a.pending.length > 0) return true;
       applyLot(a);
       a.queue.shift();
-      if (payer.cash >= a.amount) return false;
+      if (!a.sellAll && payer.cash >= a.amount) return false;
     }
   };
 
@@ -484,7 +491,9 @@ export function createGame(opts: GameOptions = {}): Game {
     const paid = affordable ? amount : payer.cash;
     payer.cash = affordable ? payer.cash - amount : BANKRUPT_CASH_LINE;
     if (receiver) receiver.cash += paid;
-    const bankrupt = !affordable && ownedBy(state.estates, payer.id).length === 0
+    /* 破产判定（M20.2 §3.5-D23）：抵押中地块不算「可自救资产」（由链三/破产清偿单独处置） */
+    const bankrupt = !affordable
+      && !ownedBy(state.estates, payer.id).some((i) => !creditLocked(state, i))
       && Object.keys(state.portfolios[payer.id - 1]).length === 0;
     if (bankrupt) payer.bankrupt = true;
     return { paid, bankrupt };
@@ -498,6 +507,13 @@ export function createGame(opts: GameOptions = {}): Game {
     const sold = a.results.map((r) => r.index);
     if (!payer) return { paid: 0, sold, bankrupt: false };
     const { paid, bankrupt } = closeDebt(payer, a.amount, receiver);
+    /* 成交款冲抵触发它的那笔债务本金（spec §3.4 链二 / 链三）；破产分支改由 `liquidateMortgages` 清账 */
+    if (!bankrupt && a.trigger === 'loan-overdue') applyToPrincipal(payer, paid);
+    if (!bankrupt && a.trigger === 'mortgage-overdue') {
+      const idx = a.results.length > 0 ? a.results[a.results.length - 1].index : a.queue[0];
+      settleMortgageAfterAuction(payer, idx, paid);
+    }
+    if (bankrupt) liquidateMortgages(payer, emit);
     if (emit && a.results.length > 0) {
       const last = a.results[a.results.length - 1];
       state.lastEvent = { kind: 'auctionDone', index: last.index, winner: last.winner, price: last.price };
@@ -505,16 +521,53 @@ export function createGame(opts: GameOptions = {}): Game {
     return { paid, sold, bankrupt };
   };
 
-  /** 开一场拍卖并跑到挂起 / 收尾；挂起时保留 `state.auction` 并返回 `'suspended'` */
+  /** 抵押超期成交分账（spec §3.4 链三）：成交款先还该笔本金，不足则余额留在账上继续追偿 */
+  const settleMortgageAfterAuction = (payer: Player, index: number, paid: number): void => {
+    const k = payer.mortgages.findIndex((m) => m.index === index);
+    if (k < 0) return;
+    payer.mortgages[k].principal -= paid;
+    if (payer.mortgages[k].principal <= 0) payer.mortgages.splice(k, 1);
+  };
+
+  /**
+   * 破产处置（spec §3.5-D23）：① 债务清零（银行承担损失）② 未赎回抵押地块追加一场
+   * `'mortgage-overdue'` 清仓拍卖（起拍价 = 各自借款额），成交款按链三分账（receiver = 银行）。
+   */
+  const liquidateMortgages = (payer: Player, emit: boolean): void => {
+    const pendingLots = payer.mortgages.map((m) => ({ index: m.index, principal: m.principal }));
+    payer.loan = null;
+    payer.mortgages = [];
+    const queue = pendingLots.map((m) => m.index).filter((i) => state.estates[i]?.owner === payer.id);
+    if (queue.length === 0) return;
+    const price: Record<number, number> = {};
+    for (const m of pendingLots) price[m.index] = m.principal;
+    const amount = queue.reduce((s, i) => s + (price[i] ?? sellAt(state.estates, i)), 0);
+    startAuction(payer, amount, null, 'mortgage-overdue', {
+      queue, priceOf: (i) => price[i] ?? sellAt(state.estates, i), sellAll: true, emit,
+    });
+  };
+
+  /**
+   * 开一场拍卖并跑到挂起 / 收尾；挂起时保留 `state.auction` 并返回 `'suspended'`。
+   * 队列默认取自有**未抵押**地块（抵押物由链三的超期拍卖单独处置，避免重复拍卖）；`opts.queue` 可显式指定。
+   */
   const startAuction = (
     payer: Player, amount: number, receiver: Player | null, trigger: AuctionTrigger = 'bankrupt',
+    opts?: { queue?: number[]; priceOf?: (index: number) => number; sellAll?: boolean; emit?: boolean },
   ): DebtResult | 'suspended' => {
-    const owned = ownedBy(state.estates, payer.id);
+    /* 起拍价口径：抵押超期 = 该笔借款额，其余 = 变卖价（spec §3.4） */
+    lotPriceOf = opts?.priceOf
+      ?? (trigger === 'mortgage-overdue'
+        ? (i) => payer.mortgages.find((m) => m.index === i)?.principal ?? sellAt(state.estates, i)
+        : (i) => sellAt(state.estates, i));
+    const owned = opts?.queue ?? ownedBy(state.estates, payer.id).filter((i) => !creditLocked(state, i));
     /* 升序：变卖价低者先拍（同价取小格号）——保住高价值资产 */
     const queue = owned.slice().sort((x, y) => {
-      const d = sellAt(state.estates, x) - sellAt(state.estates, y);
+      const d = lotPriceOf(x) - lotPriceOf(y);
       return d !== 0 ? d : x - y;
     });
+    /* 无拍品（尽为抵押物）⇒ 走既有自动清算尾段，不产生空拍卖 */
+    if (queue.length === 0) return settleDebtAuto(payer, amount, receiver);
     const first = lotOf(state.estates, queue[0]);
     const a: PendingAuction = {
       trigger,
@@ -522,20 +575,22 @@ export function createGame(opts: GameOptions = {}): Game {
       creditorId: receiver ? receiver.id : null,
       amount,
       queue,
-      lot: first ?? { index: queue[0], level: 1, startPrice: 0 },
+      lot: first ?? { index: queue[0], level: 1, startPrice: lotPriceOf(queue[0]) },
       bids: [],
       pending: [],
       results: [],
+      ...(opts?.sellAll ? { sellAll: true } : {}),
     };
     lotOpen = false;
     state.auction = a;
     if (advancePump(a)) return 'suspended';
-    return finishAuction(a, false);
+    return finishAuction(a, opts?.emit ?? false);
   };
 
-  /** 欠款清算（spec §3.3）：现金不足且有地产 → 拍卖；否则旧「自动变卖」路径 */
+  /** 欠款清算（spec §3.3）：现金不足且有**未抵押**地产 → 拍卖；否则旧「自动变卖」路径 */
   const settleDebt = (payer: Player, amount: number, receiver: Player | null): DebtResult | 'suspended' => {
-    if (payer.cash < amount && ownedBy(state.estates, payer.id).length > 0) {
+    const sellable = ownedBy(state.estates, payer.id).filter((i) => !creditLocked(state, i));
+    if (payer.cash < amount && sellable.length > 0) {
       return startAuction(payer, amount, receiver);
     }
     return settleDebtAuto(payer, amount, receiver);
@@ -545,7 +600,8 @@ export function createGame(opts: GameOptions = {}): Game {
   const settleDebtAuto = (payer: Player, amount: number, receiver: Player | null): DebtResult => {
     const sold: number[] = [];
     while (payer.cash < amount) {
-      const owned = ownedBy(state.estates, payer.id);
+      /* 抵押中地块不动（spec §3.5）：由链三的超期拍卖处置，避免被贱卖 */
+      const owned = ownedBy(state.estates, payer.id).filter((i) => !creditLocked(state, i));
       if (owned.length > 0) {
         let cheapest = owned[0];
         for (const i of owned) {
@@ -568,9 +624,14 @@ export function createGame(opts: GameOptions = {}): Game {
     const paid = affordable ? amount : payer.cash;
     payer.cash = affordable ? payer.cash - amount : BANKRUPT_CASH_LINE;
     if (receiver) receiver.cash += paid;
-    const bankrupt = !affordable && ownedBy(state.estates, payer.id).length === 0
+    /* 破产判定同 `closeDebt`：抵押中地块不算自救资产；破产即清债务并处置抵押物（spec §3.5-D23） */
+    const bankrupt = !affordable
+      && !ownedBy(state.estates, payer.id).some((i) => !creditLocked(state, i))
       && Object.keys(state.portfolios[payer.id - 1]).length === 0;
-    if (bankrupt) payer.bankrupt = true;
+    if (bankrupt) {
+      payer.bankrupt = true;
+      liquidateMortgages(payer, false);
+    }
     return { paid, sold, bankrupt };
   };
 
@@ -646,12 +707,12 @@ export function createGame(opts: GameOptions = {}): Game {
         } else {
           const debt = settleDebt(p, rent, owner);
           if (doubled && owner && base > 0) state.doubleRent[owner.id - 1] = false;
-          if (debt === 'suspended') {
+          if (debt === 'suspended' || state.auction) {
             result = auctionSettle(index);
           } else {
             /* 逾期罚息：额外 50% 直冲欠款本金（不给地主；spec §3.4 链一） */
             const pen = chargeOverduePenalty(p, rent);
-            result = pen.suspended
+            result = pen.suspended || state.auction
               ? auctionSettle(index)
               : {
                 kind: 'rent', index, owner: e.owner, rent, paid: debt.paid, sold: debt.sold,
@@ -1176,14 +1237,14 @@ export function createGame(opts: GameOptions = {}): Game {
     if (a.pending.length > 0) return { ok: true, amount };
     if (advancePump(a)) return { ok: true, amount };
     finishAuction(a, true);
+    resumeAdvance();
     return { ok: true, amount };
   };
 
   /** 把所有待出价真人按 AI 同源策略补全并收尾（`sim()` / e2e / 取证用） */
   const autoResolveAuction = (): void => {
-    for (;;) {
+    while (state.auction) {
       const a = state.auction;
-      if (!a) return;
       for (const id of a.pending) {
         const player = playerById(state, id);
         a.bids.push({ bidder: id, amount: player ? aiBidFor(player.cash, a.lot, aiParamsOf(id)) : 0 });
@@ -1191,8 +1252,8 @@ export function createGame(opts: GameOptions = {}): Game {
       a.pending = [];
       if (advancePump(a)) continue;   // 新开一块又有真人 ⇒ 再补全
       finishAuction(a, true);
-      return;
     }
+    resumeAdvance();
   };
 
   /**
@@ -1215,6 +1276,24 @@ export function createGame(opts: GameOptions = {}): Game {
     }
   };
 
+  /**
+   * 轮末违约链（spec §3.4 链二 / 链三）：先信用强执（逾期满 3 轮，拍未抵押地产），
+   * 后抵押超期（拍抵押物、起拍价 = 借款额）。任一挂起即打住，其余顺延到下一个轮末（已知限制）。
+   */
+  const runOverdueChains = (): void => {
+    for (const p of state.players) {
+      if (state.auction || p.bankrupt || !p.loan) continue;
+      if (p.loan.overdue >= OVERDUE_SEIZE_ROUNDS) startAuction(p, p.loan.principal, null, 'loan-overdue');
+    }
+    for (const p of state.players) {
+      if (p.bankrupt) continue;
+      for (const m of p.mortgages.slice()) {
+        if (state.auction) break;
+        if (state.round > m.due) startAuction(p, m.principal, null, 'mortgage-overdue', { queue: [m.index] });
+      }
+    }
+  };
+
   /** 轮末统一 tick 股价 + 清空「内幕消息」标的 */
   const onRoundBoundary = (): void => {
     settleBooks();
@@ -1224,18 +1303,11 @@ export function createGame(opts: GameOptions = {}): Game {
     state.stockTip = state.stockTip.map(() => null);
   };
 
-  /** 交下一位未破产玩家（endTurn 与 skipTurn 共用；唯一换手处） */
-  const advanceToNext = (): void => {
-    const n = state.players.length;
-    let next = state.current;
-    for (let k = 0; k < n; k++) {
-      next = (next + 1) % n;
-      if (next === 0) {
-        state.round += 1;
-        onRoundBoundary();
-      }
-      if (!state.players[next].bankrupt) break;
-    }
+  /** 轮末拍卖挂起时暂存的「未提交的换手目标」（spec §3.4：挂起期间不得推进玩家） */
+  let pendingAdvance: number | null = null;
+
+  /** 无条件提交换手（轮末 tick 与其后的违约链已跑完 / 未触发） */
+  const commitAdvance = (next: number): void => {
     state.current = next;
     state.phase = 'idle';
     state.dice = null;
@@ -1243,6 +1315,40 @@ export function createGame(opts: GameOptions = {}): Game {
     /* 新玩家回合开始：解除其地块的「施工中」（BUILD_TURNS = 1 的落地处，spec §5.2） */
     clearProcessing(state.estates, state.players[next].id);
     if (activeCount(state) <= 1 || state.round > ROUND_LIMIT) state.over = true;
+  };
+
+  /** 下一位未破产玩家下标；跨过 0 时标记 `crossed`（轮号由调用方推进，便于挂起时回退语义） */
+  const nextActiveFrom = (from: number): { next: number; crossed: boolean } => {
+    const n = state.players.length;
+    let next = from;
+    let crossed = false;
+    for (let k = 0; k < n; k++) {
+      next = (next + 1) % n;
+      if (next === 0) crossed = true;
+      if (!state.players[next].bankrupt) break;
+    }
+    return { next, crossed };
+  };
+
+  /** 拍卖彻底收尾后恢复换手（轮末违约链挂起过的场合） */
+  const resumeAdvance = (): void => {
+    if (pendingAdvance === null || state.auction) return;
+    const next = pendingAdvance;
+    pendingAdvance = null;
+    commitAdvance(next);
+  };
+
+  /** 交下一位未破产玩家（endTurn 与 skipTurn 共用；唯一换手处） */
+  const advanceToNext = (): void => {
+    const { next, crossed } = nextActiveFrom(state.current);
+    if (crossed) {
+      state.round += 1;
+      onRoundBoundary();
+      runOverdueChains();
+      /* 轮末拍卖挂起 ⇒ 不换手，等 `resumeAdvance`（spec §3.4） */
+      if (state.auction) { pendingAdvance = next; return; }
+    }
+    commitAdvance(next);
   };
 
   const endTurn = (): void => {
@@ -1327,6 +1433,8 @@ function releaseEstate(estates: Estates, index: number): void {
 export function autoTurn(g: Game): void {
   if (g.state.over) return;
   const s = g.state;
+  /* 轮末违约链挂起的拍卖：先补全收尾（收尾后会自动补上被暂存的换手） */
+  if (s.auction) { g.autoResolveAuction(); return; }
   /* 监狱禁行：本回合唯一推进 = skipTurn */
   if (s.phase === 'idle' && s.jail[s.current] > 0) {
     g.skipTurn();
