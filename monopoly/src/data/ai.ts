@@ -36,12 +36,16 @@ export interface AiParams {
   targetLeader: boolean;
   /** 拍卖估值倍率（M20.1）：保守 0.6 / 激进 1.4 / 投机 1.0 */
   bidMult: number;
+  /** 存款保留线（M20.2）：现金高于此线才把余钱存银行 */
+  depositLine: number;
+  /** 借款意愿线（M20.2）：现金低于此线才考虑抵押 / 信用借款 */
+  loanLine: number;
 }
 
 export const PERSONA_PARAMS: Record<Persona, AiParams> = {
-  conservative: { reserve: 400, buyMax: 300, upgradeEager: false, cardPolicy: 'defensive', stockPolicy: 'none', targetLeader: false, bidMult: 0.6 },
-  aggressive: { reserve: 100, buyMax: Infinity, upgradeEager: true, cardPolicy: 'offensive', stockPolicy: 'momentum', targetLeader: true, bidMult: 1.4 },
-  speculative: { reserve: 200, buyMax: Infinity, upgradeEager: true, cardPolicy: 'arbitrage', stockPolicy: 'dip', targetLeader: true, bidMult: 1.0 },
+  conservative: { reserve: 400, buyMax: 300, upgradeEager: false, cardPolicy: 'defensive', stockPolicy: 'none', targetLeader: false, bidMult: 0.6, depositLine: 800, loanLine: 400 },
+  aggressive: { reserve: 100, buyMax: Infinity, upgradeEager: true, cardPolicy: 'offensive', stockPolicy: 'momentum', targetLeader: true, bidMult: 1.4, depositLine: 500, loanLine: 200 },
+  speculative: { reserve: 200, buyMax: Infinity, upgradeEager: true, cardPolicy: 'arbitrage', stockPolicy: 'dip', targetLeader: true, bidMult: 1.0, depositLine: 700, loanLine: 300 },
 };
 
 export function personaParams(p: Persona): AiParams {
