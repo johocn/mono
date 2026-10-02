@@ -63,6 +63,18 @@ export const PANEL_D = fb({
   debtR: 8, debtFill: '#06120a', debtEdge: '#f5c451', debtEdgeW: 1.2,
   debtFs: 12, debtTextFill: '#e8e4d8', debtRemainFill: '#f5c451',
   debtLabel: '待清偿', debtRaisedLabel: '已筹', debtRemainLabel: '还差',
+  /* M20.2 HUD 债务条（ui.debtBar）：深底圆角 + 单行四段（存款 / 债务 / 抵押 / 逾期），逾期段走警示色 */
+  debtBarR: 8, debtBarFill: 'rgba(6,12,10,.82)', debtBarEdge: '#3a4a42', debtBarEdgeW: 1,
+  debtBarFs: 9, debtBarTextFill: '#d8e4dc', debtBarWarnFill: '#e8a33d',
+  debtBarDepositLabel: '存款', debtBarLoanLabel: '债务',
+  debtBarMortgageLabel: '抵押', debtBarMortgageUnit: '块',
+  debtBarOverdueLabel: '逾期', debtBarOverdueUnit: '轮',
+  /* M20.2 银行浮层产品行（ui.bankRow）：row 变体 = 两行（名称 / 摘要）+ 选中品牌色描边；line 变体 = 纯文字行 */
+  bankRowR: 8, bankRowFill: '#16221e', bankRowFillOn: '#1f2f2a',
+  bankRowEdge: '#2a3830', bankRowEdgeOn: '#f5c451', bankRowEdgeW: 1,
+  bankRowPadX: 12, bankRowTitleDy: -9, bankRowTitleFs: 13, bankRowTitleFill: '#ffe9b0',
+  bankRowSubDy: 10, bankRowSubFs: 11, bankRowSubFill: '#9fb3a8',
+  bankLineFs: 12, bankLineFill: '#d8e4dc',
 });
 
 const G = (p: Record<string, unknown>, k: keyof typeof PANEL_D): number => num(p, k, PANEL_D[k] as number);
@@ -301,4 +313,63 @@ export const uiBidDebt: ProcPreset = (g, ctx) => {
   text({ text: `${S(params, 'debtLabel')} ￥${total}`, x: cx - w / 4, y: cy, size: fs, fill: S(params, 'debtTextFill') });
   text({ text: `${S(params, 'debtRaisedLabel')} ￥${raised}`, x: cx, y: cy, size: fs, fill: S(params, 'debtTextFill') });
   text({ text: `${S(params, 'debtRemainLabel')} ￥${remain}`, x: cx + w / 4, y: cy, size: fs, fill: S(params, 'debtRemainFill') });
+};
+
+/* —— M20.2 HUD 债务条（spec §3.8B）：深底圆角 + 单行四段（存款 / 债务 / 抵押块数 / 逾期轮数）——
+   数值由 UI 层经 `state.{deposit,debt,mortgageCount,overdue,warn}` 传入；逾期段（`warn` 为真）走警示色 —— */
+export const uiDebtBar: ProcPreset = (g, ctx) => {
+  const { cx, cy, box, params, state, s, text } = ctx;
+  const w = box.w * s;
+  const h = box.h * s;
+  g.roundRect(cx - w / 2, cy - h / 2, w, h, G(params, 'debtBarR'))
+    .fill({ color: S(params, 'debtBarFill') })
+    .stroke({ color: S(params, 'debtBarEdge'), width: G(params, 'debtBarEdgeW') });
+  if (!text) return;
+  const deposit = typeof state.deposit === 'number' ? state.deposit : 0;
+  const debt = typeof state.debt === 'number' ? state.debt : 0;
+  const mortgageCount = typeof state.mortgageCount === 'number' ? state.mortgageCount : 0;
+  const overdue = typeof state.overdue === 'number' ? state.overdue : 0;
+  const fs = G(params, 'debtBarFs');
+  const fill = S(params, 'debtBarTextFill');
+  const warnFill = state.warn === true ? S(params, 'debtBarWarnFill') : fill;
+  const x0 = cx - w / 2;
+  const sw = w / 4;                       // 四段等分
+  const segX = (i: number): number => x0 + (i + 0.5) * sw;
+  const mid = cy;
+  text({ text: `${S(params, 'debtBarDepositLabel')} ￥${deposit}`, x: segX(0), y: mid, size: fs, fill });
+  text({ text: `${S(params, 'debtBarLoanLabel')} ￥${debt}`, x: segX(1), y: mid, size: fs, fill });
+  text({ text: `${S(params, 'debtBarMortgageLabel')} ${mortgageCount}${S(params, 'debtBarMortgageUnit')}`, x: segX(2), y: mid, size: fs, fill });
+  text({ text: `${S(params, 'debtBarOverdueLabel')} ${overdue}${S(params, 'debtBarOverdueUnit')}`, x: segX(3), y: mid, size: fs, fill: warnFill });
+};
+
+/* —— M20.2 银行浮层产品行（spec §3.8A）：`row` 变体 = 圆角底 + 两行（名称 / 摘要，左对齐），
+   选中行品牌色描边；`line` 变体 = 右列详情的纯文字行（无底框）。文案由 UI 层组装传入 —— */
+export const uiBankRow: ProcPreset = (g, ctx) => {
+  const { cx, cy, box, params, state, s, text } = ctx;
+  if (state.variant === 'line') {
+    if (!text) return;
+    text({
+      text: typeof state.text === 'string' ? state.text : '',
+      x: cx, y: cy, size: G(params, 'bankLineFs'), fill: S(params, 'bankLineFill'),
+    });
+    return;
+  }
+  const w = box.w * s;
+  const h = box.h * s;
+  const selected = state.selected === true;
+  g.roundRect(cx - w / 2, cy - h / 2, w, h, G(params, 'bankRowR'))
+    .fill({ color: selected ? S(params, 'bankRowFillOn') : S(params, 'bankRowFill') })
+    .stroke({ color: selected ? S(params, 'bankRowEdgeOn') : S(params, 'bankRowEdge'), width: G(params, 'bankRowEdgeW') });
+  if (!text) return;
+  const tx = cx - w / 2 + G(params, 'bankRowPadX');
+  text({
+    text: typeof state.title === 'string' ? state.title : '',
+    x: tx, y: cy + G(params, 'bankRowTitleDy'), size: G(params, 'bankRowTitleFs'),
+    fill: S(params, 'bankRowTitleFill'), align: 'left',
+  });
+  text({
+    text: typeof state.summary === 'string' ? state.summary : '',
+    x: tx, y: cy + G(params, 'bankRowSubDy'), size: G(params, 'bankRowSubFs'),
+    fill: S(params, 'bankRowSubFill'), align: 'left',
+  });
 };

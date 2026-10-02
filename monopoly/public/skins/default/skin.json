@@ -152,6 +152,8 @@
     "ui.panelClose": { "kind": "proc", "preset": "uiButton", "params": { "btnFs": 12, "btnR": 7 } },
     "ui.bid": { "kind": "proc", "preset": "uiBid", "params": {} },
     "ui.bidDebt": { "kind": "proc", "preset": "uiBidDebt", "params": {} },
+    "ui.debtBar": { "kind": "proc", "preset": "uiDebtBar", "params": {} },
+    "ui.bankRow": { "kind": "proc", "preset": "uiBankRow", "params": {} },
 
     "ui.dock": { "kind": "proc", "preset": "uiDock", "params": {} },
     "ui.panel": { "kind": "proc", "preset": "uiPanel", "params": {} },

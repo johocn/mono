@@ -130,7 +130,8 @@ import {
 import { diceBody, diceFace, uiButton, uiDock, uiLabel, uiPanel, uiPlayerBar } from './proc-hud';
 import { uiMusicOff, uiMusicOn, uiSoundOff, uiSoundOn } from './proc-audio';
 import {
-  tileCard, uiBadge, uiBid, uiBidDebt, uiCard, uiCardBack, uiHandSlot, uiPreview, uiSettleRow, uiStockChart, uiStockRow,
+  tileCard, uiBadge, uiBankRow, uiBid, uiBidDebt, uiCard, uiCardBack, uiDebtBar, uiHandSlot, uiPreview,
+  uiSettleRow, uiStockChart, uiStockRow,
 } from './proc-panel';
 import { fxCoin, fxDust, fxPulse, fxRubble, fxScaffold, fxShard, fxShine, fxSpark, fxStamp } from './proc-fx';
 
@@ -201,6 +202,8 @@ export const PROC_PRESETS: Record<string, ProcPreset> = {
   uiBadge,
   uiBid,
   uiBidDebt,
+  uiDebtBar,
+  uiBankRow,
   fxCoin,
   fxStamp,
   fxDust,

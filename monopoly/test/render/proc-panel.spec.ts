@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  PANEL_D, uiBadge, uiCard, uiCardBack, uiHandSlot, uiSettleRow, uiStockChart, uiStockRow,
+  PANEL_D, uiBadge, uiBankRow, uiCard, uiCardBack, uiDebtBar, uiHandSlot, uiSettleRow, uiStockChart, uiStockRow,
 } from '../../src/render/providers/proc-panel';
 import { PROC_PRESETS, type TextRequest } from '../../src/render/providers/proc';
 
@@ -210,8 +210,108 @@ describe('proc preset: uiSettleRow / uiBadge', () => {
   });
 });
 
+describe('proc preset: uiDebtBar 债务条（M20.2 §3.8B）', () => {
+  it('圆角底 1 枚 + 单行四段（存款/债务/抵押/逾期），四段等分横排', () => {
+    const texts: TextRequest[] = [];
+    const { g, calls } = recorder();
+    uiDebtBar(g as never, ctx({
+      box: { w: 234, d: 1, h: 22 },
+      state: { deposit: 1240, debt: 600, mortgageCount: 2, overdue: 0, warn: false },
+      text: (r: TextRequest) => texts.push(r),
+    }) as never);
+    expect(ops(calls, 'roundRect')).toHaveLength(1);
+    expect(fills(calls)).toEqual([PANEL_D.debtBarFill]);
+    expect(ops(calls, 'stroke')[0].style).toEqual({
+      color: PANEL_D.debtBarEdge, width: PANEL_D.debtBarEdgeW,
+    });
+    expect(texts.map((t) => t.text)).toEqual(['存款 ￥1240', '债务 ￥600', '抵押 2块', '逾期 0轮']);
+    /* 四段等分：x0 = 100 − 117 = −17，段宽 58.5 → 中心 12.25 / 70.75 / 129.25 / 187.75 */
+    expect(texts.map((t) => t.x)).toEqual([12.25, 70.75, 129.25, 187.75]);
+    expect(texts.every((t) => t.y === 200 && t.size === PANEL_D.debtBarFs)).toBe(true);
+    expect(texts.every((t) => t.fill === PANEL_D.debtBarTextFill)).toBe(true);
+  });
+
+  it('逾期段警示色：warn=true 才换色，未逾期三段仍中性', () => {
+    const warn: TextRequest[] = [];
+    const a = recorder();
+    uiDebtBar(a.g as never, ctx({
+      state: { deposit: 0, debt: 1400, mortgageCount: 1, overdue: 2, warn: true },
+      text: (r: TextRequest) => warn.push(r),
+    }) as never);
+    expect(warn[3].fill).toBe(PANEL_D.debtBarWarnFill);
+    expect(warn.slice(0, 3).every((t) => t.fill === PANEL_D.debtBarTextFill)).toBe(true);
+
+    const calm: TextRequest[] = [];
+    const b = recorder();
+    uiDebtBar(b.g as never, ctx({
+      state: { deposit: 0, debt: 1400, mortgageCount: 1, overdue: 0, warn: false },
+      text: (r: TextRequest) => calm.push(r),
+    }) as never);
+    expect(calm[3].fill).toBe(PANEL_D.debtBarTextFill);
+  });
+
+  it('缺字段全部按 0 渲染（不抛错）', () => {
+    const texts: TextRequest[] = [];
+    const { g } = recorder();
+    uiDebtBar(g as never, ctx({ text: (r: TextRequest) => texts.push(r) }) as never);
+    expect(texts.map((t) => t.text)).toEqual(['存款 ￥0', '债务 ￥0', '抵押 0块', '逾期 0轮']);
+  });
+});
+
+describe('proc preset: uiBankRow 银行产品行（M20.2 §3.8A）', () => {
+  it('row 变体：圆角底 1 + 左右两行（名称/摘要，左对齐），未选中走默认框色', () => {
+    const texts: TextRequest[] = [];
+    const { g, calls } = recorder();
+    uiBankRow(g as never, ctx({
+      box: { w: 152, d: 1, h: 40 },
+      state: { variant: 'row', title: '信用贷款', summary: '无债务', selected: false },
+      text: (r: TextRequest) => texts.push(r),
+    }) as never);
+    expect(ops(calls, 'roundRect')).toHaveLength(1);
+    expect(fills(calls)).toEqual([PANEL_D.bankRowFill]);
+    expect(ops(calls, 'stroke')[0].style).toEqual({
+      color: PANEL_D.bankRowEdge, width: PANEL_D.bankRowEdgeW,
+    });
+    expect(texts.map((t) => t.text)).toEqual(['信用贷款', '无债务']);
+    expect(texts.map((t) => t.x)).toEqual([100 - 76 + PANEL_D.bankRowPadX, 100 - 76 + PANEL_D.bankRowPadX]);
+    expect(texts.map((t) => t.y)).toEqual([
+      200 + PANEL_D.bankRowTitleDy, 200 + PANEL_D.bankRowSubDy,
+    ]);
+    expect(texts.map((t) => t.align)).toEqual(['left', 'left']);
+    expect(texts.map((t) => t.fill)).toEqual([PANEL_D.bankRowTitleFill, PANEL_D.bankRowSubFill]);
+  });
+
+  it('row 变体：选中行亮底 + 品牌色描边', () => {
+    const { g, calls } = recorder();
+    uiBankRow(g as never, ctx({
+      box: { w: 152, d: 1, h: 40 },
+      state: { variant: 'row', title: '抵押', summary: '2 块锁定', selected: true },
+    }) as never);
+    expect(fills(calls)).toEqual([PANEL_D.bankRowFillOn]);
+    expect(ops(calls, 'stroke')[0].style.color).toBe(PANEL_D.bankRowEdgeOn);
+  });
+
+  it('line 变体：只出一条居中文字行，不画底框', () => {
+    const texts: TextRequest[] = [];
+    const { g, calls } = recorder();
+    uiBankRow(g as never, ctx({
+      box: { w: 152, d: 1, h: 40 },
+      state: { variant: 'line', text: '额度 ￥600 / 利率 6% / 期限 8 轮' },
+      text: (r: TextRequest) => texts.push(r),
+    }) as never);
+    expect(ops(calls, 'roundRect')).toHaveLength(0);
+    expect(calls).toHaveLength(0);
+    expect(texts).toHaveLength(1);
+    expect(texts[0].text).toBe('额度 ￥600 / 利率 6% / 期限 8 轮');
+    expect(texts[0].x).toBe(100);
+    expect(texts[0].y).toBe(200);
+    expect(texts[0].fill).toBe(PANEL_D.bankLineFill);
+    expect(texts[0].align).toBeUndefined();
+  });
+});
+
 describe('proc-panel 注册与兜底容器', () => {
-  it('7 个 preset 全部注册进 PROC_PRESETS', () => {
+  it('9 个 preset 全部注册进 PROC_PRESETS', () => {
     expect(PROC_PRESETS.uiHandSlot).toBe(uiHandSlot);
     expect(PROC_PRESETS.uiCard).toBe(uiCard);
     expect(PROC_PRESETS.uiCardBack).toBe(uiCardBack);
@@ -219,6 +319,8 @@ describe('proc-panel 注册与兜底容器', () => {
     expect(PROC_PRESETS.uiStockChart).toBe(uiStockChart);
     expect(PROC_PRESETS.uiSettleRow).toBe(uiSettleRow);
     expect(PROC_PRESETS.uiBadge).toBe(uiBadge);
+    expect(PROC_PRESETS.uiDebtBar).toBe(uiDebtBar);
+    expect(PROC_PRESETS.uiBankRow).toBe(uiBankRow);
   });
 
   it('PANEL_D 是 fb 容器：几何/色值集中一处（唯一允许裸字面量的位置）', () => {

@@ -332,5 +332,7 @@
   "ui.cancel",
   "board.tile.candidate",
   "ui.bid",
-  "ui.bidDebt"
+  "ui.bidDebt",
+  "ui.bankRow",
+  "ui.debtBar"
 ]
