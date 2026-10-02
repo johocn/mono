@@ -2103,10 +2103,21 @@ git commit -m "docs(coupon): plan2 execution log and checklist"
    - `@Args('productIds', { type: () => [ID] })`：`ID` 是纯类型，作值用报 TS2693 → 去掉 `type`。
    - `import { RechargeCardService } from '@vendure/recharge-card-plugin'` 当时编译失败（该包 git 跟踪的 `lib/index.d.ts` 为旧构建、未导出该类）；先以深路径动态 import 规避，**Task 7 重建该包 lib 后已还原为标准包导入**（DI token 与 recharge-card 自身 `require('./recharge-card.service')` 指向同一模块实例，端口注入成立）。
 
+### 运行态 e2e 暴露并修复的缺陷（2026-10-02）
+
+1. **余额支付遇到「券包部分售罄」会扣款并留下半套券**：`paySaleOrderWithBalance` 原顺序为「扣余额 → 置 PAID → 发券」，而 `RechargeCardService.deductBalance` 内部会 `commitOpenTransaction`（提前提交外层 `@Transaction()`），导致其后发券失败（如券包某张售罄）时：已提交的扣款无法回滚、已 `issueForSale` 的券残留、单据停在 PENDING。
+   **修复**：改为「先发券 + 置 PAID（仍在事务内）→ 最后 `deductBalance` 提交」，使「发券 / 置 PAID / 扣款」三者原子落库；任一步失败仅回滚外层事务（测试 ③-2 断言「失败不落券、不入账、不扣余额」）。
+2. **`createSaleOrder` 未 `await` `assertBundleStock`**：券包内模板缺失/停用时，校验抛错会变成未处理的 Promise 拒绝，校验形同失效。**修复**：补 `await`。
+
 ### 残留 / 待处理事项
 
-1. **未做真实 DB 运行态 e2e**（本地无 DB）：`CS-` 微信结算回调、退款回收、券包逐张签发、并发幂等（原子 `UPDATE ... WHERE status='PENDING'`）均只经单测与静态审查，需在联调环境补 e2e。
-2. **加价购 `addSurchargeToOrder`** 在真实订单金额计算中的表现需 e2e 验证「surcharge 全额计入总额但不参与满减/促销」（§16-4 的设计假设）。
+1. ~~**未做真实 DB 运行态 e2e**~~ → **已完成（2026-10-02）**：新增 `packages/coupon-plugin/e2e/coupon-sale.e2e-spec.ts`（13 用例），覆盖 ①`CS-` 微信结算回调（注册表路径，与 `/wechatpay/notify` 同一入口）与重复回调幂等 / ②退款回收（路径 A 余额补偿、已核销拒绝、重复退款幂等、路径 B 整单退款回收）/ ③券包逐张签发与任一张售罄整包回滚 / ④并发幂等（并发回调仅发 1 张、限量 1 张并发购买仅一笔成功）。**双 DB 全绿**：sqljs 13/13、`DB=postgres`（本机 PostgreSQL 18，Initializer 另建 `e2e_*` 库）13/13。
+2. **加价购 `addSurchargeToOrder`** 在真实订单金额中的表现：e2e ⑤ 已验证「surcharge 全额计入 `order.totalWithTax`」（整单退款金额含券价 2500）；「不参与满减/促销」尚未断言（该用例未挂门槛促销），待计划 3/4 联调时补。
 3. **到店收银券列表** `listInStoreCoupons` 已就绪但尚未接入 GraphQL 暴露面，由计划 3（web-admin）/ 计划 4（nshop）消费。
-4. **加价购券的整单退款回收仅订阅了 `OrderStateTransitionEvent → Cancelled`**（按计划原文），**未**订阅 `RefundStateTransitionEvent → Settled`；即「主订单整单退款（未取消）」路径目前不会触发 `refundSurchargeOrdersForOrder`。既有 `returnCouponOnFullRefund` 走的是 Refund 事件，两者口径不一致，建议计划 3/4 联调时确认是否需补该订阅。
-5. 事务分层：`paySaleOrderWithBalance` / `refundSaleOrder` 等带 `@Transaction()` 的入口内部再调 `startTransaction`/`commitOpenTransaction`（Vendure 的 `startTransaction` 已做「已激活则跳过」保护，内部 commit 会提前提交外层事务）。此为镜像 recharge-card 既有范式的取舍，非本计划引入的缺陷。
+4. ~~**加价购券的整单退款回收未订阅 `RefundStateTransitionEvent → Settled`**~~ → **已补齐并验证**：`plugin.ts` 的 `RefundStateTransitionEvent → Settled` 订阅内已调 `refundSurchargeOrdersForOrder`，e2e ⑤ 断言整单退款 Settled 后加价购单 `REFUNDED` 且券 `INVALID`。
+5. 事务分层：`paySaleOrderWithBalance` / `refundSaleOrder` 等带 `@Transaction()` 的入口内部再调 `startTransaction`/`commitOpenTransaction`（Vendure 的 `startTransaction` 已做「已激活则跳过」保护，内部 commit 会提前提交外层事务）。此为镜像 recharge-card 既有范式的取舍；其具体后果已由本页缺陷 1 修复（发券置于扣款之前）。
+
+### e2e 环境注意（复用他处）
+
+- `testConfig()` 使用 `TestingEntityIdStrategy`：GraphQL 层 ID 形如 `T_1`，而 Service 层 `order.id` 是 DB 自增主键、`out_trade_no` 由 `CS-${order.id}` 拼成 `CS-1`。测试中构造/断言需 `decodeId()` 归一，否则会出现 `CS-T_1` 不匹配 `/^CS-(\d+)$/` 或 `Number('T_1') === NaN`。
+- `EventBus.ofType()` 订阅在**事务提交后异步触发**（`publish()` 只 await 阻塞式处理器），事件驱动的断言必须轮询（本套件用 `waitFor`），否则 sqljs 上偶过、真实 DB 上必现竞态。
