@@ -2140,6 +2140,25 @@ git commit -m "docs(coupon): plan2 execution log and checklist"
 - 各租户需在「租户设置中心 → 支付设置 → 微信支付 → 回调地址」逐个填写自己的回调 URL（如 `https://<租户域名>/wechatpay/notify`），否则微信下单因 `notify_url` 为空被拒；env 仅作兜底。
 - 支付宝仍是 `ALIPAY_NOTIFY_URL` 条件加载（同源缺陷，未在本次范围内），需另开单。
 
+### 修复既有「属店权限隔离」红灯：店主进不了 coupon resolver（2026-10-02）
+
+**根因**（即上文「唯一失败」的那条）：`CouponAdminResolver` 全部字段以 `@Allow(Permission.UpdateOrder)` 把关，而 `provisionShopOwner` 建的 `shop-owner` 角色只持 `ManageOwnShop`（阶段 18 设计的店主角色定义）→ 店主 A 首次 `createCouponTemplate` 即被 auth-guard 抛 `ForbiddenError`（`not currently authorized`）。service 层的 `resolveShopIdFromActiveUser` / `assertManagedByShop` / 列表过滤对店主**不可达**（死代码）。提交 `561fd1bb6` 只加了 service 守卫与用例、未动 resolver —— 隔离能力「只做了一半」。
+
+**修复**（Vendure `@Allow` 为 **OR 语义**：`userHasPermissions(permissions)`，任一权限命中即放行）：
+
+| 改动 | 文件 |
+|---|---|
+| 10 个字段改 `@Allow(UpdateOrder, ManageOwnShop)`（平台管理员与店主共用同一 GraphQL 面，属店隔离由 service 兜底） | `coupon-plugin/src/coupon-admin.resolver.ts` |
+| 核销类 3 字段放行店主（券列表/试算/核销，均走 `assertManagedByShop`）；**流水/汇总保持平台级**（`InStoreBill` 无 shopId、仅渠道级隔离，放行会跨店串看） | `coupon-plugin/src/in-store-bill-admin.resolver.ts` |
+| `customerCoupons` 补属店过滤（原无 shop 条件，放行后会看到全渠道券实例） | `coupon-plugin/src/coupon.service.ts`（`listAllCoupons`） |
+| 到店券列表补属店过滤 | `coupon-plugin/src/coupon.service.ts`（`listInStoreCoupons`） |
+| e2e 新增断言 4：店主 `customerCoupons` 不含别店券实例 | `coupon-plugin/e2e/coupon.e2e-spec.ts` |
+| 声明 `@vendure/shop-plugin` peer 依赖（`ManageOwnShop` 权限同源） | `coupon-plugin/package.json` |
+
+**回归**：coupon-plugin **150/150**（原 149/150，红灯转绿）。
+
+**本次未放开（有意）**：`couponChannelCustomers`（发放选人）为渠道级顾客列表、无属店维度，店主可见当前渠道顾客（发放动作本身仍受 `assertManagedByShop` 限制）；到店流水/汇总对店主未开放。如需更细粒度，另开单。
+
 ### e2e 环境注意（复用他处）
 
 - `testConfig()` 使用 `TestingEntityIdStrategy`：GraphQL 层 ID 形如 `T_1`，而 Service 层 `order.id` 是 DB 自增主键、`out_trade_no` 由 `CS-${order.id}` 拼成 `CS-1`。测试中构造/断言需 `decodeId()` 归一，否则会出现 `CS-T_1` 不匹配 `/^CS-(\d+)$/` 或 `Number('T_1') === NaN`。
