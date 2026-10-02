@@ -23,11 +23,12 @@ import {
   type Market, type Portfolio, type Quotes, type TradeOutcome as CoreTradeOutcome,
 } from './stocks';
 import {
-  BANK_CAP, BANK_RATE, HOSPITAL_TURNS, JAIL_TURNS, LOTTERY_STAKE, TAX_CAP, TAX_RATE,
+  HOSPITAL_TURNS, JAIL_TURNS, LOTTERY_STAKE, TAX_CAP, TAX_RATE,
   nextJail, rollBonus, rollLottery, specialAt, type BonusReward,
 } from './special';
 import {
-  BANK_TILE_INDEX, DEPOSIT_RATE, LOAN_RATE, LOAN_TERM, MORTGAGE_RATE, MORTGAGE_TERM, OVERDUE_SEIZE_ROUNDS,
+  BANK_DEPOSIT_BONUS, BANK_TILE_INDEX, DEPOSIT_RATE, LOAN_RATE, LOAN_TERM, MORTGAGE_RATE, MORTGAGE_TERM,
+  OVERDUE_SEIZE_ROUNDS,
 } from '../data/bank';
 import {
   loanLimitOf, mortgageLimitOf, overdueOf, penaltyOf, type DebtBook, type MortgageBook,
@@ -199,7 +200,7 @@ export type SettleResult =
   | { kind: 'jail'; index: number; turns: number; waived: boolean }
   | { kind: 'bonus'; index: number; reward: BonusReward }
   | { kind: 'stock'; index: number }
-  | { kind: 'bank'; index: number; interest: number }
+  | { kind: 'bank'; index: number; bonus: number }
   | { kind: 'lottery'; index: number; stake: number; prize: number }
   | { kind: 'tax'; index: number; amount: number; paid: number; sold: number[]; bankrupt: boolean }
   | { kind: 'hospital'; index: number; turns: number; waived: boolean }
@@ -587,8 +588,15 @@ export function createGame(opts: GameOptions = {}): Game {
     return finishAuction(a, opts?.emit ?? false);
   };
 
-  /** 欠款清算（spec §3.3）：现金不足且有**未抵押**地产 → 拍卖；否则旧「自动变卖」路径 */
+  /**
+   * 欠款清算（spec §3.5-D9）：① 现金足额直接付 ② 存款自动全额取出 ③ 有**未抵押**地产 → 拍卖
+   * ④ 折股 ⑤ 破产（`settleDebtAuto` 尾段）。存款取出仍不免死：不足照样进入后续环节。
+   */
   const settleDebt = (payer: Player, amount: number, receiver: Player | null): DebtResult | 'suspended' => {
+    if (payer.cash < amount && payer.deposit > 0) {
+      payer.cash += payer.deposit;
+      payer.deposit = 0;
+    }
     const sellable = ownedBy(state.estates, payer.id).filter((i) => !creditLocked(state, i));
     if (payer.cash < amount && sellable.length > 0) {
       return startAuction(payer, amount, receiver);
@@ -793,11 +801,14 @@ export function createGame(opts: GameOptions = {}): Game {
     return result;
   };
 
-  /** 鹿乡银行：按现金计息（10%，封顶 ￥300），直接入账、不参与欠款清算 */
+  /**
+   * 鹿乡银行（spec §3.7）：领「存款红包」= round(deposit × 5%) 一次性入现金。
+   * 首轮免息随 `takeLoan()` 一并置位（本回合办理的贷款 ⇒ 轮末跳过 1 次计息），此处不再重复置位。
+   */
   const resolveBank = (p: Player, index: number): BankSettle => {
-    const interest = Math.min(Math.round(p.cash * BANK_RATE), BANK_CAP);
-    p.cash += interest;
-    const result: BankSettle = { kind: 'bank', index, interest };
+    const bonus = Math.round(p.deposit * BANK_DEPOSIT_BONUS);
+    p.cash += bonus;
+    const result: BankSettle = { kind: 'bank', index, bonus };
     state.lastEvent = result;
     return result;
   };

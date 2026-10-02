@@ -99,18 +99,18 @@ describe('special 乐透彩开奖（M7 新增）', () => {
 });
 
 describe('special 银行 / 乐透 / 税金 / 医院 落格结算（M7 新增）', () => {
-  it('鹿乡银行：按现金 10% 计息、封顶 ￥300，直接入账', () => {
+  it('鹿乡银行：领「存款红包」= round(存款 × 5%) 一次性入现金（无存款则 0）', () => {
     const { g, r } = settleAt(9);
-    expect(r).toMatchObject({ kind: 'bank', index: 9, interest: 300 });
-    expect(g.state.players[0].cash).toBe(3300);   // 3000 + min(3000×0.1, 300)
+    expect(r).toMatchObject({ kind: 'bank', index: 9, bonus: 0 });   // 无存款 ⇒ 红包 0
+    expect(g.state.players[0].cash).toBe(3000);
 
     const g2 = createGame({ dice: fixed(1, 1), seed: 1 });
     g2.state.players[0].pos = 7;
-    g2.state.players[0].cash = 200;
+    g2.state.players[0].deposit = 1000;
     g2.rollDice();
     g2.moveCurrent();
-    expect(g2.settleCurrent()).toMatchObject({ kind: 'bank', interest: 20 });
-    expect(g2.state.players[0].cash).toBe(220);
+    expect(g2.settleCurrent()).toMatchObject({ kind: 'bank', bonus: 50 });   // round(1000 × 0.05)
+    expect(g2.state.players[0].cash).toBe(3050);
   });
 
   it('乐透彩：先扣 ￥100 入场费，再按权重开奖（现金 = 开局 − 入场 + 奖金）', () => {

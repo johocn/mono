@@ -51,10 +51,6 @@ export function rollBonus(rng: () => number): BonusReward {
   return { kind: 'upgrade' };
 }
 
-/** 鹿乡银行：按现金 10% 计息，单次封顶 ￥300（现金越多越有利，鼓励留现金存款） */
-export const BANK_RATE = 0.1;
-export const BANK_CAP = 300;
-
 /** 税务局：按现金 10% 征收，单次封顶 ￥500（走欠款清算，可能触发变卖 / 破产） */
 export const TAX_RATE = 0.1;
 export const TAX_CAP = 500;

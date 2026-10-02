@@ -57,8 +57,10 @@ export function bubbleOfStep(
   if (r.kind === 'fate' || r.kind === 'chance') {
     return { title: tileName, amount: `抽到「${cardTitle ?? ''}」`, tone: 'card', quote: q };
   }
-  if (r.kind === 'bank' && typeof r.interest === 'number') {
-    return { title: tileName, amount: `利息 +￥${r.interest}`, tone: 'buy', quote: q };
+  if (r.kind === 'bank' && typeof r.bonus === 'number') {
+    return r.bonus > 0
+      ? { title: '银行服务', amount: `存款红包 +￥${r.bonus}`, tone: 'buy', quote: q }
+      : { title: '银行服务', amount: '存款享 3%/轮 复利', tone: 'buy', quote: q };
   }
   if (r.kind === 'lottery' && typeof r.prize === 'number') {
     const stake = typeof r.stake === 'number' ? r.stake : 0;

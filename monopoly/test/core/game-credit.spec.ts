@@ -338,3 +338,37 @@ describe('M20.2 信贷 · 两条违约链与破产清债务（spec §3.4 链二/
     expect(g.state.auction).toBeNull();
   });
 });
+
+describe('M20.2 信贷 · 银行格与清算顺序（spec §3.5 / §3.7）', () => {
+  it('落 9 号银行格：领「存款红包」= round(存款 × 5%)，存款本金不动', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    const p = g.state.players[0];
+    p.pos = 7;                         // +2 步落 9 号银行格
+    p.deposit = 1000;
+    g.rollDice();
+    g.moveCurrent();
+    expect(g.settleCurrent()).toMatchObject({ kind: 'bank', index: 9, bonus: 50 });
+    expect(p.deposit).toBe(1000);      // 只是发红包，存款仍在账上
+    expect(p.cash).toBe(START_CASH + 50);
+  });
+
+  it('清算优先取存款：现金不足时先全额取存款补齐，不触拍卖、不动自有地产', () => {
+    const g = createGame({ dice: step(1) });
+    const p = g.state.players[0];
+    g.state.estates[1] = { index: 1, owner: 2, level: 1, processing: false };   // 2 号收租格
+    giveEstate(g, 3);                  // 自有未抵押地产（若误走拍卖会被卖掉）
+    p.cash = 5;
+    p.deposit = 500;
+    g.state.hands[0] = g.state.hands[0].filter((k) => k !== 'pardon');
+    g.state.current = 0;
+    p.pos = 0;
+    g.rollDice();
+    g.moveCurrent();
+    const r = g.settleCurrent() as { kind: string; paid: number; sold: number[] };
+    expect(r).toMatchObject({ kind: 'rent', paid: 15, sold: [] });   // L1 租金 15
+    expect(p.deposit).toBe(0);         // 存款已全额取出
+    expect(p.cash).toBe(490);          // 5 + 500 − 15
+    expect(g.state.estates[3]?.owner).toBe(1);
+    expect(g.state.auction).toBeNull();
+  });
+});
