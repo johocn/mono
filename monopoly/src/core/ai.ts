@@ -3,9 +3,11 @@
  * 只产出「要做什么」（`AiStep[]`，对既有 Game API 的调用意图）；
  * 「什么时候做、做多久」全部由 `src/ui/aiDriver.ts` 决定。
  */
-import { currentPlayer, buyDiscountOf, netWorth, type Game, type GameState, type Phase } from './game';
+import { creditLocked, currentPlayer, buyDiscountOf, netWorth, type Game, type GameState, type Phase } from './game';
 import { buyable, canBuy, discounted, ownedBy } from './estate';
 import { buyPrice, canUpgrade, nextLevel } from '../data/economy';
+import { BANK_TILE_INDEX } from '../data/bank';
+import { loanLimitOf } from './bank';
 import type { ItemCardKind } from '../data/cards';
 import { RING_SIZE } from '../data/board';
 import { STOCK_TILE_INDEX, STOCKS } from '../data/stocks';
@@ -17,6 +19,9 @@ export type { AiParams, Persona, Seat } from '../data/ai';
 /** 路障铺在领先者前方第 N 格（≤ BARRIER_RANGE = 6 内，确定性，不引入随机源） */
 const BARRIER_LEAD = 3;
 
+/** M20.2 银行信贷动作（与 `Game` 六个 API 一一对应） */
+export type BankAction = 'deposit' | 'withdraw' | 'borrow' | 'repay' | 'mortgage' | 'redeem';
+
 /** 计划中的一步；`close` 见计划抬头「澄清 2」（收口浮层，避免陈旧卡面残留到下一位） */
 export type AiStep =
   | { kind: 'skip' }
@@ -26,6 +31,7 @@ export type AiStep =
   | { kind: 'roll' } | { kind: 'move' } | { kind: 'settle' }
   | { kind: 'sell'; index: number }          /* M20.1 自由出售自有地块 */
   | { kind: 'auctionBid'; amount: number }   /* M20.1 拍卖出价（0 = 放弃） */
+  | { kind: 'bank'; action: BankAction; amount?: number; index?: number }   /* M20.2 银行信贷 */
   | { kind: 'close' } | { kind: 'end' };
 
 /** `AiStep` → `Game` API 的唯一纯映射（绝不抛错；合法性由 decideTurn 前置保证） */
@@ -41,6 +47,14 @@ export function applyStep(g: Game, step: AiStep): unknown {
     case 'settle': return g.settleCurrent();
     case 'sell': return g.sellEstate(step.index);
     case 'auctionBid': return g.bidAuction(step.amount);
+    case 'bank': {
+      if (step.action === 'deposit') return g.deposit(step.amount ?? 0);
+      if (step.action === 'withdraw') return g.withdraw(step.amount ?? 0);
+      if (step.action === 'borrow') return g.takeLoan();
+      if (step.action === 'repay') return g.repayLoan(step.amount);
+      if (step.action === 'mortgage') return g.takeMortgage(step.index ?? -1);
+      return g.redeemMortgage(step.index ?? -1);
+    }
     case 'close': return g.clearEvent();
     case 'end': return g.endTurn();
   }
@@ -117,6 +131,55 @@ export function pickStock(state: GameState, P: AiParams, cash: number): string |
   return cand[0].code;
 }
 
+/**
+ * 首个可抵押地块（自有 + 未施工 + 未抵押，升序）；无 → null。
+ * 与 `ui/panels.firstMortgageableTile` 同口径，但按 `owner` 参数化（core 不依赖 ui）。
+ */
+export function firstMortgageable(state: GameState, owner: number): number | null {
+  const list = ownedBy(state.estates, owner)
+    .filter((i) => !state.estates[i].processing && !creditLocked(state, i))
+    .sort((a, b) => a - b);
+  return list.length > 0 ? list[0] : null;
+}
+
+/**
+ * 银行信贷策略（M20.2-D12，纯函数 / 零随机）：每回合至多产 **1 步**
+ * （驱动器每步前重算 plan，故逐步推进即可，无需一次排出多步）。
+ *
+ * 优先级：
+ * 1. 临近到期（`due − round ≤ 2`，含已逾期）→ 优先还款（还款不限 9 号格）；
+ * 2. 站 9 号格且现金低于 `loanLine` → 先抵押闲置地块；无地可抵押再申请信用贷款；
+ * 3. 现金高于 `depositLine` 且**无任何债务** → 存余钱（留 `reserve`，避免现金归零）。
+ *
+ * 真人席位不会产出（`decideTurn` 只对 persona 调用，驱动器对真人让位）。
+ * 注：AI 不主动取款 / 赎回抵押（本里程碑策略刻意保守，见手册「已知限制」）。
+ */
+export function pickBank(state: GameState, P: AiParams): AiStep[] {
+  const p = currentPlayer(state);
+  if (p.bankrupt) return [];
+  const atBank = p.pos === BANK_TILE_INDEX;
+
+  /* ① 临近到期 / 已逾期：优先还款（任意回合可还，不限 9 号格） */
+  if (p.loan && p.loan.due - state.round <= 2 && p.cash > 0) {
+    return [{ kind: 'bank', action: 'repay' }];
+  }
+
+  /* ② 站 9 号格且现金告急：先抵押闲置地块，无地可抵押再申请信用贷款 */
+  if (atBank && p.cash < P.loanLine) {
+    const tile = firstMortgageable(state, p.id);
+    if (tile !== null) return [{ kind: 'bank', action: 'mortgage', index: tile }];
+    if (!p.loan && loanLimitOf(netWorth(state, p)) > 0) return [{ kind: 'bank', action: 'borrow' }];
+  }
+
+  /* ③ 现金充裕且无债务：把余钱存银行（留 reserve，纯现金收益） */
+  const debtless = !p.loan && p.mortgages.length === 0;
+  const amount = p.cash - P.reserve;
+  if (debtless && p.cash > P.depositLine && amount > 0) {
+    return [{ kind: 'bank', action: 'deposit', amount }];
+  }
+  return [];
+}
+
 /* —— 各阶段的分支 —— */
 
 function idlePlan(state: GameState, persona: Persona, P: AiParams): AiStep[] {
@@ -182,7 +245,16 @@ function settledPlan(state: GameState, persona: Persona, P: AiParams): AiStep[] 
     if (code) post.push({ kind: 'trade', code, shares: 1 });
   }
 
-  /* ④ 投机专项：租金翻倍（持牌 + 本回合未用 + 现金门 + 已有 >=2 级地块） */
+  /* ④ 银行信贷（M20.2）：`pickBank` 一步；**与同回合消费步骤（买地/升级/股票）互斥** ——
+     存款金额按「当前现金」算，若整段 plan 里既有消费又有存款，顺序执行到存款时现金已变、金额失真。
+     驱动器每步前会重算 plan，消费步跑完后下一步即补上存款，故不损失行为。 */
+  const bank = pickBank(state, P);
+  const spending = post.some((s) => s.kind === 'buy' || s.kind === 'upgrade' || s.kind === 'trade');
+  if (bank.length > 0 && !(spending && bank[0].kind === 'bank' && bank[0].action === 'deposit')) {
+    post.push(...bank);
+  }
+
+  /* ⑤ 投机专项：租金翻倍（持牌 + 本回合未用 + 现金门 + 已有 >=2 级地块） */
   if (persona === 'speculative' && (state.hands[me.id - 1] ?? []).includes('doubleRent')
     && !state.doubleRent[me.id - 1] && me.cash >= P.reserve && ownedFrom(state, me.id, 2).length > 0) {
     post.push({ kind: 'card', card: 'doubleRent' });
