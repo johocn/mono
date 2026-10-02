@@ -26,9 +26,9 @@ import {
   BANK_CAP, BANK_RATE, HOSPITAL_TURNS, JAIL_TURNS, LOTTERY_STAKE, TAX_CAP, TAX_RATE,
   nextJail, rollBonus, rollLottery, specialAt, type BonusReward,
 } from './special';
-import { BANK_TILE_INDEX, LOAN_RATE, LOAN_TERM, MORTGAGE_RATE, MORTGAGE_TERM } from '../data/bank';
+import { BANK_TILE_INDEX, DEPOSIT_RATE, LOAN_RATE, LOAN_TERM, MORTGAGE_RATE, MORTGAGE_TERM } from '../data/bank';
 import {
-  loanLimitOf, mortgageLimitOf, type DebtBook, type MortgageBook,
+  loanLimitOf, mortgageLimitOf, overdueOf, type DebtBook, type MortgageBook,
 } from './bank';
 import { abilityOfPlayer, type AbilityDef } from '../data/abilities';
 import { personaParams, type AiParams, type Persona, type Seat } from '../data/ai';
@@ -1150,8 +1150,29 @@ export function createGame(opts: GameOptions = {}): Game {
     }
   };
 
+  /**
+   * 轮末统一计息（spec §3.3）：① 存款复利 ② 信用贷款复利（首轮免息跳 1 次后清标记）
+   * ③ 逐笔抵押复利 ④ 逾期推进。破产者跳过、零随机。必须在股价 tick 之前执行。
+   */
+  const settleBooks = (): void => {
+    for (const p of state.players) {
+      if (p.bankrupt) continue;
+      if (p.deposit > 0) p.deposit = Math.round(p.deposit * (1 + DEPOSIT_RATE));
+      if (p.loan) {
+        if (p.loan.freeFirstRound) p.loan.freeFirstRound = false;
+        else p.loan.principal = Math.round(p.loan.principal * (1 + p.loan.rate));
+        p.loan.overdue = overdueOf(p.loan, state.round);
+      }
+      for (const m of p.mortgages) {
+        m.principal = Math.round(m.principal * (1 + m.rate));
+        m.overdue = overdueOf(m, state.round);
+      }
+    }
+  };
+
   /** 轮末统一 tick 股价 + 清空「内幕消息」标的 */
   const onRoundBoundary = (): void => {
+    settleBooks();
     const tips = state.stockTip.filter((c): c is string => c !== null);
     state.quotes = market.tick(tips);
     state.priceHistory = market.history();

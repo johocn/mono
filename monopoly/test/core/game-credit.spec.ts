@@ -17,6 +17,13 @@ const giveEstate = (g: Game, index = 1): void => {
   g.state.estates[index] = { index, owner: 1, level: 1, processing: false };
 };
 
+/** 触发一次轮末：把当前玩家设为末位并结束回合 ⇒ next===0 ⇒ round+1 + onRoundBoundary */
+const passRound = (g: Game): void => {
+  g.state.current = g.state.players.length - 1;
+  g.state.phase = 'settled';
+  g.endTurn();
+};
+
 describe('M20.2 信贷 · 存取款（spec §3.2）', () => {
   it('deposit 现金 → 存款；非法金额 / 现金不足拒绝', () => {
     const g = createGame({ dice: fixed(1, 1) });
@@ -164,5 +171,63 @@ describe('M20.2 信贷 · 抵押与锁定（spec §3.4）', () => {
     expect(g.state.players[0].cash).toBe(before - 24);
     expect(creditLocked(g.state, 1)).toBe(false);
     expect(g.redeemMortgage(1)).toEqual({ ok: false, reason: 'no-mortgage' });
+  });
+});
+
+describe('M20.2 信贷 · 轮末计息与逾期推进（spec §3.3 / §3.4）', () => {
+  it('存款 +3%/轮 复利', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    g.state.players[0].deposit = 1000;
+    passRound(g);
+    expect(g.state.players[0].deposit).toBe(1030);
+  });
+
+  it('信用贷款按 6%/轮 复利（无免息标记）', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    g.state.players[0].loan = { principal: 1000, rate: LOAN_RATE, due: 99, overdue: 0 };
+    passRound(g);
+    expect(g.state.players[0].loan?.principal).toBe(1060);
+  });
+
+  it('抵押贷款按 4%/轮 复利', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    g.state.players[0].mortgages = [{ principal: 1000, rate: MORTGAGE_RATE, due: 99, overdue: 0, index: 1 }];
+    passRound(g);
+    expect(g.state.players[0].mortgages[0].principal).toBe(1040);
+  });
+
+  it('首轮免息：站 9 号格借款后第 1 个轮末不计息，第 2 个轮末起计息', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    atBank(g);
+    g.takeLoan();                       // 借 900，freeFirstRound
+    passRound(g);
+    expect(g.state.players[0].loan?.principal).toBe(900);
+    expect(g.state.players[0].loan?.freeFirstRound).toBeFalsy();
+    passRound(g);
+    expect(g.state.players[0].loan?.principal).toBe(Math.round(900 * 1.06));
+  });
+
+  it('逾期推进：到期轮不算逾期，下一轮起 +1；未逾期归零', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    g.state.players[0].loan = { principal: 100, rate: LOAN_RATE, due: 2, overdue: 0 };
+    g.state.round = 2;
+    passRound(g);                       // round → 3 > due(2) ⇒ 逾期 1
+    expect(g.state.players[0].loan?.overdue).toBe(1);
+  });
+
+  it('到期轮（round === due）不算逾期', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    g.state.players[0].loan = { principal: 100, rate: LOAN_RATE, due: 3, overdue: 0 };
+    g.state.round = 2;
+    passRound(g);                       // round → 3 === due → 未逾期
+    expect(g.state.players[0].loan?.overdue).toBe(0);
+  });
+
+  it('破产者不涨利息', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    g.state.players[0].bankrupt = true;
+    g.state.players[0].deposit = 1000;
+    passRound(g);
+    expect(g.state.players[0].deposit).toBe(1000);
   });
 });
