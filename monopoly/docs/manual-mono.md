@@ -901,6 +901,53 @@ $env:MONO_ORIGIN='http://127.0.0.1:52301'; node local/mono-shots-m20-2.mjs   # [
 - **E 贷款强执**：末位玩家（`current=3`）持逾期满 3 轮的贷款 + 一块未抵押 L1 地产 → HUD「结束回合」推一轮 → 触发 `loan-overdue` 拍卖（起拍 = 变卖价 ￥30），成交款冲抵本金至结清（现金 200 → 124、原主不破产）。
 - **F 抵押超期**：末位玩家持 `round > due` 的抵押（index 11）→ HUD「结束回合」推一轮 → 触发 `mortgage-overdue` 拍卖（起拍 = 借款额 ￥208 = 200×1.04），成交后抵押清账、地块转移。
 
+### M20.3-A 手牌排序与道具商店（含相机命中回归修复）2026-10-02
+
+**范围**：对齐 spec `docs/superpowers/specs/2026-10-02-monopoly-m20-3-hand-and-item-shop-design.md` 的决策 **D-A / D-B / D-C**（路线图诉求 ②手牌排布 + ③道具商店，外加用户报障的 P0）。三件事：① 相机命中回归修复；② 手牌三键排序 + 单行横滑；③ 道具商店买卖。**股票轨（涨跌卡 / 红利卡 / 杠杆 / 爆仓 / 股票浮层 A 版式）留给 M20.3-B 单独交付。**
+
+**三项需求与落点**：
+
+| # | 需求（D） | 落点 | 结果 |
+|---|---|---|---|
+| 1 | 相机命中回归（D-A） | [main.ts](file:///d:/zhao/monopoly/src/main.ts) `pickIdxAt` | `#mono-pick` 选目标命中层补相机逆变换 `toWorld`，容差同口径折算 `TOL / zoom`；恒等位姿下与修复前**逐像素一致**（非取景态零回归） |
+| 2 | 手牌排序 + 横滑（D-B） | [cards.ts](file:///d:/zhao/monopoly/src/data/cards.ts) `priority` / [panels.ts](file:///d:/zhao/monopoly/src/ui/panels.ts) `handSlots` / `handLayout` / `handBarView` / `main.ts` 横滑手势 | 三键稳定排序（持有 → 常用 `priority` 升序 → `ITEM_CARDS` 表序兜底）；槽宽 55 不变、槽数由 `ITEM_CARDS.length` 驱动；`contentW = n·W + (n−1)·G`、`maxScroll = max(0, contentW − 390)` |
+| 3 | 道具商店（D-C） | [item-shop.ts](file:///d:/zhao/monopoly/src/data/item-shop.ts) / `game.ts` `buyItem`/`sellItem` / `panels.ts` 商店浮层 / [Hud.ts](file:///d:/zhao/monopoly/src/ui/Hud.ts) 商店键 / [ai.ts](file:///d:/zhao/monopoly/src/core/ai.ts) `pickStore` | 售价表 6 项（免罚 250 / 翻倍 250 / 炸弹 300 / 路障 150 / 迁点 200 / 拆迁令 500）+ 回收价 = 售价 × 50%（向下取整）；**每种至多持 1 张**；HUD 常驻「商店」键（不依赖走位）；AI 每回合至多 1 步采购 |
+
+**优先级与互斥**：`overlayOf()` 在 `bank` 之后插入 `store`，得 `auction > settle > bank > store > stock > draw`；商店与银行同为「常驻 HUD 入口」且**互斥开合**（开一个即关另一个）。
+
+**四级回退**：唯一新增可见元素 `ui.handBar`（手牌滑动条）已在 [registry.ts](file:///d:/zhao/monopoly/src/skin/registry.ts) 登记 + 内建 `fb` 兜底，`npm run lint:skin` 通过（`registry-ids.json` 由 336 → **337 ids**）；商店浮层**零新增皮肤元素**，100% 复用 `showcase.panel` / `ui.badge` / `ui.bankRow` / `ui.button.primary` / `ui.button.secondary` / `ui.qk`；几何集中在 [layout.ts](file:///d:/zhao/monopoly/src/skin/layout.ts) 的 `PANEL_STORE_ROW_H/GAP/Y0`（6 项装不进银行 40/8 行距，故行距独立），x / 宽 / 键位仍 100% 复用 `PANEL_BANK_*`。
+
+**确定性**：排序三键、`resaleOf`、`buyItem` / `sellItem`、`pickStore` 四条规则全部为纯算术，**零随机**（`test/smoke.spec.ts` 的 `Math.random` 源码闸门通过）。
+
+**已知限制**：
+
+1. **滑动条本轮不入画（有意 · 待 M20.3-B 自动启用）**：6 张手牌 × 55px + 5 × 6px = 360px ≤ 390px，**恰好一屏** ⇒ `maxScroll = 0`、`ui.handBar` 不入画、`setHandScroll(v)` 恒被 clamp 到 0，横滑手势不进入拖拽态。M20.3-B 把 `ITEM_CARDS` 补到 8 种后（482px > 390px）滑动条与手势**自动启用、零版式返工**——本轮 e2e 闸门 `hand_row_fits` 即为此断言（防「为 8 槽留的横滑在 6 槽下误入画 / 误吞点击」）。
+2. **AI 只买不卖**：`pickStore` 不产出 `sellItem`（卖牌会与「保命线」规则相互抵消，收益不确定）。
+3. **买卖逐张无档位**：每次 1 张（单键动作），与股票「1 手 / 5 手 / 全仓」三档刻意区分，避免手感混淆。
+
+**回归口径（本轮实测）**：
+
+```powershell
+npx tsc --noEmit                                 # 退出码 0、无输出
+npm run check                                    # eslint 0 错；[theme] OK / [skin:default] OK / [skin:photo] OK；registry-ids.json: 337 ids；72 文件 / 754 例全绿
+npm run build                                    # [check-hardcoded] clean（29 个文件）→ ✓ built in 5.51s
+$env:MONO_ORIGIN='http://127.0.0.1:52302'; node local/mono-e2e-campick.mjs      # [campick] PASS（5 项 gate 全 true、errors: []）
+$env:MONO_ORIGIN='http://127.0.0.1:52302'; node local/mono-shots-m20-3.mjs      # [m20-3-shots] PASS（10 项 gate 全 true、errors: []）
+$env:MONO_ORIGIN='http://127.0.0.1:52302'; node local/mono-e2e-playthrough.mjs  # [playthrough] PASS · 退出码 0 · 17 项 gate 全 true · problems=[] · errors=[]（整局 984 次点击跑到 over=true；AI 段 167s、auctionClicks=6）
+```
+
+**整局卡死回归（本轮发现并修复 · 两处）**：复跑 `mono-e2e-playthrough.mjs` 时 `gate.aiGame === false`，AI 段 300s 预算耗尽而状态**永久冻结**。逐层取证后确认是**两个独立缺陷串联**（修掉①后②才暴露）：
+
+① **AI 规划必败步**（`round=20 / phase='settled' / pos=1` 冻结）：包装 `Game` 全部 API 计数后调 `skipRest()` → `counts = { upgradeCurrent: 65 }` 而 `state` **零变化** ⇒ 每步都是同一个必败步。**根因**：AI 站在**自有但已抵押**的地块上，[ai.ts](file:///d:/zhao/monopoly/src/core/ai.ts) `settledPlan` ② 只校验 `owner / canUpgrade / upgradeEager / !processing`、**漏检 `creditLocked`**，于是每步规划同一个 `upgrade`；而引擎 [game.ts](file:///d:/zhao/monopoly/src/core/game.ts) `upgradeCurrent()` 以 `creditLocked` 前置（spec §3.4 抵押期间锁出售 / 锁升级）返回 `{ ok:false, reason:'mortgaged' }` 且**不改 state** ⇒ `skipRest` 空转满 `AI_SKIP_MAX_STEPS`(64) 步返回、`tick` 同样空转 ⇒ 整局静默卡死（**非**测试预算问题）。**修复**：`settledPlan` ② 补 `&& !creditLocked(state, pos)`（与引擎同一前置），并新增 `test/core/ai.spec.ts`「抵押锁升级」3 例（未抵押 → 规划 upgrade / 抵押 → 不规划且以 `end` 收口可换手 / 根因复现：引擎返回 `mortgaged` 且 `state` 不变）。
+
+② **e2e 未代真人出价**（修掉①后冻结点移到 `round=21 / pos=28`，换言之①只是把②掩盖了）：探针显示 `state.auction === true` 且 `counts = {}`（**一个 Game API 都没被调**）——`skipRest` 的循环守卫 `!(state.over || state.auction || state.current !== seat)` 一见待拍态即返回。**结论：引擎与 AI 均无缺陷** —— [game.ts](file:///d:/zhao/monopoly/src/core/game.ts) `openLot` 只把**真人**竞拍人挂进 `pending`（AI 席位当场 `aiBidFor` 即时算价入 `bids`），故 `state.auction` 挂起**必然**是「轮到真人出价」，而 `aiDriver.tick` / `skipRest` 在待拍态立即让位（`aiDriver.ts` 第 57 行「M20.1 待真人出价：拍卖挂起，AI 不推进」）本身就是正确设计。缺陷在**取证脚本**：两个整局段都只按「当前玩家是不是真人」决策，从不去点拍卖浮层，于是真人竞拍人被永久搁置。**修复**（[mono-e2e-playthrough.mjs](file:///d:/zhao/monopoly/local/mono-e2e-playthrough.mjs)）：① `readState()` 增 `auction` 快照并**计入状态签名**（出价本身不写 `lastEvent`，只有落槌才写 `auctionDone`，不带它会把「点出价」误判成「点了没反应」）；② 主整局与 AI 两段都在一切分支**之前**插入「待拍态优先」分支，代真人点首个可用出价档（`auction:bid:not([disabled])`）否则点放弃（`auction:pass`）；③ 墙钟上限 `420s → 600s`（4 真人整局实测 ≈ 984 次点击 × ~0.45s/次，原上限在机器有负载时会误报「墙钟超时」）。修复后 AI 段只用 167s 就跑完（`auctionClicks=6` 证明该分支确实被走到）。
+
+**P0 回归取证（相机取景下「点不上棋盘 / 道具不生效」）**：`local/mono-e2e-campick.mjs` **刻意不带 `nofx=1`**（既有 `mono-shots-*.mjs` 全带 `nofx` ⇒ `camOn = false` ⇒ `zoom ≡ 1`，恰好掩盖该缺陷），把相机顶到 `zoom = 3.4` 后走真实点击链「HUD 手牌键 → 炸弹槽 → 目标格屏幕坐标」，5 项机器闸门：`cam_zoom_active`（zoom > 1.5，确实处于取景态）/ `bomb_armed`（进入选目标态且 `#mono-pick` 可点）/ `pick_would_miss`（**旧算法**在同一像素上解出 7 号格 ≠ 目标 3 号格，证明用例有效、能捕获该缺陷）/ `bomb_landed`（`lastEvent = { kind:'card', card:'bomb', target:3 }`）/ `estate_demoted`（目标地块 L2 → L1、手牌不再含炸弹）。
+
+**截图清单（4 张，均 390×844 @dpr2 手机视口，出 780×1688 PNG，入 `docs/verify/`）**：`mono-m20-3-01-hand-sorted`（手牌行三键排序：持有的「免罚 / 炸弹 / 迁点」在前且亮显，未持有的「租金翻倍 / 路障 / 拆迁令」淡显在后 —— 正是 `priority` 10/30/50 ｜ 20/40/60 的两段）/ `mono-m20-3-02-store-panel`（道具商店浮层：角标「道具商店」+ 左列 6 行目录「免罚 ￥250 · 持有 / 租金翻倍 ￥250 · — / 炸弹 ￥300 · 持有 / 路障 ￥150 · 持有 / 迁点 ￥200 · — / 拆迁令 ￥500 · —」+ 右列 4 行详情「用途描述（折行）/ 售价 ￥300 · 回收 ￥150 / 持有 1 张 / 现金 ￥3000」+ 买入（置灰）/ 卖出 / 关闭）/ `mono-m20-3-03-store-bought`（真实点击「炸弹」行 + 买入 → 现金 ￥1000 → ￥700、炸弹转「持有 1 张」、买入键置灰、卖出键点亮、面板保持开启（非模态））/ `mono-m20-3-04-store-sold`（真实点击卖出 → 回收 ￥150 到账（￥850）、炸弹转「持有 0 张」、卖出键置灰、买入键点亮）。目视复核要点：①②③④ 同一手机视口下浮层不溢出、6 行目录与 4 行详情间距清晰；① 持有 / 未持有的亮暗对比可辨；③④ 键位置灰 / 点亮状态与「持有」列一致。
+
+**取证脚本**：[local/mono-shots-m20-3.mjs](file:///d:/zhao/monopoly/local/mono-shots-m20-3.mjs)（10 项机器闸门）与 [local/mono-e2e-campick.mjs](file:///d:/zhao/monopoly/local/mono-e2e-campick.mjs)（相机开启下的选目标回归）。关键口径：打 `?play=1&seed=20261002&nofx=1&humans=4&tour=0` 真实对局，全程走 `#mono-hud` / `#mono-panels` 命中层；闸门 `store_rows = ITEM_CARDS.length + 4 = 10`（6 目录行 + 4 详情行，均由 `ui.bankRow` 承载）、`store_buttons` 直查 DOM（`store:select` × 6 带 `data-target` = kind、`store:buy` / `store:sell` / `store:close` 各 1，且浮层展开时无其他 `#mono-panels` 键位残留）。
+
 ### 最终验收（对照 spec §11 硬性标准）
 
 | # | spec §11 条目 | 证据 |

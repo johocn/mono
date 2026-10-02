@@ -19,6 +19,8 @@ import { mkdirSync } from 'node:fs';
  *     其余仍用合成 `click` 以守住墙钟预算。gate `audio_unlocked` 证明 ctx 真被建起（spec §4.3c）
  *   3 合法路径：idle→掷骰 / rolled→前进 / moved→结算 / settled→(用卡 ≥1 次 · 买地 · 升级 · 结束回合)；
  *     jail 禁行→跳过；到手牌/股票浮层时用一次卡、做一笔股票交易
+ *   3b 待拍态（`state.auction`）**优先于一切**：代真人在拍卖浮层点出价 / 放弃。`openLot` 只把真人
+ *     竞拍人挂进 `pending`，而 `aiDriver.tick` / `skipRest` 在待拍态立即返回 ⇒ 真人不出价则整局永久挂起
  *   4 state.over===true 且结算面板给出胜者与 4 行名次（由点击到达，非 sim()）
  *   5 关键截图 7 张：开局/首次买地/首次升级/踩监狱/抽卡/股票盘/终局；两两内容哈希不同且非空
  *   6 硬上限：轮数 ≤ 61（设计目标）+ 墙钟超时（避免卡死挂住）
@@ -33,7 +35,7 @@ const OUT = 'docs/verify';
 const SEED = 20260928;
 const MAX_ROUNDS = 61;              // 设计目标：ROUND_LIMIT(60) 之后一回合内必结束
 const MAX_CLICKS = 8000;            // 点击次数硬上限
-const WALL_MS = 420000;             // 墙钟上限 7 分钟
+const WALL_MS = 600000;             // 墙钟上限 10 分钟（4 真人整局实测 ≈ 1000 次点击 × ~0.45s/次）
 const REPORT_ONLY = process.argv.includes('--report-only');
 mkdirSync(OUT, { recursive: true });
 
@@ -53,6 +55,9 @@ const viewport = { width: 390, height: 844 };
 const readState = () => page.evaluate(() => {
   const m = window.__monoMain;
   const s = m.game.state;
+  /* 待拍态：`openLot` 只把**真人**竞拍人放进 `pending`（AI 即时算价入 `bids`），
+     故有 `auction` 即等于「轮到真人出价」——必须由本脚本代真人在浮层上点击，否则永久挂起。 */
+  const auc = m.auction ? m.auction() : null;
   const hud = document.querySelector('#mono-hud');
   const panels = document.querySelector('#mono-panels');
   const enabled = (root, sel) => {
@@ -79,6 +84,17 @@ const readState = () => page.evaluate(() => {
     lastDraw: s.lastDraw ? s.lastDraw.deck : null,
     lastEvent: s.lastEvent ? s.lastEvent.kind : null,
     overlay,
+    auction: auc ? {
+      pending: auc.pending.slice(),
+      bids: auc.bids.length,
+      results: auc.results.length,
+      lot: auc.lot ? auc.lot.index : null,
+    } : null,
+    /* 拍卖三档出价键里可能有禁用档（现金不足），故判据是「存在任一可用档」而非只看首键 */
+    auctionBidEnabled: (() => {
+      const els = panels ? [...panels.querySelectorAll('button[data-action="auction:bid"]')] : [];
+      return els.some((x) => !x.disabled);
+    })(),
     primaryAction: document.querySelector('#mono-hud button[data-primary]')?.dataset.action ?? null,
     buyEnabled: enabled(hud, 'button[data-action="buy"]'),
     upgradeEnabled: enabled(hud, 'button[data-action="upgrade"]'),
@@ -99,6 +115,8 @@ const sig = (s) => JSON.stringify({
   phase: s.phase, over: s.over, current: s.current, round: s.round,
   pos: s.pos, cash: s.cash, bankrupt: s.bankrupt, jail: s.jail, dice: s.dice,
   estates: s.estates, hands: s.hands, lastDraw: s.lastDraw, lastEvent: s.lastEvent,
+  /* 出价本身不写 `lastEvent`（只有落槌才写 `auctionDone`），不带上它会让「点了但判为没反应」误报 */
+  auction: s.auction,
 });
 
 let page;
@@ -184,44 +202,53 @@ try {
 
     let sel;
     let action;
-    /* 牌袋抽屉：还没打过牌、停在格、无浮层时先展开抽屉（否则手牌键与牌面键都不在命中层） */
-    if (!used.card && !drawerOpen && s.phase === 'settled' && s.overlay === null && s.handKeyEnabled) {
-      await page.evaluate(() => { document.querySelector('#mono-hud button[data-action="hand"]')?.click(); });
-      await page.waitForTimeout(20);
-      drawerOpen = true;
-      s = await readState();
-    }
-    if (s.phase === 'idle' || s.phase === 'rolled' || s.phase === 'moved') {
-      if (!s.primaryAction) throw new Error(`${s.phase} 阶段却无主按钮（命中层缺失）`);
-      sel = '#mono-hud button[data-primary]';
-      action = s.primaryAction;               // roll / move / settle / skip
-    } else if (s.overlay === 'draw') {
-      if (!facts.shots['05-draw']) { await settleFx(); await shot('05-draw'); }
-      sel = '#mono-panels button[data-action="card:close"]';
-      action = 'card:close';
-    } else if (s.overlay === 'stock') {
-      if (!facts.shots['06-stock']) { await settleFx(); await shot('06-stock'); }
-      if (!used.trade && s.stockBuyEnabled) {
-        sel = '#mono-panels button[data-action="stock:buy"]';
-        action = 'stock:buy';
-        used.trade = true;
+    /* 待拍态优先于一切（`overlayOf`：auction > settle > bank > store > stock > draw）：
+       `openLot` 只把**真人**竞拍人挂进 `pending`，真人不出价则引擎与 `aiDriver` 双双永久挂起。 */
+    if (s.auction) {
+      sel = s.auctionBidEnabled
+        ? '#mono-panels button[data-action="auction:bid"]:not([disabled])'
+        : '#mono-panels button[data-action="auction:pass"]';
+      action = s.auctionBidEnabled ? 'auction:bid' : 'auction:pass';
+    } else {
+      /* 牌袋抽屉：还没打过牌、停在格、无浮层时先展开抽屉（否则手牌键与牌面键都不在命中层） */
+      if (!used.card && !drawerOpen && s.phase === 'settled' && s.overlay === null && s.handKeyEnabled) {
+        await page.evaluate(() => { document.querySelector('#mono-hud button[data-action="hand"]')?.click(); });
+        await page.waitForTimeout(20);
+        drawerOpen = true;
+        s = await readState();
+      }
+      if (s.phase === 'idle' || s.phase === 'rolled' || s.phase === 'moved') {
+        if (!s.primaryAction) throw new Error(`${s.phase} 阶段却无主按钮（命中层缺失）`);
+        sel = '#mono-hud button[data-primary]';
+        action = s.primaryAction;               // roll / move / settle / skip
+      } else if (s.overlay === 'draw') {
+        if (!facts.shots['05-draw']) { await settleFx(); await shot('05-draw'); }
+        sel = '#mono-panels button[data-action="card:close"]';
+        action = 'card:close';
+      } else if (s.overlay === 'stock') {
+        if (!facts.shots['06-stock']) { await settleFx(); await shot('06-stock'); }
+        if (!used.trade && s.stockBuyEnabled) {
+          sel = '#mono-panels button[data-action="stock:buy"]';
+          action = 'stock:buy';
+          used.trade = true;
+        } else {
+          sel = '#mono-hud button[data-primary]';
+          action = s.primaryAction;             // end
+        }
+      } else if (!used.card && s.cardDoubleRentEnabled) {
+        sel = '#mono-panels button[data-action="card:doubleRent"]';
+        action = 'card:doubleRent';
+        used.card = true;
+      } else if (s.buyEnabled) {
+        sel = '#mono-hud button[data-action="buy"]';
+        action = 'buy';
+      } else if (s.upgradeEnabled) {
+        sel = '#mono-hud button[data-action="upgrade"]';
+        action = 'upgrade';
       } else {
         sel = '#mono-hud button[data-primary]';
-        action = s.primaryAction;             // end
+        action = s.primaryAction;               // end
       }
-    } else if (!used.card && s.cardDoubleRentEnabled) {
-      sel = '#mono-panels button[data-action="card:doubleRent"]';
-      action = 'card:doubleRent';
-      used.card = true;
-    } else if (s.buyEnabled) {
-      sel = '#mono-hud button[data-action="buy"]';
-      action = 'buy';
-    } else if (s.upgradeEnabled) {
-      sel = '#mono-hud button[data-action="upgrade"]';
-      action = 'upgrade';
-    } else {
-      sel = '#mono-hud button[data-primary]';
-      action = s.primaryAction;               // end
     }
 
     if (!sel || !action) throw new Error(`无法决策下一步 phase=${s.phase} overlay=${s.overlay}`);
@@ -331,6 +358,7 @@ try {
   let aiClicks = 0;
   let iterations = 0;
   let skipCalls = 0;
+  let auctionClicks = 0;
   let lastSt = null;
   while (Date.now() - tAI < 300000) {
     iterations += 1;
@@ -339,6 +367,8 @@ try {
       const s = m.game.state;
       return {
         over: s.over,
+        /* 待拍态：真人是竞拍人 ⇒ 必须代其出价，`skipRest` / `tick` 在 `state.auction` 下都会立刻返回 */
+        auction: Boolean(m.auction ? m.auction() : s.auction),
         isHuman: m.seats[s.current] === null,
         phase: s.phase,
         lastDraw: Boolean(s.lastDraw),
@@ -347,7 +377,17 @@ try {
     });
     lastSt = st;
     if (st.over) break;
-    if (st.isHuman) {
+    if (st.auction) {
+      /* 拍卖出价优先于「谁的回合」：只有真人会进 `pending`，AI 席位已即时算价入 `bids` */
+      await aiPage.evaluate(() => {
+        const btns = [...document.querySelectorAll('#mono-panels button[data-action="auction:bid"]')];
+        const b = btns.find((x) => !x.disabled)
+          ?? document.querySelector('#mono-panels button[data-action="auction:pass"]');
+        if (b && !b.disabled) b.click();
+      });
+      auctionClicks += 1;
+      await aiPage.waitForTimeout(20);
+    } else if (st.isHuman) {
       /* 真人回合：浮层先关（抽卡），否则走主按钮（roll/move/settle/skip/end） */
       const sel = st.phase === 'settled' && st.lastDraw && st.pos !== 19
         ? '#mono-panels button[data-action="card:close"]'
@@ -367,7 +407,7 @@ try {
   }
 
   facts.aiDiag = {
-    elapsedMs: Date.now() - tAI, iterations, aiClicks, skipCalls, lastSt,
+    elapsedMs: Date.now() - tAI, iterations, aiClicks, skipCalls, auctionClicks, lastSt,
     seats: await aiPage.evaluate(() => window.__monoMain.seats),
     hasDriver: await aiPage.evaluate(() => Boolean(window.__monoMain.aiDriver)),
   };

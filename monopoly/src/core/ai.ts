@@ -282,8 +282,12 @@ function settledPlan(state: GameState, persona: Persona, P: AiParams): AiStep[] 
     if (cost <= P.buyMax && canBuy(state.estates, pos, me.cash, discount) && me.cash - cost >= P.reserve) post.push({ kind: 'buy' });
   }
 
-  /* ② 升级：自有 + 可升级 + upgradeEager + 不在施工 + 现金门（投机另需已持同级 >=2 块） */
-  if (e && e.owner === me.id && canUpgrade(e.level) && P.upgradeEager && !e.processing) {
+  /* ② 升级：自有 + 可升级 + upgradeEager + 不在施工 + **未被抵押** + 现金门（投机另需已持同级 >=2 块）。
+     `creditLocked` 是引擎 `upgradeCurrent` 的同一前置（spec §3.4：抵押期间锁出售 / 锁升级）：
+     漏检时 AI 会在自有但已抵押的地块上反复规划同一个必败的 upgrade，`skipRest` 每次空转满
+     `AI_SKIP_MAX_STEPS` 步而整局静默卡死（M20.3 回归实测：round 20 起永久停滞）。 */
+  if (e && e.owner === me.id && canUpgrade(e.level) && P.upgradeEager && !e.processing
+    && !creditLocked(state, pos)) {
     const cost = buyPrice(nextLevel(e.level));
     const gate = persona === 'speculative' ? sameLevelCount(state, me.id, e.level) >= 2 : true;
     if (gate && me.cash - cost >= P.reserve) post.push({ kind: 'upgrade' });

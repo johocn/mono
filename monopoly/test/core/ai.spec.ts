@@ -306,3 +306,45 @@ describe('ai pickBank 银行信贷策略（M20.2-D12）', () => {
     expect(applyStep(g, { kind: 'bank', action: 'redeem', index: 3 })).toEqual({ ok: false, reason: 'no-mortgage' });
   });
 });
+
+/*
+ * M20.3 回归（实测 round 20 起整局静默卡死）：AI 站在**自有但已抵押**的地块上时，
+ * `settledPlan` ② 未校验 `creditLocked` 而规划 upgrade，引擎 `upgradeCurrent` 以 `mortgaged`
+ * 拒绝且不改 state ⇒ 每步都是同一个必败步，`skipRest` 空转到 `AI_SKIP_MAX_STEPS` 上限而零进度。
+ * 修复：② 补上 `!creditLocked(state, pos)`（与引擎同一前置，spec §3.4 抵押锁升级）。
+ */
+describe('ai 步骤合法性：抵押锁升级（M20.3 回归）', () => {
+  const setup = () => {
+    const g = createGame({ seed: 3 });
+    const me = currentPlayer(g.state);
+    me.pos = 1;
+    me.cash = 5000;
+    g.state.phase = 'settled';
+    g.state.estates[1] = { index: 1, owner: me.id, level: 2, processing: false };
+    return { g, me };
+  };
+
+  it('未抵押 → 激进性格规划 upgrade', () => {
+    const { g } = setup();
+    expect(decideTurn(g.state, 'aggressive').some((s) => s.kind === 'upgrade')).toBe(true);
+  });
+
+  it('抵押该地块 → 不再规划 upgrade，且计划仍以 end 收口（可换手推进）', () => {
+    const { g, me } = setup();
+    me.mortgages = [{ principal: 200, rate: 0.04, due: g.state.round + 6, overdue: 0, index: 1 }];
+    const plan = decideTurn(g.state, 'aggressive');
+    expect(plan.some((s) => s.kind === 'upgrade')).toBe(false);
+    expect(plan[plan.length - 1]).toEqual({ kind: 'end' });
+    const before = g.state.current;
+    applyStep(g, { kind: 'end' });
+    expect(g.state.current).not.toBe(before);
+  });
+
+  it('根因复现：抵押地块上的 upgrade 被引擎拒绝（ok:false / mortgaged，state 不变）', () => {
+    const { g, me } = setup();
+    me.mortgages = [{ principal: 200, rate: 0.04, due: g.state.round + 6, overdue: 0, index: 1 }];
+    const before = JSON.stringify(g.state.estates);
+    expect(applyStep(g, { kind: 'upgrade' })).toEqual({ ok: false, reason: 'mortgaged' });
+    expect(JSON.stringify(g.state.estates)).toBe(before);
+  });
+});
