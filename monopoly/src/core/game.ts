@@ -28,7 +28,7 @@ import {
 } from './special';
 import { BANK_TILE_INDEX, DEPOSIT_RATE, LOAN_RATE, LOAN_TERM, MORTGAGE_RATE, MORTGAGE_TERM } from '../data/bank';
 import {
-  loanLimitOf, mortgageLimitOf, overdueOf, type DebtBook, type MortgageBook,
+  loanLimitOf, mortgageLimitOf, overdueOf, penaltyOf, type DebtBook, type MortgageBook,
 } from './bank';
 import { abilityOfPlayer, type AbilityDef } from '../data/abilities';
 import { personaParams, type AiParams, type Persona, type Seat } from '../data/ai';
@@ -189,7 +189,7 @@ export type SettleResult =
   | { kind: 'start'; index: number }
   | { kind: 'vacant'; index: number; price: number }
   | { kind: 'own'; index: number; level: number }
-  | { kind: 'rent'; index: number; owner: number; rent: number; paid: number; sold: number[]; bankrupt: boolean; waived?: boolean }
+  | { kind: 'rent'; index: number; owner: number; rent: number; paid: number; sold: number[]; bankrupt: boolean; waived?: boolean; penalty?: number }
   | { kind: 'fate'; index: number; cardId: string; effect: FateEffect }
   | { kind: 'chance'; index: number; cardId: string; effect: ChanceEffect }
   | { kind: 'jail'; index: number; turns: number; waived: boolean }
@@ -582,6 +582,42 @@ export function createGame(opts: GameOptions = {}): Game {
       : { kind: 'start', index };
   };
 
+  /** 该玩家是否存在逾期中的债务（信用贷款或任一笔抵押；spec §3.4 链一） */
+  const hasOverdueDebt = (p: Player): boolean =>
+    (p.loan?.overdue ?? 0) > 0 || p.mortgages.some((m) => m.overdue > 0);
+
+  /** 把一笔金额按「信用贷款 → 抵押（index 升序）」顺序冲减本金；本金归零即移除（抵押地块随之解锁） */
+  const applyToPrincipal = (p: Player, amount: number): void => {
+    let left = amount;
+    if (p.loan && left > 0) {
+      const pay = Math.min(left, p.loan.principal);
+      p.loan.principal -= pay;
+      left -= pay;
+      if (p.loan.principal <= 0) p.loan = null;
+    }
+    for (let k = 0; k < p.mortgages.length && left > 0; k++) {
+      const m = p.mortgages[k];
+      const pay = Math.min(left, m.principal);
+      m.principal -= pay;
+      left -= pay;
+      if (m.principal <= 0) { p.mortgages.splice(k, 1); k -= 1; }
+    }
+  };
+
+  /**
+   * 逾期罚息（spec §3.4 链一）：付款人逾期时额外付 `rent × 50%`，直冲欠款本金、不给地主。
+   * 返回实际计入本金的金额与是否因清算挂起。
+   */
+  const chargeOverduePenalty = (p: Player, rent: number): { penalty: number; suspended: boolean } => {
+    if (p.bankrupt || !hasOverdueDebt(p)) return { penalty: 0, suspended: false };
+    const penalty = penaltyOf(rent);
+    if (penalty <= 0) return { penalty: 0, suspended: false };
+    const d = settleDebt(p, penalty, null);
+    if (d === 'suspended') return { penalty, suspended: true };
+    applyToPrincipal(p, d.paid);
+    return { penalty, suspended: false };
+  };
+
   const settleCurrent = (): SettleResult => {
     if (state.phase !== 'moved') throw new Error(`[mono] settleCurrent @phase=${state.phase}`);
     const p = currentPlayer(state);
@@ -610,9 +646,18 @@ export function createGame(opts: GameOptions = {}): Game {
         } else {
           const debt = settleDebt(p, rent, owner);
           if (doubled && owner && base > 0) state.doubleRent[owner.id - 1] = false;
-          result = debt === 'suspended'
-            ? auctionSettle(index)
-            : { kind: 'rent', index, owner: e.owner, rent, paid: debt.paid, sold: debt.sold, bankrupt: debt.bankrupt };
+          if (debt === 'suspended') {
+            result = auctionSettle(index);
+          } else {
+            /* 逾期罚息：额外 50% 直冲欠款本金（不给地主；spec §3.4 链一） */
+            const pen = chargeOverduePenalty(p, rent);
+            result = pen.suspended
+              ? auctionSettle(index)
+              : {
+                kind: 'rent', index, owner: e.owner, rent, paid: debt.paid, sold: debt.sold,
+                bankrupt: debt.bankrupt, ...(pen.penalty > 0 ? { penalty: pen.penalty } : {}),
+              };
+          }
         }
       }
     } else if (specialAt(index) === 'jail') {

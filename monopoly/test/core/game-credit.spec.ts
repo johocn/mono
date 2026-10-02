@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { createGame, creditLocked, type Game } from '../../src/core/game';
-import { START_CASH } from '../../src/data/economy';
+import { rentOf, START_CASH } from '../../src/data/economy';
 import { LOAN_RATE, LOAN_TERM, MORTGAGE_RATE, MORTGAGE_TERM } from '../../src/data/bank';
+import { penaltyOf } from '../../src/core/bank';
 import type { Dice } from '../../src/core/dice';
 
 /** 固定点数骰：走位可预期 */
@@ -229,5 +230,40 @@ describe('M20.2 信贷 · 轮末计息与逾期推进（spec §3.3 / §3.4）', 
     g.state.players[0].deposit = 1000;
     passRound(g);
     expect(g.state.players[0].deposit).toBe(1000);
+  });
+});
+
+describe('M20.2 信贷 · 逾期付租罚息（spec §3.4 链一）', () => {
+  /** 让 2 号玩家（逾期）走到 1 号格向 1 号玩家付租 */
+  const rentFromOverdue = (g: Game) => {
+    giveEstate(g);
+    g.state.hands[1] = g.state.hands[1].filter((k) => k !== 'pardon');
+    g.state.current = 1;
+    g.state.players[1].pos = 0;
+    g.state.players[1].cash = 3000;
+    g.rollDice();
+    g.moveCurrent();
+    return g.settleCurrent();
+  };
+
+  it('逾期玩家付租额外 +50% 直冲本金，地主只收原租金', () => {
+    const g = createGame({ dice: step(1) });
+    g.state.players[1].loan = { principal: 500, rate: LOAN_RATE, due: 1, overdue: 2 };
+    const ownerBefore = g.state.players[0].cash;
+    const r = rentFromOverdue(g);
+    const rent = rentOf(1);
+    expect(r.kind).toBe('rent');
+    expect(r.kind === 'rent' ? r.penalty : 0).toBe(penaltyOf(rent));
+    expect(g.state.players[0].cash).toBe(ownerBefore + rent);
+    expect(g.state.players[1].cash).toBe(3000 - rent - penaltyOf(rent));
+    expect(g.state.players[1].loan?.principal).toBe(500 - penaltyOf(rent));
+  });
+
+  it('未逾期玩家无罚息', () => {
+    const g = createGame({ dice: step(1) });
+    g.state.players[1].loan = { principal: 500, rate: LOAN_RATE, due: 99, overdue: 0 };
+    const r = rentFromOverdue(g);
+    expect(r.kind === 'rent' ? r.penalty : 0).toBeUndefined();
+    expect(g.state.players[1].loan?.principal).toBe(500);
   });
 });
