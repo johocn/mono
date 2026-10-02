@@ -23,8 +23,10 @@ export const PANEL_D = fb({
   /* 卡背（未翻面） */
   backR: 10, backFill: '#2b3566', backEdge: '#6b7ff0', backEdgeW: 1.2,
   backInR: 6, backInInset: 8, backInFill: '#1c2440',
-  /* 行情行：两行（上排 代码/名称/现价/涨跌，下排 持股/市值） */
+  /* 行情行：两行（上排 代码/名称/现价/涨跌，下排 持股/市值）；
+     `state.selected` = 逐行选中的标的（M20.3-B 版式 A）：换描边色 + 加粗，不改任何文字偏移 */
   rowR: 6, rowFill: '#16221e', rowEdge: '#2a3830', rowEdgeW: 1,
+  rowEdgeSel: '#f5c451', rowEdgeSelW: 2,
   rowTopDy: -8, rowBotDy: 9,
   codeDx: -146, codeFs: 11, nameDx: -92, nameFs: 11,
   priceDx: 26, priceFs: 12, changeDx: 96, changeFs: 11,
@@ -148,9 +150,13 @@ export const uiStockRow: ProcPreset = (g, ctx) => {
   const h = box.h * s;
   const change = typeof state.change === 'number' ? state.change : 0;
   const changeFill = change > 0 ? S(params, 'upFill') : change < 0 ? S(params, 'downFill') : S(params, 'flatFill');
+  const sel = state.selected === true;
   g.roundRect(cx - w / 2, cy - h / 2, w, h, G(params, 'rowR'))
     .fill({ color: S(params, 'rowFill') })
-    .stroke({ color: S(params, 'rowEdge'), width: G(params, 'rowEdgeW') });
+    .stroke({
+      color: sel ? S(params, 'rowEdgeSel') : S(params, 'rowEdge'),
+      width: sel ? G(params, 'rowEdgeSelW') : G(params, 'rowEdgeW'),
+    });
   if (!text) return;
   const y1 = cy + G(params, 'rowTopDy');
   const y2 = cy + G(params, 'rowBotDy');

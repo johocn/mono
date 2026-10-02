@@ -10,7 +10,8 @@
  */
 import { PLAYER_NAME, RING_SIZE, brandAt } from '../data/board';
 import { ITEM_CARDS, type ItemCardKind } from '../data/cards';
-import { SHARE_LOT, STOCKS, STOCK_TILE_INDEX } from '../data/stocks';
+import { LEVERAGES, LOT_TIERS, MARGIN_UNLOCK_ROUND, STOCKS, STOCK_TILE_INDEX, type LotTier } from '../data/stocks';
+import { lotShares } from '../core/stocks';
 import {
   BANK_DEPOSIT_BONUS, BANK_TILE_INDEX, DEPOSIT_RATE, LOAN_NET_RATIO, LOAN_RATE, LOAN_TERM,
   MORTGAGE_LTV, MORTGAGE_RATE, MORTGAGE_TERM,
@@ -36,19 +37,21 @@ import {
   PANEL_CLOSE_X, PANEL_CLOSE_Y, PANEL_CX, PANEL_DEBT_CX, PANEL_DEBT_CY, PANEL_DRAW_X, PANEL_DRAW_Y,
   PANEL_HAND_BAR_H, PANEL_HAND_BAR_W, PANEL_HAND_BAR_Y, PANEL_HAND_Y,
   PANEL_PREVIEW_W, PANEL_PREVIEW_X,
-  PANEL_ROW_GAP, PANEL_ROW_H, PANEL_ROW_W, PANEL_ROW_X, PANEL_SETTLE_ROW_GAP,
+  PANEL_ROW_H, PANEL_ROW_W, PANEL_ROW_X, PANEL_SETTLE_ROW_GAP,
   PANEL_SETTLE_ROW_H, PANEL_SETTLE_ROW_Y, PANEL_SLOT_GAP, PANEL_SLOT_H, PANEL_SLOT_W,
-  PANEL_SLOT_X0, PANEL_STOCK_ROW_Y, PANEL_STORE_DESC_DY, PANEL_STORE_LINE_W, PANEL_STORE_ROW_GAP,
+  PANEL_SLOT_X0, PANEL_STOCK_BUY_Y, PANEL_STOCK_LEV_GAP, PANEL_STOCK_LEV_X0, PANEL_STOCK_LEV_Y,
+  PANEL_STOCK_ROW_GAP, PANEL_STOCK_ROW_Y, PANEL_STOCK_SELL_Y,
+  PANEL_STOCK_TIER_GAP, PANEL_STOCK_TIER_H, PANEL_STOCK_TIER_S, PANEL_STOCK_TIER_W,
+  PANEL_STOCK_TIER_X0, PANEL_STOCK_Y, PANEL_STORE_DESC_DY, PANEL_STORE_LINE_W, PANEL_STORE_ROW_GAP,
   PANEL_STORE_ROW_H, PANEL_STORE_ROW_Y0,
-  PANEL_TRADE_GAP, PANEL_TRADE_H, PANEL_TRADE_W,
-  PANEL_TRADE_X0, PANEL_TRADE_Y, PANEL_X, PANEL_Y, STAGE_W,
+  PANEL_X, PANEL_Y, STAGE_W,
 } from '../skin/layout';
 
 /** 浮层动作位（DOM 命中层 `data-action`；`data-target` 给目标格号 / 股票代码 / 银行产品 / 出价金额） */
 export type PanelActionId =
   | 'card:bomb' | 'card:barrier' | 'card:teleport' | 'card:doubleRent' | 'card:demolish'
   | 'card:cancel'
-  | 'stock:buy' | 'stock:sell' | 'card:close' | 'settle:close'
+  | 'stock:buy' | 'stock:sell' | 'stock:select' | 'stock:lev' | 'card:close' | 'settle:close'
   | 'auction:bid' | 'auction:pass'
   /* M20.2 银行信贷（spec §3.8）：选中产品行 + 六个 API + 关闭 */
   | 'bank:select' | 'bank:deposit' | 'bank:withdraw' | 'bank:borrow' | 'bank:repay'
@@ -73,6 +76,16 @@ export interface StoreUiState {
   open: boolean;
   sel: ItemCardKind;
 }
+
+/** M20.3-B 股票浮层 UI 态（`main.ts` 持有；`sel` = 逐行选中的标的代码，`lev` = 杠杆倍数，1 = 不加杠杆）。
+ *  与 `BankUiState` / `StoreUiState` 同规打包成一个参数，避免 `panelSpecs` / `panelHitAreas` 再摊两个位置参数。 */
+export interface StockUiState {
+  sel: string;
+  lev: number;
+}
+
+/** 股票浮层 UI 态缺省值（选中首支标的、不加杠杆）——两处调用点共用，避免字面量漂移 */
+export const STOCK_UI_DEFAULTS: StockUiState = { sel: STOCKS[0].code, lev: 1 };
 
 /** 浮层可见态（优先级：拍卖 > 结算 > 银行 > 商店 > 股票盘 > 抽卡翻牌；无 → null） */
 export type OverlayKind = 'auction' | 'settle' | 'bank' | 'store' | 'stock' | 'draw';
@@ -192,15 +205,106 @@ export interface StockRowView {
   change: number;
   shares: number;
   value: number;
+  /** 是否为当前选中标的（版式 A 靠它高亮整行；恰有一行为 true） */
+  selected: boolean;
 }
 
-export function stockRows(state: GameState): StockRowView[] {
+export function stockRows(state: GameState, sel: string = STOCKS[0].code): StockRowView[] {
   const pf = state.portfolios[state.current] ?? {};
   return STOCKS.map((d) => {
     const price = state.quotes[d.code] ?? d.price0;
     const shares = pf[d.code]?.shares ?? 0;
-    return { code: d.code, name: d.name, price, change: price - d.price0, shares, value: shares * price };
+    return {
+      code: d.code, name: d.name, price, change: price - d.price0,
+      shares, value: shares * price, selected: d.code === sel,
+    };
   });
+}
+
+/** 单支标的的账户口径（spec §6.1）：行情 + 持仓 + 现金 + 保证金借入本金，UI 一律从这里读、不另算 */
+export interface StockDetailView {
+  code: string;
+  name: string;
+  price: number;
+  change: number;
+  shares: number;
+  value: number;
+  /** 累计买入成本（只计自有资金，与 `game.trade` 杠杆买入的口径一致） */
+  cost: number;
+  cash: number;
+  /** 保证金借入本金（无杠杆 → 0）；走势图角标据此提示「借款 ￥N」 */
+  margin: number;
+}
+
+export function stockDetail(state: GameState, code: string): StockDetailView {
+  const def = STOCKS.find((d) => d.code === code) ?? STOCKS[0];
+  const p = currentPlayer(state);
+  const price = state.quotes[def.code] ?? def.price0;
+  const h = state.portfolios[p.id - 1]?.[def.code] ?? null;
+  const shares = h?.shares ?? 0;
+  return {
+    code: def.code, name: def.name, price, change: price - def.price0,
+    shares, value: shares * price, cost: h?.cost ?? 0,
+    cash: p.cash, margin: p.margin?.principal ?? 0,
+  };
+}
+
+/* —— 数量档（M20.3-B spec §6.1：买 / 卖各三档）—— */
+
+/** 三档序列：`1 手 / 5 手 / 全仓`（前两档定值来自 `LOT_TIERS`，第三档按可用量推导） */
+export const TIER_SEQ: LotTier[] = [...LOT_TIERS, 'all'];
+
+/** `data-target` 第二段的档位编码（整数档写数字，全仓写 `all`） */
+export function tierKey(tier: LotTier): string {
+  return tier === 'all' ? 'all' : String(tier);
+}
+
+/**
+ * 档位 → 实际成交股数（买 / 卖共用；`main.ts` 点击时用同一函数换算，杜绝「UI 显示的与成交的不一致」）。
+ * **不可用即 0**：定值档在可用量不足时返回 0（而不是悄悄减量），部分量只有「全仓」一档出口。
+ * 杠杆买入按 `game.trade` 的 `own = ⌈成本 / 倍数⌉ ≤ 现金` 折成等效现金上界 `⌊现金 × 倍数 / 现价⌋`。
+ */
+export function tierShares(
+  state: GameState, code: string, side: 'buy' | 'sell', tier: LotTier, leverage = 1,
+): number {
+  const d = stockDetail(state, code);
+  const cash = side === 'buy' ? d.cash * Math.max(1, leverage) : d.cash;
+  const cap = lotShares(tier, d.price, cash, d.shares, side);
+  return tier === 'all' ? cap : (cap >= tier ? tier : 0);
+}
+
+export interface StockTierView {
+  tier: LotTier;
+  label: string;
+  /** 成交股数；0 = 该档不可用 */
+  shares: number;
+  enabled: boolean;
+}
+
+/** 三档视图：`enabled ⟺ shares > 0`（**定值档不足即整档禁用**——持 3 股时「卖 5 手」禁用，不是悄悄卖 3 股） */
+export function stockTiers(
+  state: GameState, code: string, side: 'buy' | 'sell', leverage = 1,
+): StockTierView[] {
+  const verb = side === 'buy' ? '买' : '卖';
+  return TIER_SEQ.map((tier) => {
+    const shares = tierShares(state, code, side, tier, leverage);
+    return {
+      tier,
+      label: tier === 'all' ? `${verb}全仓` : `${verb} ${tier} 手`,
+      shares,
+      enabled: shares > 0,
+    };
+  });
+}
+
+/** 三档按键的左上角 x（买 / 卖同列居中；370 宽内 3×105 + 2×8 = 331） */
+export function tierX(i: number): number {
+  return PANEL_STOCK_TIER_X0 + i * (PANEL_STOCK_TIER_W + PANEL_STOCK_TIER_GAP);
+}
+
+/** 杠杆分段的段位（1 = 不加杠杆 / 2× / 3×；段间用 `ui.qk` 的 `enabled` 表选中态） */
+export function leverageChips(): { lev: number; label: string }[] {
+  return [{ lev: 1, label: '无' }, ...LEVERAGES.map((l) => ({ lev: l, label: `${l}×` }))];
 }
 
 /* —— 抽卡翻牌 —— */
@@ -482,6 +586,7 @@ export function panelSpecs(
   state: GameState, handOpen = false, sel: TargetingView | null = null,
   bank: BankUiState = { open: false, sel: 'deposit' }, handScroll = 0,
   store: StoreUiState = { open: false, sel: STORE_CATALOG[0].kind },
+  stock: StockUiState = STOCK_UI_DEFAULTS,
 ): ElementSpec[] {
   const out: ElementSpec[] = [];
   let r = 0;
@@ -593,25 +698,41 @@ export function panelSpecs(
     push('ui.qk', PANEL_BANK_CLOSE_X + HUD_QK_W / 2, PANEL_BANK_CLOSE_Y + HUD_QK_H / 2,
       { label: '关闭', enabled: true });
   } else if (overlay === 'stock') {
-    push('showcase.panel', PANEL_X, PANEL_Y);
+    /* 版式 A（spec §6.1）：底板加高到 330（300..630，不压底坞资产条）。
+       自上而下：角标 → 四行标的（可点选中，恰一行高亮）→ 走势图（跟随选中标的）→
+       杠杆分段（第 8 轮起才产出）→ 买三档 → 卖三档。台位与 `panelHitAreas` 一一对应。 */
+    push('showcase.panelStock', PANEL_X, PANEL_STOCK_Y);
     push('ui.badge', PANEL_CX, PANEL_BADGE_Y, { text: '股票交易所' });
-    const rows = stockRows(state);
-    rows.forEach((row, i) => {
+    stockRows(state, stock.sel).forEach((row, i) => {
       push('ui.stockRow', PANEL_ROW_X + PANEL_ROW_W / 2,
-        PANEL_STOCK_ROW_Y + PANEL_ROW_H / 2 + i * (PANEL_ROW_H + PANEL_ROW_GAP),
-        { code: row.code, name: row.name, price: row.price, change: row.change, shares: row.shares, value: row.value });
+        PANEL_STOCK_ROW_Y + PANEL_ROW_H / 2 + i * (PANEL_ROW_H + PANEL_STOCK_ROW_GAP),
+        {
+          code: row.code, name: row.name, price: row.price, change: row.change,
+          shares: row.shares, value: row.value, selected: row.selected,
+        });
     });
-    const first = rows[0];
+    const detail = stockDetail(state, stock.sel);
     push('ui.stockChart', PANEL_CHART_X + PANEL_CHART_W / 2, PANEL_CHART_Y + PANEL_CHART_H / 2,
-      { series: state.priceHistory[first.code] ?? [first.price], label: `${first.code} 走势` });
-    /* 可见买/卖键（台位与 `panelHitAreas` 完全一致；观感复用 `uiButton` preset） */
-    const cash = state.players[state.current].cash;
-    push('ui.tradeBuy',
-      PANEL_TRADE_X0 + PANEL_TRADE_W / 2, PANEL_TRADE_Y + PANEL_TRADE_H / 2,
-      { label: `买 ${SHARE_LOT}`, enabled: cash >= first.price });
-    push('ui.tradeSell',
-      PANEL_TRADE_X0 + PANEL_TRADE_W + PANEL_TRADE_GAP + PANEL_TRADE_W / 2, PANEL_TRADE_Y + PANEL_TRADE_H / 2,
-      { label: `卖 ${SHARE_LOT}`, enabled: first.shares > 0 });
+      {
+        series: state.priceHistory[detail.code] ?? [detail.price],
+        /* 有保证金负债时角标补一句，杠杆局里玩家据此知道自己欠多少 */
+        label: detail.margin > 0 ? `${detail.code} 走势 · 借款 ￥${detail.margin}` : `${detail.code} 走势`,
+      });
+    if (state.round >= MARGIN_UNLOCK_ROUND) {
+      leverageChips().forEach((c, i) => {
+        push('ui.qk', PANEL_STOCK_LEV_X0 + HUD_QK_W / 2 + i * (HUD_QK_W + PANEL_STOCK_LEV_GAP),
+          PANEL_STOCK_LEV_Y + HUD_QK_H / 2, { label: c.label, enabled: c.lev === stock.lev });
+      });
+    }
+    /* 买 / 卖各三档（可见键与 `panelHitAreas` 同源 `stockTiers`，启用判据不会漂） */
+    stockTiers(state, stock.sel, 'buy', stock.lev).forEach((t, i) => {
+      push('ui.tradeBuy', tierX(i) + PANEL_STOCK_TIER_W / 2, PANEL_STOCK_BUY_Y + PANEL_STOCK_TIER_H / 2,
+        { label: t.label, enabled: t.enabled }, PANEL_STOCK_TIER_S);
+    });
+    stockTiers(state, stock.sel, 'sell').forEach((t, i) => {
+      push('ui.tradeSell', tierX(i) + PANEL_STOCK_TIER_W / 2, PANEL_STOCK_SELL_Y + PANEL_STOCK_TIER_H / 2,
+        { label: t.label, enabled: t.enabled }, PANEL_STOCK_TIER_S);
+    });
   } else if (overlay === 'draw') {
     const card = drawCard(state);
     if (card) {
@@ -648,6 +769,7 @@ export function panelHitAreas(
   state: GameState, handOpen = false, sel: TargetingView | null = null,
   bank: BankUiState = { open: false, sel: 'deposit' }, handScroll = 0,
   store: StoreUiState = { open: false, sel: STORE_CATALOG[0].kind },
+  stock: StockUiState = STOCK_UI_DEFAULTS,
 ): PanelHit[] {
   const out: PanelHit[] = [];
   if (sel !== null) {
@@ -751,16 +873,37 @@ export function panelHitAreas(
       w: PANEL_CLOSE_W, h: PANEL_CLOSE_H, enabled: true,
     });
   } else if (overlay === 'stock') {
-    const first = stockRows(state)[0];
-    const cash = state.players[state.current].cash;
-    out.push({
-      action: 'stock:buy', target: first.code, x: PANEL_TRADE_X0, y: PANEL_TRADE_Y,
-      w: PANEL_TRADE_W, h: PANEL_TRADE_H, enabled: cash >= first.price,
+    /* 与 `panelSpecs` 股票分支同源：四行选中（`stock:select`，target = code）+ 杠杆分段 +
+       买 / 卖各三档。买 / 卖键的 `data-target` 编码为 `${code}:${tier}`（`tier ∈ '1' | '5' | 'all'`），
+       由 `main.ts` 拆开后再走 `tierShares` 换算股数——UI 与成交口径共用同一函数。 */
+    stockRows(state, stock.sel).forEach((row, i) => {
+      out.push({
+        action: 'stock:select', target: row.code,
+        x: PANEL_ROW_X, y: PANEL_STOCK_ROW_Y + i * (PANEL_ROW_H + PANEL_STOCK_ROW_GAP),
+        w: PANEL_ROW_W, h: PANEL_ROW_H, enabled: true,
+      });
     });
-    out.push({
-      action: 'stock:sell', target: first.code,
-      x: PANEL_TRADE_X0 + PANEL_TRADE_W + PANEL_TRADE_GAP, y: PANEL_TRADE_Y,
-      w: PANEL_TRADE_W, h: PANEL_TRADE_H, enabled: first.shares > 0,
+    if (state.round >= MARGIN_UNLOCK_ROUND) {
+      leverageChips().forEach((c, i) => {
+        out.push({
+          action: 'stock:lev', target: c.lev,
+          x: PANEL_STOCK_LEV_X0 + i * (HUD_QK_W + PANEL_STOCK_LEV_GAP), y: PANEL_STOCK_LEV_Y,
+          w: HUD_QK_W, h: HUD_QK_H, enabled: true,
+        });
+      });
+    }
+    const enc = (tier: LotTier): string => `${stock.sel}:${tierKey(tier)}`;
+    stockTiers(state, stock.sel, 'buy', stock.lev).forEach((t, i) => {
+      out.push({
+        action: 'stock:buy', target: enc(t.tier), x: tierX(i), y: PANEL_STOCK_BUY_Y,
+        w: PANEL_STOCK_TIER_W, h: PANEL_STOCK_TIER_H, enabled: t.enabled,
+      });
+    });
+    stockTiers(state, stock.sel, 'sell').forEach((t, i) => {
+      out.push({
+        action: 'stock:sell', target: enc(t.tier), x: tierX(i), y: PANEL_STOCK_SELL_Y,
+        w: PANEL_STOCK_TIER_W, h: PANEL_STOCK_TIER_H, enabled: t.enabled,
+      });
     });
   }
   return out;

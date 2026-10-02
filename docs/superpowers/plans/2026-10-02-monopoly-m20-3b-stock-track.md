@@ -113,18 +113,19 @@
 
 ## Task 4：版式常量与股票浮层 A（`skin/layout.ts` + `ui/panels.ts`）
 
-- [ ] `src/skin/layout.ts` 新增：`PANEL_STOCK_PANEL_H = 360`、`PANEL_STOCK_LEV_Y`、`PANEL_STOCK_BUY_Y`、`PANEL_STOCK_SELL_Y`、
-      `PANEL_STOCK_TIER_W`、`PANEL_STOCK_TIER_GAP`、`PANEL_STOCK_TIER_H`（三档横排，370 宽内均分）；附中文注释说明各段与 `PANEL_STOCK_ROW_Y / PANEL_CHART_Y` 的垂直顺序（行 336..496 → 图 502..556 → 杠杆 → 买档 → 卖档 → 面板底 652）。
-- [ ] `src/ui/panels.ts`：`stockRows(state, sel)` 增第二参 `sel: string`，`StockRowView` 增 `selected: boolean`。
-- [ ] `src/ui/panels.ts`：新增 `stockDetail(state, code)`（现价 / 涨跌 / 持股 / 市值 / 现金 / 借款 / 可用自有资金）与
-      `lotShares(tier, price, cash, held)`（档位 → 股数；导出以便单测与 `main.ts` 共用）。
-- [ ] `src/ui/panels.ts`：`panelSpecs` 股票分支改为版式 A——`showcase.panel` 用 `PANEL_STOCK_PANEL_H`；4 行 `ui.stockRow` 带 `selected`；
-      `ui.stockChart` 跟随 `sel`；`round >= MARGIN_UNLOCK_ROUND` 时推 `ui.qk` ×3（「无 / 2× / 3×」）；买三档 / 卖三档各 3 键（`ui.tradeBuy` / `ui.tradeSell`），启用判据走 `lotShares`。
-- [ ] `src/ui/panels.ts`：`panelHitAreas` 股票分支暴露 4 行选中键（`stock:select`，`target = code`）+ 杠杆键（`stock:lev`）+ 6 档键，
-      `data-target` 编码 `` `${code}:${tier}` ``（`tier ∈ '1' | '5' | 'all'`）；`panelHitAreas` 签名增 `stockSel` / `stockLev` 参数（带默认值，保持既有调用零改动）。
-- [ ] `test/ui/panels.spec.ts`：改写既有股票断言 → 断言 4 行且恰一行 `selected`、`ui.stockChart` 跟随 `sel`、`round >= 8` 才有 `ui.qk`、买三档 / 卖三档各 3 键、命中区 `code:tier` 编码与禁用态（持股 0 时卖档全禁用）。
-- [ ] `local/mono-shots-m5.mjs`：同步第 215–239 行股票断言（`ui.stockRow` 计数、`buyLabel` 由 `买 1` 改为三档）。
-- [ ] 跑 `npx tsc --noEmit` 与 `npx vitest run test/ui/panels.spec.ts`。
+- [x] `src/skin/layout.ts` 新增：`PANEL_STOCK_W/PANEL_STOCK_PANEL_H = 370/330`（新增注册项 `showcase.panelStock`，300..630，不压底坞资产条 632）、`PANEL_STOCK_ROW_Y = 336` / `PANEL_STOCK_ROW_GAP = 4`、`PANEL_CHART_*`、`PANEL_STOCK_LEV_Y`、`PANEL_STOCK_BUY_Y`、`PANEL_STOCK_SELL_Y`（由买档顶 + 档高 + 3 推导）、
+      `PANEL_STOCK_TIER_S = 0.7` 与由基座常量推导的 `PANEL_STOCK_TIER_W/H`（= `ui.tradeBuy`/`ui.tradeSell` 的 box 150×38 × 0.7，渲染侧与命中侧写出同一表达式，避免浮点漂移）、`PANEL_STOCK_TIER_GAP`、`PANEL_STOCK_TIER_X0`；附中文注释说明各段垂直顺序（角标 305..331 → 标的行 ×4 336..484 → 走势图 487..541 → 杠杆 544..566 → 买档 569..595.6 → 卖档 598.6..625.2 → 面板底 630）。
+- [x] `src/ui/panels.ts`：`stockRows(state, sel)` 增第二参 `sel: string`，`StockRowView` 增 `selected: boolean`。
+- [x] `src/ui/panels.ts`：新增 `stockDetail(state, code)`（现价 / 涨跌 / 持股 / 市值 / 现金 / 借款）与
+      `tierShares` / `stockTiers` / `leverageChips`（档位 → 股数；底层换算走 `core/stocks.ts` 的 `lotShares`，导出以便单测与 `main.ts` 共用）。
+- [x] `src/ui/panels.ts`：`panelSpecs` 股票分支改为版式 A——底板换新增注册项 `showcase.panelStock`（370×330）；4 行 `ui.stockRow` 带 `selected`；
+      `ui.stockChart` 跟随 `sel`；`round >= MARGIN_UNLOCK_ROUND` 时推 `ui.qk` ×3（「无 / 2× / 3×」）；买三档 / 卖三档各 3 键（`ui.tradeBuy` / `ui.tradeSell`，缩 `s=0.7`），启用判据走 `stockTiers`。
+- [x] `src/ui/panels.ts`：`panelHitAreas` 股票分支暴露 4 行选中键（`stock:select`，`target = code`）+ 杠杆键（`stock:lev`）+ 6 档键，
+      `data-target` 编码 `` `${code}:${tier}` ``（`tier ∈ '1' | '5' | 'all'`）；`panelHitAreas` / `panelSpecs` 签名末位增 `stock: StockUiState` 参数（带默认值，保持既有调用零改动）。
+- [x] `test/ui/panels.spec.ts`：改写既有股票断言 → 断言 4 行且恰一行 `selected`、`ui.stockChart` 跟随 `sel`、`round >= 8` 才有 `ui.qk`、买三档 / 卖三档各 3 键、命中区 `code:tier` 编码与禁用态（持股 0 时卖档全禁用）；另有两个历史股票单测同步改为三档口径。
+- [x] `local/mono-shots-m5.mjs`：同步股票断言（`ui.stockRow` 计数、买键改点 `data-target="SY01:1"`、`buyLabels` 三档、`sellAfter` 3、底板 `showcase.panelStock`、`stock:select` 4 键）。
+- [x] 新增注册项 `showcase.panelStock`（`registry.ts` + `public/skins/default/skin.json`）与 `ui.stockRow` 选中态（`proc-panel.ts`）；`npm run lint:skin` 通过。
+- [x] 跑 `npx tsc --noEmit` 与 `npx vitest run test/ui/panels.spec.ts`（31 绿）。
 - [ ] 提交：`git -C d:\zhao add monopoly/src/skin/layout.ts monopoly/src/ui/panels.ts monopoly/test/ui/panels.spec.ts monopoly/local/mono-shots-m5.mjs` → `-m 'M20.3-B Task4: 股票浮层 A 版式（选中行 + 买三档/卖三档）'`。
 
 ## Task 5：涨跌卡浮层纯函数（`ui/panels.ts`）

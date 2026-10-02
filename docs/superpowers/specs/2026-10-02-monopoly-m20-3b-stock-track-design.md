@@ -165,16 +165,16 @@ useCard(kind: ItemCardKind, target?: number, stock?: StockPlay): CardOutcome
 
 ### 6.1 股票浮层 · 版式 A
 
-面板 `370×360 @ (10, 292)`（原 300 高 → 360；浮层本就覆盖手牌行，不遮 HUD）。
+面板 `370×330 @ (10, 300)`（原 300 高 → 330；新增注册项 `showcase.panelStock`，底缘 630 **不压底坞资产条 632**，与 `showcase.panelTall` 同口径；浮层本就覆盖手牌行，代价是盖住底坞状态行 606..630，骰子 684 与主按钮 738 不受影响）。
 
 | 区域 | 台位 | 元素 | 说明 |
 | --- | --- | --- | --- |
-| 角标 | `PANEL_BADGE_Y` | `ui.badge` | 「股票交易所」 |
-| 标的行 ×4 | `PANEL_STOCK_ROW_Y=336`，行高 `PANEL_ROW_H=34` / 间距 6 | `ui.stockRow` | 可点选中；选中行加 `selected`，行内含 现价 / 涨跌 / 持股 / 市值 |
-| 走势图 | `PANEL_CHART_Y` | `ui.stockChart` | **跟随选中标的**（原恒为第一支） |
-| 杠杆分段 | `PANEL_STOCK_LEV_Y` | `ui.qk` ×3 | 「无 / 2× / 3×」；`round < 8` 时整行不产出 |
-| 买三档 | `PANEL_STOCK_BUY_Y` | `ui.tradeBuy` ×3 | 「买 1 手 / 买 5 手 / 买全仓」 |
-| 卖三档 | `PANEL_STOCK_SELL_Y` | `ui.tradeSell` ×3 | 「卖 1 手 / 卖 5 手 / 卖全仓」；持股不足该档 → 禁用 |
+| 角标 | `PANEL_BADGE_Y=318` | `ui.badge` | 「股票交易所」 |
+| 标的行 ×4 | `PANEL_STOCK_ROW_Y=336`，行高 `PANEL_ROW_H=34` / 间距 `PANEL_STOCK_ROW_GAP=4`（336..484） | `ui.stockRow` | 可点选中；选中行加 `selected`（金色描边），行内含 现价 / 涨跌 / 持股 / 市值 |
+| 走势图 | `PANEL_CHART_Y=487`（300×54，**不缩放**） | `ui.stockChart` | **跟随选中标的**（原恒为第一支） |
+| 杠杆分段 | `PANEL_STOCK_LEV_Y=544` | `ui.qk` ×3（72×22，x0=81） | 「无 / 2× / 3×」；`round < 8` 时整行不产出 |
+| 买三档 | `PANEL_STOCK_BUY_Y=569` | `ui.tradeBuy` ×3（缩 `s=0.7` → 105×26.6） | 「买 1 手 / 买 5 手 / 买全仓」 |
+| 卖三档 | `PANEL_STOCK_SELL_Y`（= 买档顶 + 26.6 + 3 ≈ 598.6） | `ui.tradeSell` ×3（同上缩放） | 「卖 1 手 / 卖 5 手 / 卖全仓」；持股不足该档 → 禁用 |
 
 - 命中区 `data-target` 编码为 `` `${code}:${tier}` ``（`tier ∈ '1' | '5' | 'all'`），由 `main.ts` 解析。
 - 新增 UI 态：`stockSel`（默认 `STOCKS[0].code`）、`stockLev`（默认 1）。

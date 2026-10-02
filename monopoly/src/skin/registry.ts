@@ -4,6 +4,7 @@ import {
   PANEL_CLOSE_H, PANEL_CLOSE_W, PANEL_DEBT_H, PANEL_DEBT_W,
   PANEL_HAND_BAR_H, PANEL_HAND_BAR_W,
   PANEL_PREVIEW_H, PANEL_PREVIEW_W, PANEL_SLOT_H, PANEL_SLOT_W,
+  PANEL_STOCK_PANEL_H, PANEL_STOCK_TIER_BASE_H, PANEL_STOCK_TIER_BASE_W, PANEL_STOCK_W,
   PANEL_TALL_H, PANEL_TALL_W, TILE_CARD_H, TILE_CARD_W,
 } from './layout';
 import type { RegistryEntry } from './types';
@@ -185,6 +186,10 @@ reg['showcase.panel'] = showcaseEntry('showcase.panel', SC_PANEL);
 /* 抽卡翻牌专用高底板（事件卡 ×2 = 211×282，300 高的 showcase.panel 装不下）：
    独立 ID 以免牵动 B 版式橱窗（showcase.panel / showcase.hud 仍是 370×300） */
 reg['showcase.panelTall'] = showcaseEntry('showcase.panelTall', { w: PANEL_TALL_W, d: 1, h: PANEL_TALL_H });
+/* 股票浮层专用底板（版式 A：四行标的 + 走势图 + 杠杆分段 + 买卖各三档）：
+   300 高的 showcase.panel 装不下（需 ~314），故独立 ID。取 330 使底缘落在 630——
+   与 showcase.panelTall 同口径，不压底坞资产条（632） */
+reg['showcase.panelStock'] = showcaseEntry('showcase.panelStock', { w: PANEL_STOCK_W, d: 1, h: PANEL_STOCK_PANEL_H });
 reg['showcase.sky'] = showcaseEntry('showcase.sky', { w: 370, d: 1, h: 180 });
 reg['showcase.skyline'] = showcaseEntry('showcase.skyline', { w: 370, d: 1, h: 180 });
 reg['showcase.ground'] = showcaseEntry('showcase.ground', { w: 370, d: 1, h: 120 });
@@ -216,8 +221,9 @@ reg['ui.stockChart'] = showcaseEntry('ui.stockChart', { w: 300, d: 1, h: 54 });
 reg['ui.settleRow'] = showcaseEntry('ui.settleRow', { w: 342, d: 1, h: 40 });
 reg['ui.badge'] = showcaseEntry('ui.badge', { w: 120, d: 1, h: 26 });
 /* 浮层上的可见按键（复用 uiButton preset 的观感；台位与命中区一一对应） */
-reg['ui.tradeBuy'] = showcaseEntry('ui.tradeBuy', { w: 150, d: 1, h: 38 });
-reg['ui.tradeSell'] = showcaseEntry('ui.tradeSell', { w: 150, d: 1, h: 38 });
+/* 买卖键基座 150×38：股票浮层三档并排时整体缩 0.7（layout 的 PANEL_STOCK_TIER_* 由同一基座推导） */
+reg['ui.tradeBuy'] = showcaseEntry('ui.tradeBuy', { w: PANEL_STOCK_TIER_BASE_W, d: 1, h: PANEL_STOCK_TIER_BASE_H });
+reg['ui.tradeSell'] = showcaseEntry('ui.tradeSell', { w: PANEL_STOCK_TIER_BASE_W, d: 1, h: PANEL_STOCK_TIER_BASE_H });
 reg['ui.panelClose'] = showcaseEntry('ui.panelClose', { w: PANEL_CLOSE_W, d: 1, h: PANEL_CLOSE_H });
 /* 停留事件头顶气泡（spec §6.7）：棋盘上的「即时事件图」，与底部地块卡一上一下分工；
    台位 = 当前玩家棋子头顶上方 BUBBLE_GAP（BubbleView 给 fixed），不进任何命中区 */

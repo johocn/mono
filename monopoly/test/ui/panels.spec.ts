@@ -154,19 +154,78 @@ describe('panels：spec 组装（pass 4 / fixed / 注册表命中）', () => {
     expect(panelSpecs(g.state).filter((s) => s.id === 'ui.settleRow')).toHaveLength(4);
   });
 
-  it('股票格：盘面 4 行（含持股/市值）+ 走势折线 + 可见买/卖键', () => {
+  it('股票格：版式 A − 加高底板 + 4 行（恰一行选中）+ 走势跟随选中 + 买卖各三档', () => {
     const g = createGame({ dice: fixed(1, 1) });
     stepTo(g, 19);
     expect(overlayOf(g.state)).toBe('stock');
     const specs = panelSpecs(g.state);
+    /* 底板换成加高注册项（370×330，底缘 630 不压底坞资产条） */
+    expect(specs.map((s) => s.id)).toContain('showcase.panelStock');
+    expect(specs.map((s) => s.id)).not.toContain('showcase.panel');
     const rows = specs.filter((s) => s.id === 'ui.stockRow');
     expect(rows).toHaveLength(4);
     expect(rows.every((s) => typeof s.state?.shares === 'number' && typeof s.state?.value === 'number')).toBe(true);
+    /* 逐行选中：缺省选中首支，恰一行 selected */
+    expect(rows.filter((s) => s.state?.selected === true)).toHaveLength(1);
+    expect(rows[0].state?.selected).toBe(true);
+    /* 选中第 3 支后：高亮跟着走，走势图也换成该支 */
+    const sel = STOCKS[2].code;
+    const picked = panelSpecs(g.state, false, null, undefined, 0, undefined, { sel, lev: 1 });
+    expect(picked.filter((s) => s.state?.selected === true).map((s) => s.state?.code)).toEqual([sel]);
+    expect(picked.find((s) => s.id === 'ui.stockChart')!.state?.label).toBe(`${sel} 走势`);
     const chart = specs.find((s) => s.id === 'ui.stockChart')!;
     expect(chart.state?.series).toEqual([STOCKS[0].price0]);
     expect(chart.state?.label).toBe(`${STOCKS[0].code} 走势`);
-    expect(specs.filter((s) => s.id === 'ui.tradeBuy')).toHaveLength(1);
-    expect(specs.filter((s) => s.id === 'ui.tradeSell')).toHaveLength(1);
+    /* 买 / 卖各三档：标签与「全仓」编码 */
+    const buy = specs.filter((s) => s.id === 'ui.tradeBuy');
+    const sell = specs.filter((s) => s.id === 'ui.tradeSell');
+    expect(buy.map((s) => s.state?.label)).toEqual(['买 1 手', '买 5 手', '买全仓']);
+    expect(sell.map((s) => s.state?.label)).toEqual(['卖 1 手', '卖 5 手', '卖全仓']);
+    /* 空仓：卖三档全禁用；现金充足且无杠杆时买档全可点 */
+    expect(sell.every((s) => s.state?.enabled === false)).toBe(true);
+    expect(buy.every((s) => s.state?.enabled === true)).toBe(true);
+    /* 三档都是缩放版（1 档 → 0.7）：底框 105×26.6 才装得下三枚 */
+    expect(buy.every((s) => s.fixed?.s === 0.7)).toBe(true);
+    expect(sell.every((s) => s.fixed?.s === 0.7)).toBe(true);
+  });
+
+  it('股票格 · 杠杆分段：`round < 8` 整行不产出，第 8 轮起 3 键且当前倍数选中', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    stepTo(g, 19);
+    const levOf = (s: { id: string; state?: Record<string, unknown> }[]): unknown[] =>
+      s.filter((x) => x.id === 'ui.qk').map((x) => x.state?.label);
+    expect(g.state.round).toBeLessThan(8);
+    expect(levOf(panelSpecs(g.state))).toEqual([]);
+
+    g.state.round = 8;
+    expect(levOf(panelSpecs(g.state))).toEqual(['无', '2×', '3×']);
+    const sel = panelSpecs(g.state, false, null, undefined, 0, undefined, { sel: STOCKS[0].code, lev: 2 })
+      .filter((x) => x.id === 'ui.qk');
+    expect(sel.map((x) => x.state?.enabled)).toEqual([false, true, false]);
+  });
+
+  it('股票格 · 命中区：4 行选中 + 杠杆键 + 6 档 `code:tier` 编码', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    stepTo(g, 19);
+    const code = STOCKS[1].code;
+    const hits = panelHitAreas(g.state, false, null, undefined, 0, undefined, { sel: code, lev: 1 });
+    expect(hits.filter((h) => h.action === 'stock:select').map((h) => h.target))
+      .toEqual(STOCKS.map((s) => s.code));
+    expect(hits.filter((h) => h.action === 'stock:lev')).toHaveLength(0);   // 第 1 轮：杠杆行不产出
+
+    g.state.round = 8;
+    const on8 = panelHitAreas(g.state, false, null, undefined, 0, undefined, { sel: code, lev: 3 });
+    expect(on8.filter((h) => h.action === 'stock:lev').map((h) => h.target)).toEqual([1, 2, 3]);
+    expect(on8.filter((h) => h.action === 'stock:buy').map((h) => h.target))
+      .toEqual([`${code}:1`, `${code}:5`, `${code}:all`]);
+    const sells = on8.filter((h) => h.action === 'stock:sell');
+    expect(sells.map((h) => h.target)).toEqual([`${code}:1`, `${code}:5`, `${code}:all`]);
+    expect(sells.every((h) => h.enabled === false)).toBe(true);            // 空仓 → 卖档全禁用
+    /* 命中矩形与画面同台位：三档并排 105 宽 + 8 缝，落在底板 10..380 之内 */
+    const buys = on8.filter((h) => h.action === 'stock:buy');
+    expect(buys[0].x).toBe(29.5);
+    expect(buys[1].x - buys[0].x).toBe(113);
+    expect(buys[2].x + buys[2].w).toBeLessThan(380);
   });
 
   it('抽卡浮层：可见关闭键（与命中区同台位）', () => {
@@ -229,14 +288,23 @@ describe('panels：DOM 命中层矩形', () => {
     expect(panelHitAreas(g.state).map((h) => h.action)).toEqual(['card:close']);
   });
 
-  it('股票浮层：买/卖键带 code，可用性随现金与持股', () => {
+  it('股票浮层：四行选中 + 买/卖各三档（`code:tier` 编码），可用性随现金与持股', () => {
     const g = createGame({ dice: fixed(1, 1) });
     stepTo(g, 19);
     const hits = panelHitAreas(g.state);
-    expect(hits.map((h) => h.action)).toEqual(['stock:buy', 'stock:sell']);
-    expect(hits.every((h) => h.target === 'SY01')).toBe(true);
-    expect(hits[0].enabled).toBe(true);       // 现金 3000 ≥ ￥120
-    expect(hits[1].enabled).toBe(false);      // 未持股
+    expect(hits.map((h) => h.action)).toEqual([
+      'stock:select', 'stock:select', 'stock:select', 'stock:select',
+      'stock:buy', 'stock:buy', 'stock:buy', 'stock:sell', 'stock:sell', 'stock:sell',
+    ]);
+    /* 四行 target = 各标的 code（缺省选中首支 SY01，故买卖编码都用 SY01） */
+    expect(hits.filter((h) => h.action === 'stock:select').map((h) => h.target))
+      .toEqual(STOCKS.map((s) => s.code));
+    const buys = hits.filter((h) => h.action === 'stock:buy');
+    const sells = hits.filter((h) => h.action === 'stock:sell');
+    expect(buys.map((h) => h.target)).toEqual(['SY01:1', 'SY01:5', 'SY01:all']);
+    expect(sells.map((h) => h.target)).toEqual(['SY01:1', 'SY01:5', 'SY01:all']);
+    expect(buys.every((h) => h.enabled === true)).toBe(true);    // 现金 3000 ≥ ￥120
+    expect(sells.every((h) => h.enabled === false)).toBe(true);  // 未持股
   });
 });
 
@@ -251,13 +319,23 @@ describe('panels：可见键台位 == DOM 命中区矩形', () => {
     return { x: s.fixed!.cx - w / 2, y: s.fixed!.cy - h / 2, w, h };
   };
 
-  it('股票盘：买/卖键与 stock:buy / stock:sell 逐像素对齐', () => {
+  it('股票盘：买/卖各三档与 stock:buy / stock:sell 逐像素对齐', () => {
     const g = createGame({ dice: fixed(1, 1) });
     stepTo(g, 19);
     const hits = panelHitAreas(g.state);
     for (const [id, action] of [['ui.tradeBuy', 'stock:buy'], ['ui.tradeSell', 'stock:sell']] as const) {
-      const h = hits.find((x) => x.action === action)!;
-      expect(rectOf(id, g.state)).toEqual({ x: h.x, y: h.y, w: h.w, h: h.h });
+      const specs = panelSpecs(g.state).filter((x) => x.id === id);
+      const boxed = hits.filter((x) => x.action === action);
+      expect(specs).toHaveLength(3);
+      expect(boxed).toHaveLength(3);
+      specs.forEach((s, i) => {
+        const box = REGISTRY[id].box;
+        const scale = s.fixed?.s ?? 1;
+        const w = box.w * scale;
+        const h = box.h * scale;
+        expect({ x: s.fixed!.cx - w / 2, y: s.fixed!.cy - h / 2, w, h })
+          .toEqual({ x: boxed[i].x, y: boxed[i].y, w: boxed[i].w, h: boxed[i].h });
+      });
     }
   });
 

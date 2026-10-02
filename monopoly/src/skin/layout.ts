@@ -157,18 +157,38 @@ export const PANEL_BADGE_Y = 318;
 export const PANEL_ROW_X = 24;                   // 左上
 export const PANEL_ROW_W = 342;
 export const PANEL_ROW_H = 34;
-export const PANEL_ROW_GAP = 6;
-export const PANEL_STOCK_ROW_Y = 340;            // 首行顶
-export const PANEL_CHART_X = 45;                 // 图表左上
-export const PANEL_CHART_Y = 502;
+/* —— 股票浮层 · 版式 A（M20.3-B spec §6.1）——
+   底板换成新增注册项 `showcase.panelStock`（370×330），自面板顶 300 铺到 630：
+   与 `showcase.panelTall` 同口径——**不压底坞资产条（632）**，代价是盖住底坞状态行
+   606..630；骰子（684）与主按钮（738）不受影响。浮层本就盖住手牌行。
+   自上而下：角标 305..331 → 标的行 ×4 336..484 → 走势图 487..541 →
+   杠杆分段 544..566（`round < 8` 时整行不产出）→ 买三档 569..595.6 → 卖三档 598.6..625.2。 */
+export const PANEL_STOCK_W = 370;                // = `showcase.panelStock` 的 box 宽
+export const PANEL_STOCK_PANEL_H = 330;          // = `showcase.panelStock` 的 box 高
+export const PANEL_STOCK_Y = PANEL_Y;            // 面板顶（与拍卖 / 结算 / 银行 / 商店同一基线）
+export const PANEL_STOCK_ROW_Y = 336;            // 首行顶
+export const PANEL_STOCK_ROW_GAP = 4;            // 行距（比结算行的 6 紧：四行 + 三档要装进 330）
+export const PANEL_CHART_X = 45;                 // 走势图左上（原生 300×54，**不缩放**才有充足画幅）
+export const PANEL_CHART_Y = 487;
 export const PANEL_CHART_W = 300;
 export const PANEL_CHART_H = 54;
-/* 股票盘底部买卖键（作用于首支标的，按钮的 `data-target` 给 code） */
-export const PANEL_TRADE_Y = 562;                // 顶
-export const PANEL_TRADE_X0 = 30;                // 左
-export const PANEL_TRADE_W = 150;
-export const PANEL_TRADE_H = 38;
-export const PANEL_TRADE_GAP = 30;
+export const PANEL_STOCK_LEV_Y = 544;            // 杠杆分段顶（`ui.qk` 72×22）
+export const PANEL_STOCK_LEV_GAP = 6;
+export const PANEL_STOCK_LEV_X0 = 81;            // 居中：(390 − (72×3 + 6×2)) / 2
+export const PANEL_STOCK_BUY_Y = 569;            // 买三档顶
+/* 买卖档按键（作用于选中标的，`data-target` 编码为 `${code}:${tier}`）：
+   基座 150×38（= 注册项 `ui.tradeBuy` / `ui.tradeSell` 的 box）三枚并排需 466 > 370，
+   故整体缩到 0.7 → 105×26.6（三枚 + 两缝 = 331 ≤ 370 居中）。
+   注意 preset 只缩放底框，字号（14）与标签偏移**不随 s 缩放**——`买 全仓` 约 60px 仍容得下。
+   W/H 一律由基座 × s 推导：与「渲染侧 box × s」写出同一表达式，逐位相等（避免 26.6 与 38×0.7 的浮点漂移）。 */
+export const PANEL_STOCK_TIER_BASE_W = 150;      // = `ui.tradeBuy` / `ui.tradeSell` 的 box 宽
+export const PANEL_STOCK_TIER_BASE_H = 38;       // = `ui.tradeBuy` / `ui.tradeSell` 的 box 高
+export const PANEL_STOCK_TIER_S = 0.7;
+export const PANEL_STOCK_TIER_W = PANEL_STOCK_TIER_BASE_W * PANEL_STOCK_TIER_S;
+export const PANEL_STOCK_TIER_H = PANEL_STOCK_TIER_BASE_H * PANEL_STOCK_TIER_S;
+export const PANEL_STOCK_TIER_GAP = 8;
+export const PANEL_STOCK_SELL_Y = PANEL_STOCK_BUY_Y + PANEL_STOCK_TIER_H + 3;  // 卖三档顶
+export const PANEL_STOCK_TIER_X0 = 29.5;         // 居中：(390 − 331) / 2
 
 /* 抽卡翻牌（事件卡 ×2）：卡面 66×88 × 3.2 = 211×282，370×300 的老底板装不下，
    故改用新增注册项 `showcase.panelTall`（370×480），底板从 150 铺到 630（不压底坞资产条 632）。

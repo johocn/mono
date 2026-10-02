@@ -213,7 +213,8 @@ facts.stock = await page.evaluate(() => {
   const settle = m.game.settleCurrent();
   m.paint();
   const rows = m.scene.instancesOf().filter((i) => i.id === 'ui.stockRow').length;
-  const buyBtn = document.querySelector('#mono-panels button[data-action="stock:buy"]');
+  /* M20.3-B 版式 A：买键拆成三档（`data-target` = `code:tier`），点「买 1 手」= 1 股 */
+  const buyBtn = document.querySelector('#mono-panels button[data-action="stock:buy"][data-target="SY01:1"]');
   const cashBefore = s.players[0].cash;
   const priceBefore = s.quotes.SY01;
   buyBtn?.click();
@@ -232,11 +233,14 @@ facts.stock = await page.evaluate(() => {
   return {
     ...result,
     rowsAfter: inst.filter((i) => i.id === 'ui.stockRow').length,
+    /* 版式 A：底板换成加高注册项；四行选中键 + 买卖各三档 */
+    panelId: inst.find((i) => i.id === 'showcase.panelStock')?.id ?? null,
+    selKeys: document.querySelectorAll('#mono-panels button[data-action="stock:select"]').length,
     sellAfter: document.querySelectorAll('#mono-panels button[data-action="stock:sell"]').length,
     /* 可见买/卖键（注册表元素）+ 行情行持股/市值 + 折线序列 */
     buyVisible: inst.filter((i) => i.id === 'ui.tradeBuy').length,
     sellVisible: inst.filter((i) => i.id === 'ui.tradeSell').length,
-    buyLabel: inst.find((i) => i.id === 'ui.tradeBuy')?.state?.label ?? null,
+    buyLabels: inst.filter((i) => i.id === 'ui.tradeBuy').map((i) => i.state?.label ?? null),
     closeVisible: inst.filter((i) => i.id === 'ui.panelClose').length,
     rowShares: row0?.state?.shares ?? null,
     rowValue: row0?.state?.value ?? null,
@@ -248,9 +252,11 @@ gate.stock_kind = facts.stock.settleKind === 'stock' && facts.stock.pos === 19;
 gate.stock_rows = facts.stock.rows === 4 && facts.stock.rowsAfter === 4;
 gate.stock_buy = facts.stock.buyBtn === true && facts.stock.shares === 1
   && facts.stock.spend === facts.stock.priceBefore && facts.stock.tradeKind === 'trade';
-gate.stock_sell = facts.stock.sellAfter === 1;
-gate.stock_keys_visible = facts.stock.buyVisible === 1 && facts.stock.sellVisible === 1
-  && facts.stock.buyLabel === '买 1' && facts.stock.closeVisible === 0;
+gate.stock_sell = facts.stock.sellAfter === 3;
+gate.stock_keys_visible = facts.stock.buyVisible === 3 && facts.stock.sellVisible === 3
+  && facts.stock.buyLabels.join('|') === '买 1 手|买 5 手|买全仓'
+  && facts.stock.panelId === 'showcase.panelStock' && facts.stock.selKeys === 4
+  && facts.stock.closeVisible === 0;
 gate.stock_row_shares = facts.stock.rowShares === 1 && facts.stock.rowValue === facts.stock.priceBefore;
 gate.stock_chart_line = facts.stock.chartSeries >= 3 && facts.stock.chartLabel === 'SY01 走势';
 
