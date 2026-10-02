@@ -2157,7 +2157,22 @@ git commit -m "docs(coupon): plan2 execution log and checklist"
 
 **回归**：coupon-plugin **150/150**（原 149/150，红灯转绿）。
 
-**本次未放开（有意）**：`couponChannelCustomers`（发放选人）为渠道级顾客列表、无属店维度，店主可见当前渠道顾客（发放动作本身仍受 `assertManagedByShop` 限制）；到店流水/汇总对店主未开放。如需更细粒度，另开单。
+**本次未放开（有意）**：到店流水/汇总对店主未开放（`InStoreBill` 无 shopId 维度）。
+
+### 修复 `couponChannelCustomers` 渠道级可见性（店主串看全渠道顾客）（2026-10-02）
+
+**问题**：上一节放行店主后，`couponChannelCustomers`（定向发券的「选顾客」数据源，`vshop/web-admin` 的 `searchChannelCustomers` 在用）只按 `Customer.channels` 命中当前渠道过滤，无属店维度 → 店主搜得到**整个租户渠道**的顾客（含邮箱/手机号），跨店串看。
+
+**口径**（用户选定）：`本店商品订单顾客` —— 在该渠道内下过「含本店商品」订单（`orderPlacedAt` 非空）的顾客；与 shop-plugin `myShopOrders` 的归属口径一致（行商品 `Product.customFields.shopId === 本店`）。超级管理员（无属店）保持渠道全量不变。
+
+**实现**（`coupon-plugin/src/coupon.service.ts`）：`listChannelCustomers` 内用 `resolveShopIdFromActiveUser` 取属店；有属店时：
+1. `findShopProductIds`（新增私有方法）按 `Product.customFields.shopId` 取本店商品 id；无商品 → 直接返回空列表（不查库）。
+2. 追加关联过滤 `c.orders → o.lines → ol.productVariant`，条件 `o.orderPlacedAt IS NOT NULL` + `o.channels 命中当前渠道` + `pv.productId IN (本店商品)`；并加 `distinct(true)`，避免同顾客多张本店订单导致重复行（`totalItems` 同步按人去重）。
+
+**验证（先红后绿）**：e2e 断言 5 新增三段 —— 店A（商品已挂店A + 顾客下单）能看到该顾客且不重复；**店B 看不到该顾客**；超管仍渠道全量。临时短路属店过滤复跑 → 如预期失败（`expected [ 'T_2', 'T_1' ] to not include 'T_1'`，店B 串看到渠道顾客），恢复后全绿。
+
+**回归**：coupon-plugin **150/150**。
+**已知边界**：只下过购物车（未 `ArrangingPayment`）的顾客不可见；店B 无本店商品时列表为空（预期）。
 
 ### e2e 环境注意（复用他处）
 
