@@ -95,9 +95,9 @@ describe('panels：商店浮层画面与命中区', () => {
     emptyHand(g);
     const specs = panelSpecs(g.state, false, null, { open: false, sel: 'deposit' }, 0, { open: true, sel: 'bomb' });
     expect(specs.filter((s) => s.id === 'ui.bankRow')).toHaveLength(STORE_CATALOG.length + 4);
-    expect(specs.filter((s) => s.id === 'ui.bankRow' && s.state.variant === 'row')).toHaveLength(STORE_CATALOG.length);
-    expect(specs.filter((s) => s.id === 'ui.bankRow' && s.state.variant === 'line')).toHaveLength(4);
-    expect(specs.find((s) => s.id === 'ui.badge')!.state.text).toBe('道具商店');
+    expect(specs.filter((s) => s.id === 'ui.bankRow' && s.state?.variant === 'row')).toHaveLength(STORE_CATALOG.length);
+    expect(specs.filter((s) => s.id === 'ui.bankRow' && s.state?.variant === 'line')).toHaveLength(4);
+    expect(specs.find((s) => s.id === 'ui.badge')!.state!.text).toBe('道具商店');
     expect(specs.filter((s) => s.id === 'ui.button.primary')).toHaveLength(1);
     expect(specs.filter((s) => s.id === 'ui.button.secondary')).toHaveLength(1);
     /* 商店展开时不画手牌滑动条（浮层压住手牌行） */
@@ -121,7 +121,7 @@ describe('panels：商店浮层画面与命中区', () => {
   it('无法购买时该键在画面与命中区同时禁用', () => {
     const g = createGame({ dice: fixed(1, 1) });       // 开局全持有 → 买入禁用
     const specs = panelSpecs(g.state, false, null, { open: false, sel: 'deposit' }, 0, { open: true, sel: 'pardon' });
-    expect(specs.find((s) => s.id === 'ui.button.primary')!.state.enabled).toBe(false);
+    expect(specs.find((s) => s.id === 'ui.button.primary')!.state!.enabled).toBe(false);
     const hits = panelHitAreas(g.state, false, null, { open: false, sel: 'deposit' }, 0, { open: true, sel: 'pardon' });
     expect(hits.find((h) => h.action === 'store:buy')!.enabled).toBe(false);
   });

@@ -7,7 +7,7 @@ import {
   AUDIO_BGM_BOX, AUDIO_KEY_SIZE, AUDIO_SFX_BOX, BOTTOM_BTN_Y, DOCK_Y, HUD_BAR_GAP, HUD_BAR_H,
   HUD_BAR_W, HUD_BAR_X0, HUD_BTN_AI_W, HUD_BTN_AI_X, HUD_BTN_H, HUD_DICE_Y,
   HUD_DEBT_H, HUD_DEBT_W, HUD_DEBT_X, HUD_DEBT_Y,
-  HUD_QK_BANK_X, HUD_QK_FAST_X, HUD_QK_H, HUD_QK_SKIP_X, HUD_QK_W, HUD_QK_Y, STAGE_W,
+  HUD_QK_BANK_X, HUD_QK_FAST_X, HUD_QK_H, HUD_QK_SKIP_X, HUD_QK_STORE_X, HUD_QK_W, HUD_QK_Y, STAGE_W,
   TILE_CARD_BTN_Y, TILE_CARD_H, TILE_CARD_W, TILE_CARD_X, TILE_CARD_Y,
 } from '../../src/skin/layout';
 import type { Dice } from '../../src/core/dice';
@@ -175,11 +175,11 @@ describe('hud spec 组装（pass 4 / fixed / depth 顺序）', () => {
 });
 
 describe('hud 命中层（透明 DOM 按钮的矩形来源）', () => {
-  it('idle：两枚静音键常驻 + 牌袋键 + 出售键 + 银行键 + 主按钮，且都可点', () => {
+  it('idle：两枚静音键常驻 + 牌袋键 + 出售键 + 商店键 + 银行键 + 主按钮，且都可点', () => {
     const g = createGame({ dice: fixed(1, 1) });
     const areas = hitAreas(g.state);
     /* 无地产：出售键仍在（置灰），位置占用 AI 回合的「加速」空位 */
-    expect(areas.map((a) => a.action)).toEqual(['audio:sfx', 'audio:bgm', 'hand', 'sell', 'bank', 'roll']);
+    expect(areas.map((a) => a.action)).toEqual(['audio:sfx', 'audio:bgm', 'hand', 'sell', 'bank', 'store', 'roll']);
     expect(areas[0]).toEqual({
       action: 'audio:sfx', x: AUDIO_SFX_BOX.left, y: AUDIO_SFX_BOX.top,
       w: AUDIO_KEY_SIZE, h: AUDIO_KEY_SIZE, enabled: true,
@@ -191,20 +191,21 @@ describe('hud 命中层（透明 DOM 按钮的矩形来源）', () => {
     expect(areas[4]).toEqual({
       action: 'bank', x: HUD_QK_BANK_X, y: HUD_QK_Y, w: HUD_QK_W, h: HUD_QK_H, enabled: true,
     });
-    expect(areas[5].action).toBe('roll');
+    expect(areas[5].action).toBe('store');
+    expect(areas[6].action).toBe('roll');
   });
 
   it('settled + 自有 L1：主按钮为「结束回合」+ 出售可点 + 升级按钮（含可用性）', () => {
     const g = settledAt(3);
     g.state.estates[3] = { index: 3, owner: 1, level: 1, processing: false };
     const areas = hitAreas(g.state);
-    expect(areas.map((a) => a.action)).toEqual(['audio:sfx', 'audio:bgm', 'hand', 'sell', 'bank', 'end', 'upgrade']);
+    expect(areas.map((a) => a.action)).toEqual(['audio:sfx', 'audio:bgm', 'hand', 'sell', 'bank', 'store', 'end', 'upgrade']);
     expect(areas[3].enabled).toBe(true);            // 自有地产 ⇒ 出售可点
-    expect(areas[5].x).toBe(146);
-    expect(areas[6]).toEqual({ action: 'upgrade', x: 249, y: BOTTOM_BTN_Y, w: 110, h: 46, enabled: true });
+    expect(areas[6].x).toBe(146);
+    expect(areas[7]).toEqual({ action: 'upgrade', x: 249, y: BOTTOM_BTN_Y, w: 110, h: 46, enabled: true });
 
     g.state.players[0].cash = 10;
-    expect(hitAreas(g.state)[6].enabled).toBe(false);
+    expect(hitAreas(g.state)[7].enabled).toBe(false);
   });
 
   it('命中区都落在舞台宽度内', () => {
@@ -266,16 +267,17 @@ describe('hud spec 组装（AI 回合）', () => {
     expect(areas[4].enabled).toBe(true);
   });
 
-  it('真人回合不受影响：仍出 primary + 买/升级，另加牌袋键 + 出售键 + 银行键（AI 回合不出）', () => {
+  it('真人回合不受影响：仍出 primary + 买/升级，另加牌袋键 + 出售键 + 商店键 + 银行键（AI 回合不出）', () => {
     const g = createGame({ seed: 1 });
     g.state.current = 0;                       // 席位 0 = 真人
     const specs = hudSpecs(g.state, false, seats, false);
     expect(byId(specs, 'ui.button.wide').length).toBe(0);
     expect(byId(specs, 'ui.button.primary').length).toBe(1);
-    expect(byId(specs, 'ui.qk').length).toBe(3);
+    expect(byId(specs, 'ui.qk').length).toBe(4);
     expect(String(byId(specs, 'ui.qk')[0].state!.label)).toBe('手牌');
     expect(String(byId(specs, 'ui.qk')[1].state!.label)).toBe('出售');
-    expect(String(byId(specs, 'ui.qk')[2].state!.label)).toBe('银行');
+    expect(String(byId(specs, 'ui.qk')[2].state!.label)).toBe('商店');
+    expect(String(byId(specs, 'ui.qk')[3].state!.label)).toBe('银行');
   });
 });
 
@@ -289,7 +291,7 @@ describe('hud 牌袋抽屉键 + 落地地块卡（spec §7.3）', () => {
     const g = settledAt(3);
     const closed = hudSpecs(g.state, false, [], false, undefined, { handOpen: false });
     const open = hudSpecs(g.state, false, [], false, undefined, { handOpen: true });
-    expect(byId(closed, 'ui.qk').length).toBe(3);
+    expect(byId(closed, 'ui.qk').length).toBe(4);
     expect(String(byId(closed, 'ui.qk')[0].state!.label)).toBe('手牌');
     expect(String(byId(open, 'ui.qk')[0].state!.label)).toBe('收起手牌');
     for (const qk of [byId(closed, 'ui.qk')[0], byId(open, 'ui.qk')[0]]) {
@@ -315,15 +317,15 @@ describe('hud 牌袋抽屉键 + 落地地块卡（spec §7.3）', () => {
     const secs = byId(specs, 'ui.button.secondary');
     expect(secs.map((s) => s.state!.action)).toEqual(['buy']);
     expect(secs[0].fixed!.cy).toBe(TILE_CARD_BTN_Y + HUD_BTN_H / 2);
-    /* r 严格递增（depth 升序即绘制序）：牌袋键 13 → 出售键 14 → 银行键 15 → 静音 16/17 → 卡 18 → 次要键 19 */
+    /* r 严格递增（depth 升序即绘制序）：牌袋键 13 → 出售键 14 → 商店键 15 → 银行键 16 → 静音 17/18 → 卡 19 → 次要键 20 */
     const rs = specs.map((s) => s.r);
     expect([...rs].sort((a, b) => a - b)).toEqual(rs);
     expect(cards[0].r).toBeGreaterThan(byId(specs, 'ui.music.on')[0].r);
 
     /* 命中区与视觉同源 */
     const areas = hitAreas(g.state, [], { tileCard: true });
-    expect(areas.map((a) => a.action)).toEqual(['audio:sfx', 'audio:bgm', 'hand', 'sell', 'bank', 'end', 'buy']);
-    expect(areas[6].y).toBe(TILE_CARD_BTN_Y);
+    expect(areas.map((a) => a.action)).toEqual(['audio:sfx', 'audio:bgm', 'hand', 'sell', 'bank', 'store', 'end', 'buy']);
+    expect(areas[7].y).toBe(TILE_CARD_BTN_Y);
   });
 
   it('地块卡文案跟随归属（等级 + 持有者）', () => {
@@ -333,7 +335,7 @@ describe('hud 牌袋抽屉键 + 落地地块卡（spec §7.3）', () => {
     expect(String(card.state!.sub)).toBe('等级 L2 · 持有 猪八戒');
     /* 非自有地块不给升级报价 → 卡上只剩主按钮；出售键仍在（本局当前玩家无地 ⇒ 置灰） */
     const areas = hitAreas(g.state, [], { tileCard: true });
-    expect(areas.map((a) => a.action)).toEqual(['audio:sfx', 'audio:bgm', 'hand', 'sell', 'bank', 'end']);
+    expect(areas.map((a) => a.action)).toEqual(['audio:sfx', 'audio:bgm', 'hand', 'sell', 'bank', 'store', 'end']);
   });
 });
 
@@ -405,9 +407,9 @@ describe('hud 出售键（M20.1 自由出售，spec §3.5）', () => {
     g.state.estates[3] = { index: 3, owner: 1, level: 1, processing: false };
     expect(sellOf(hitAreas(g.state)).enabled).toBe(true);
 
-    /* 视觉同源：ui.qk 三枚（手牌 + 出售 + 银行），出售台位 = HUD_QK_FAST_X + HUD_QK_W / 2 */
+    /* 视觉同源：ui.qk 四枚（手牌 + 出售 + 商店 + 银行），出售台位 = HUD_QK_FAST_X + HUD_QK_W / 2 */
     const qks = hudSpecs(g.state).filter((s) => s.id === 'ui.qk');
-    expect(qks.map((s) => s.state!.label)).toEqual(['手牌', '出售', '银行']);
+    expect(qks.map((s) => s.state!.label)).toEqual(['手牌', '出售', '商店', '银行']);
     expect(qks[1].fixed!.cx).toBe(HUD_QK_FAST_X + HUD_QK_W / 2);
     expect(Boolean(qks[1].state!.enabled)).toBe(true);
 
@@ -430,8 +432,8 @@ describe('hud 银行键与债务条（M20.2 银行信贷，spec §3.8）', () =>
     /* 与「出售」211..283、「跳过本次」287..359 不重叠 */
     expect(HUD_QK_BANK_X + HUD_QK_W).toBeLessThanOrEqual(HUD_QK_FAST_X);
 
-    const off = byId(hudSpecs(g.state), 'ui.qk')[2];
-    const on = byId(hudSpecs(g.state, false, [], false, undefined, { bankOpen: true }), 'ui.qk')[2];
+    const off = byId(hudSpecs(g.state), 'ui.qk')[3];
+    const on = byId(hudSpecs(g.state, false, [], false, undefined, { bankOpen: true }), 'ui.qk')[3];
     expect(String(off.state!.label)).toBe('银行');
     expect(String(on.state!.label)).toBe('银行 ✓');
     expect(on.fixed!.cx).toBe(HUD_QK_BANK_X + HUD_QK_W / 2);
@@ -465,7 +467,7 @@ describe('hud 银行键与债务条（M20.2 银行信贷，spec §3.8）', () =>
     expect([...rs].sort((a, b) => a - b)).toEqual(rs);
     /* 债务条不吃事件：命中层不新增矩形 */
     expect(hitAreas(g.state).some((a) => a.action === 'bank')).toBe(true);
-    expect(hitAreas(g.state).length).toBe(6);
+    expect(hitAreas(g.state).length).toBe(7);
   });
 
   it('债务条：贷款 + 抵押合并计债；任一逾期 → 警示段（warn=true）', () => {
@@ -479,5 +481,31 @@ describe('hud 银行键与债务条（M20.2 银行信贷，spec §3.8）', () =>
     /* 只有抵押、无逾期 → 不警示 */
     p.mortgages = [{ index: 3, principal: 800, rate: 0.04, due: 7, overdue: 0 }];
     expect(byId(hudSpecs(g.state), 'ui.debtBar')[0].state).toMatchObject({ mortgageCount: 1, overdue: 0, warn: false });
+  });
+});
+
+describe('hud 商店键（M20.3 道具商店，spec §5.1）', () => {
+  const byId = (specs: ReturnType<typeof hudSpecs>, id: string) => specs.filter((s) => s.id === id);
+
+  it('「商店」键：真人回合常开可点，落 HUD_QK_STORE_X；`storeOpen` 只切标签；AI 回合不出', () => {
+    const g = createGame({ seed: 1 });
+    const key = hitAreas(g.state).find((a) => a.action === 'store');
+    expect(key).toEqual({ action: 'store', x: HUD_QK_STORE_X, y: HUD_QK_Y, w: HUD_QK_W, h: HUD_QK_H, enabled: true });
+    /* 与「银行」135..207 留 4px 间隙，且不压到舞台左侧边缘 */
+    expect(HUD_QK_STORE_X + HUD_QK_W).toBeLessThanOrEqual(HUD_QK_BANK_X);
+    expect(HUD_QK_STORE_X).toBeGreaterThanOrEqual(0);
+
+    const off = byId(hudSpecs(g.state), 'ui.qk')[2];
+    const on = byId(hudSpecs(g.state, false, [], false, undefined, { storeOpen: true }), 'ui.qk')[2];
+    expect(String(off.state!.label)).toBe('商店');
+    expect(String(on.state!.label)).toBe('商店 ✓');
+    expect(on.fixed!.cx).toBe(HUD_QK_STORE_X + HUD_QK_W / 2);
+    expect(on.fixed!.cy).toBe(HUD_QK_Y + HUD_QK_H / 2);
+
+    /* AI 回合：商店键与出手牌 / 出售 / 银行键一样不推（该区位空着） */
+    const aiSeats: Seat[] = [null, 'conservative', 'aggressive', 'speculative'];
+    g.state.current = 1;
+    expect(hitAreas(g.state, aiSeats).some((a) => a.action === 'store')).toBe(false);
+    expect(byId(hudSpecs(g.state, false, aiSeats), 'ui.qk').length).toBe(2);
   });
 });
