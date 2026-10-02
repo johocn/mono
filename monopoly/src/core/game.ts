@@ -459,7 +459,9 @@ export function createGame(opts: GameOptions = {}): Game {
   };
 
   /** 开一场拍卖并跑到挂起 / 收尾；挂起时保留 `state.auction` 并返回 `'suspended'` */
-  const startAuction = (payer: Player, amount: number, receiver: Player | null): DebtResult | 'suspended' => {
+  const startAuction = (
+    payer: Player, amount: number, receiver: Player | null, trigger: AuctionTrigger = 'bankrupt',
+  ): DebtResult | 'suspended' => {
     const owned = ownedBy(state.estates, payer.id);
     /* 升序：变卖价低者先拍（同价取小格号）——保住高价值资产 */
     const queue = owned.slice().sort((x, y) => {
@@ -468,7 +470,7 @@ export function createGame(opts: GameOptions = {}): Game {
     });
     const first = lotOf(state.estates, queue[0]);
     const a: PendingAuction = {
-      trigger: 'bankrupt',
+      trigger,
       payerId: payer.id,
       creditorId: receiver ? receiver.id : null,
       amount,

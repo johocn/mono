@@ -1,7 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { aiBidFor, lotOf, resolveLot, type AuctionBid } from '../../src/core/auction';
+import { aiBidFor, lotOf, resolveLot, type AuctionBid, type AuctionTrigger } from '../../src/core/auction';
 import { PERSONA_PARAMS } from '../../src/data/ai';
 import type { Estates } from '../../src/core/estate';
+
+describe('auction.AuctionTrigger（M20.2 三源）', () => {
+  it('三值均可赋给 AuctionTrigger（编译期 + 运行期）', () => {
+    const triggers: AuctionTrigger[] = ['bankrupt', 'mortgage-overdue', 'loan-overdue'];
+    expect(triggers).toHaveLength(3);
+    expect(new Set(triggers).size).toBe(3);
+  });
+});
 
 describe('auction.lotOf（拍品快照，起拍价 = 变卖价）', () => {
   const es: Estates = { 3: { index: 3, owner: 1, level: 1, processing: false } };

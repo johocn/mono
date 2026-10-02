@@ -8,8 +8,8 @@ import { sellAt, type Estates } from './estate';
 import { BID_RENT_MULT, rentOf } from '../data/economy';
 import type { AiParams } from '../data/ai';
 
-/** 拍卖触发源（M20.2 将增 'mortgage-overdue'；本轮只开 'bankrupt'） */
-export type AuctionTrigger = 'bankrupt';
+/** 拍卖触发源（M20.2 扩抵押超期与贷款强执；三源共享同一裁决，只换起拍价与分账口径） */
+export type AuctionTrigger = 'bankrupt' | 'mortgage-overdue' | 'loan-overdue';
 
 /** 拍品快照：拍卖开始时的楼层（成交后按此保留，不从零复建） */
 export interface AuctionLot {
