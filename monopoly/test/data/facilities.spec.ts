@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   FACILITIES, FACILITY_DIV_RATE, FACILITY_SHARES, facilityAtTile, facilityOf,
 } from '../../src/data/facilities';
-import { NEWS_COEF, NEWS_TABLE, newsTargetsValid } from '../../src/data/news';
+import { ECONOMY_TARGET, NEWS_COEF, NEWS_TABLE, newsTargetsValid } from '../../src/data/news';
 import { STOCKS } from '../../src/data/stocks';
 
 describe('公共设施数据（M20.4 spec §4.1 / D25–D26）', () => {
@@ -50,11 +50,14 @@ describe('公共设施数据（M20.4 spec §4.1 / D25–D26）', () => {
 });
 
 describe('新闻表数据（M20.4 spec §4.2 / D28）', () => {
-  it('10 条：设施 6 + 个股 4，id 唯一', () => {
-    expect(NEWS_TABLE.length).toBe(10);
-    expect(new Set(NEWS_TABLE.map((n) => n.id)).size).toBe(10);
+  it('12 条：设施 6 + 个股 4 + 大盘 2，id 唯一', () => {
+    expect(NEWS_TABLE.length).toBe(12);
+    expect(new Set(NEWS_TABLE.map((n) => n.id)).size).toBe(12);
     expect(NEWS_TABLE.filter((n) => n.scope === 'facility').length).toBe(6);
     expect(NEWS_TABLE.filter((n) => n.scope === 'stock').length).toBe(4);
+    /* M20.5 D48：大盘新闻一利好一利空，target 恒为 market */
+    expect(NEWS_TABLE.filter((n) => n.scope === 'economy').length).toBe(2);
+    expect(NEWS_TABLE.filter((n) => n.scope === 'economy').map((n) => n.target)).toEqual(['market', 'market']);
   });
 
   it('每条 magnitude 与 sentiment 自洽（利好 1.5 / 利空 0.5）', () => {
@@ -64,13 +67,15 @@ describe('新闻表数据（M20.4 spec §4.2 / D28）', () => {
     expect(NEWS_COEF).toEqual({ good: 1.5, bad: 0.5 });
   });
 
-  it('target 落在对应真源内（设施 → FACILITIES / 个股 → STOCKS）', () => {
+  it('target 落在对应真源内（设施 → FACILITIES / 个股 → STOCKS / 大盘 → market）', () => {
     expect(newsTargetsValid()).toBe(true);
     for (const n of NEWS_TABLE) {
       if (n.scope === 'facility') {
         expect(FACILITIES.map((f) => f.id as string)).toContain(n.target);
-      } else {
+      } else if (n.scope === 'stock') {
         expect(STOCKS.map((s) => s.code)).toContain(n.target);
+      } else {
+        expect(n.target).toBe(ECONOMY_TARGET);
       }
     }
   });

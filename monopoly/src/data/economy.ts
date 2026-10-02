@@ -56,3 +56,28 @@ export function sellValue(level: number): number {
 
 /** 拍卖 AI 估值：以该级租金 × 此倍率为「愿意付的上限」基线（M20.1，spec §3.1） */
 export const BID_RENT_MULT = 6;
+
+/* —— M20.5 景气度与查税（spec §3 D42/D43）—— */
+/** 景气度初始值 */
+export const ECON_INDEX_START = 1.0;
+/** 景气度下限 / 上限（租金系数不会被压成 0 或翻倍失控） */
+export const ECON_INDEX_MIN = 0.7;
+export const ECON_INDEX_MAX = 1.3;
+/** 轮末随机游走幅度（±） */
+export const ECON_VOL = 0.08;
+/** 新闻对景气度的偏置：大盘新闻 ±0.15 / 其它 ±0.05 */
+export const ECON_BIAS_ECONOMY = 0.15;
+export const ECON_BIAS_NORMAL = 0.05;
+
+/** 查税：每 ￥1 租金收入带来的被查概率（0.0002 ⇒ 每 ￥100 租金 +2%） */
+export const AUDIT_PER_RENT = 0.0002;
+/** 被查概率上限（40%） */
+export const AUDIT_MAX = 0.4;
+/** 补税额 = 本轮租金收入 × 30% */
+export const AUDIT_RATE = 0.3;
+
+/* —— M20.5 经济道具（D45）—— */
+/** `subsidy` 立即领取额 */
+export const SUBSIDY_AMOUNT = 300;
+/** `boom` 景气度抬升量 */
+export const BOOM_DELTA = 0.2;

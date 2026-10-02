@@ -43,6 +43,8 @@ export const MARGIN_UNLOCK_ROUND = 8;
 export const MARGIN_RATE = 0.06;
 /** 爆仓线：持仓市值 < 借入本金 × 该系数 → 强制平仓还债（D31） */
 export const LIQUIDATION_RATIO = 1.2;
+/** M20.5：市值 / 借款 低于此比例即触发**爆仓警示**（提示早于强平线 `LIQUIDATION_RATIO`，D40） */
+export const MARGIN_WARN_RATIO = 1.5;
 /** 红利卡：每股分红（B-D7） */
 export const DIVIDEND_PER_SHARE = 20;
 /** 红利卡：无持仓时的折现额（B-D7） */

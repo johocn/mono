@@ -18,13 +18,16 @@ export interface StoreProduct {
 /** 回收价系数：卖出价 = `floor(售价 × STORE_MARKUP)`（spec §5.2） */
 export const STORE_MARKUP = 0.5;
 
-/** 商店目录（按 `priority` 升序：免罚 10 → 翻倍 20 → 炸弹 30 → 路障 40 → 迁点 50 → 拆迁令 60 → 涨跌卡 70 → 红利卡 80） */
+/** 商店目录（按 `priority` 升序：免罚 10 → 避税 15 → 翻倍 20 → 补贴 25 → 炸弹 30 → 路障 40 → 迁点 50 → 造势 55 → 拆迁令 60 → 涨跌卡 70 → 红利卡 80） */
 export const STORE_CATALOG: StoreProduct[] = [
   { kind: 'pardon', price: 250 },
+  { kind: 'taxShield', price: 350 },
   { kind: 'doubleRent', price: 250 },
+  { kind: 'subsidy', price: 400 },
   { kind: 'bomb', price: 300 },
   { kind: 'barrier', price: 150 },
   { kind: 'teleport', price: 200 },
+  { kind: 'boom', price: 500 },
   { kind: 'demolish', price: 500 },
   /* —— M20.3-B 股票轨（spec §4.1）：售价与「红利卡每股 ￥20 / 折现 ￥100」的收益量级自洽 —— */
   { kind: 'bullBear', price: 400 },

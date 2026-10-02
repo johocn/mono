@@ -12,7 +12,9 @@
 export type ItemCardKind =
   | 'bomb' | 'barrier' | 'pardon' | 'teleport' | 'doubleRent' | 'demolish'
   /* —— M20.3-B 股票轨新增两种（spec §4.1）—— */
-  | 'bullBear' | 'dividend';
+  | 'bullBear' | 'dividend'
+  /* —— M20.5 经济类新增三种（spec §4.1b D45）—— */
+  | 'taxShield' | 'subsidy' | 'boom';
 
 /** 用牌目标类：`stock` = 需指定一支股票（M20.3-B 涨跌卡；`main.ts` 走专属浮层，不进棋盘选目标态） */
 export type ItemTarget = 'none' | 'tile' | 'foe' | 'self' | 'stock';
@@ -40,6 +42,10 @@ export const ITEM_CARDS: ItemCardDef[] = [
   /* —— M20.3-B 股票轨（spec §4.1）：数组序仍作第三键兜底，故新卡一律追加在表尾 —— */
   { kind: 'bullBear', name: '涨跌卡', desc: '指定一支股票，下轮必涨或必跌', target: 'stock', priority: 70 },
   { kind: 'dividend', name: '红利卡', desc: '按持仓每股领 ￥20；无持仓折现 ￥100', target: 'none', priority: 80 },
+  /* —— M20.5 经济道具（spec §4.1b D45）：新卡一律追加在表尾，`priority` 决定手牌 / 商店排序 —— */
+  { kind: 'taxShield', name: '避税凭证', desc: '被税务抽查时自动抵免一次（未触发不消耗）', target: 'none', priority: 15 },
+  { kind: 'subsidy', name: '惠农补贴', desc: '立即领取 ￥300', target: 'none', priority: 25 },
+  { kind: 'boom', name: '造势', desc: '本轮景气度 +0.2，全场租金随之上浮', target: 'none', priority: 55 },
 ];
 
 /**

@@ -31,7 +31,7 @@ describe('core.cards 牌堆（seed 定序 / 抽空洗牌）', () => {
   });
 });
 
-describe('core.cards 手牌（8 槽 / 去重）', () => {
+describe('core.cards 手牌（11 槽 / 去重）', () => {
   it('grant 去重：空手牌入 bomb 长度 1；再入 bomb → false', () => {
     const hand: Hand = [];
     expect(grant(hand, 'bomb')).toBe(true);
@@ -40,10 +40,10 @@ describe('core.cards 手牌（8 槽 / 去重）', () => {
     expect(hand).toHaveLength(1);
   });
 
-  it('填满 8 种后再 grant → false（满槽）', () => {
+  it('填满全部种类后再 grant → false（满槽）', () => {
     const hand: Hand = [];
     for (const c of ITEM_CARDS) expect(grant(hand, c.kind)).toBe(true);
-    expect(hand).toHaveLength(8);
+    expect(hand).toHaveLength(ITEM_CARDS.length);
     expect(grant(hand, 'bomb')).toBe(false);
   });
 

@@ -1,7 +1,7 @@
 import { RING_SIZE, typeAt } from '../data/board';
 import {
-  BANKRUPT_CASH_LINE, PASS_START_BONUS, ROUND_LIMIT, START_CASH,
-  buyPrice, canUpgrade, nextLevel,
+  BANKRUPT_CASH_LINE, BOOM_DELTA, ECON_INDEX_START, PASS_START_BONUS, ROUND_LIMIT, START_CASH,
+  SUBSIDY_AMOUNT, buyPrice, canUpgrade, nextLevel,
 } from '../data/economy';
 import {
   CHANCE_DECK, FATE_DECK, FREE_UPGRADE_REFUND, ITEM_CARDS, PARDON_REFUND,
@@ -42,7 +42,10 @@ import { abilityOfPlayer, type AbilityDef } from '../data/abilities';
 import { personaParams, type AiParams, type Persona, type Seat } from '../data/ai';
 import { aiBidFor, lotOf, resolveLot, type AuctionBid, type AuctionLot, type AuctionTrigger } from './auction';
 import { FACILITIES, type FacilityId } from '../data/facilities';
-import { NEWS_TABLE, type NewsItem } from '../data/news';
+import { NEWS_COOLDOWN, type NewsItem } from '../data/news';
+/* M20.5：景气度 / 查税纯函数 + 公平抽取（均独立于引擎运行时） */
+import { auditChanceOf, auditTaxOf, clampIndex, nextEconomyIndex } from './cycle';
+import { rollNews } from './news';
 import {
   canSubscribe, dividendOf, newsCoefOf, newsForceOf, type FacilityFail,
 } from './facility';
@@ -78,6 +81,9 @@ export interface Player {
   /* —— M20.4 公共设施入股（spec §5.1）—— */
   /** 设施持股（`FacilityId` → 股数；未持有为缺键）；每处至多 20 股、先到先得 */
   facilities: Partial<Record<FacilityId, number>>;
+  /* —— M20.5 经济平衡（spec §5.1）—— */
+  /** 本轮累计收租（轮末用于查税判定后清零；D43） */
+  roundRent: number;
 }
 
 /** 最近一次抽卡（翻牌动画消费）：`deck` + 卡面 id + 标题/文案（取自 `cards.ts` 数据） */
@@ -196,6 +202,11 @@ export interface GameState {
   news: NewsItem | null;
   /** 本设施本轮累计的现金流（轮末分红后清空；供分红计算与 UI 说明，F-D4） */
   facilityCashflow: Record<FacilityId, number>;
+  /* —— M20.5 经济平衡（spec §5.1）—— */
+  /** 景气度（租金系数，初 1.0、域 `[0.7, 1.3]`；D42） */
+  economyIndex: number;
+  /** 新闻抽取历史（由新到旧，最多 `NEWS_COOLDOWN` 条；D47） */
+  newsHistory: string[];
 }
 
 export interface GameOptions {
@@ -246,7 +257,16 @@ export type EventLog =
   /** M20.4 设施认购（F-D1 / F-D13）：`facility` 处新增 `shares` 股、付 `cost` */
   | { kind: 'facility'; facility: FacilityId; shares: number; cost: number }
   /** M20.3-B 爆仓强平：`debt` = 清仓后仍不足、已转入信用贷款的余债；`refund` = 还清后返还现金 */
-  | { kind: 'marginCall'; player: number; debt: number; refund: number };
+  | { kind: 'marginCall'; player: number; debt: number; refund: number }
+  /* —— M20.5 经济平衡（spec §5.5）—— */
+  /** 轮末税务抽查：`rent` = 本轮租金、`tax` = 应补税、`paid` = 实付、`bankrupt` = 是否因此破产 */
+  | { kind: 'audit'; player: number; rent: number; tax: number; paid: number; bankrupt: boolean }
+  /** 追加保证金：`added` = 实际补入、`source` = 现金 / 抵押借入 */
+  | { kind: 'marginAdd'; player: number; added: number; source: MarginSource }
+  /** 造势道具触发的景气度变动（即时结算） */
+  | { kind: 'economy'; index: number }
+  /** 惠农补贴道具（spec §5.6，复用既有 `gift` 口径的展示） */
+  | { kind: 'subsidy'; amount: number };
 
 /** 细分落格结果的具名别名（供 lastEvent 精确赋值） */
 type FateSettle = Extract<SettleResult, { kind: 'fate' }>;
@@ -286,6 +306,13 @@ export type BankFail =
 /** 银行信贷操作结果（M20.2） */
 export type BankOutcome =
   | { ok: true; amount: number }
+  | { ok: false; reason: BankFail };
+
+/* —— M20.5 追加保证金（spec §5.3 D41）—— */
+/** 补仓来源：`cash` = 现金直接冲减 / `mortgage` = 以自有地块抵押借入后直接补仓 */
+export type MarginSource = 'cash' | 'mortgage';
+export type MarginOutcome =
+  | { ok: true; added: number; principal: number }
   | { ok: false; reason: BankFail };
 
 /** 拍卖出价结果（spec §3.4） */
@@ -349,6 +376,9 @@ export interface Game {
   takeMortgage(index: number): BankOutcome;
   /** 赎回抵押：付清该笔本金，解锁地块 */
   redeemMortgage(index: number): BankOutcome;
+  /* —— M20.5 追加保证金（spec §5.3 D41）—— */
+  /** 追加保证金：`cash` 现金冲减（不传 amount = 全额）/ `mortgage` 抵押借入直接补仓（须站 9 号格） */
+  addMargin(amount?: number, source?: MarginSource): MarginOutcome;
   /* —— M20.3 道具商店（spec §5.3）—— */
   /** 买入道具（每次 1 张）：扣售价，加入当前玩家手牌；已持有 / 现金不足则失败 */
   buyItem(kind: string): ItemShopOutcome;
@@ -389,11 +419,6 @@ function zeroCashflow(): Record<FacilityId, number> {
   return { bank: 0, exchange: 0, hospital: 0, lottery: 0, welfare: 0 };
 }
 
-/** 从新闻表按独立流抽 1 条（F-D8）：`Math.floor(rng() × 表长)`，索引必然在界内 */
-function rollNews(rng: () => number): NewsItem {
-  return NEWS_TABLE[Math.floor(rng() * NEWS_TABLE.length)];
-}
-
 export function createGame(opts: GameOptions = {}): Game {
   const count = opts.playerCount ?? 4;
   const seed = opts.seed ?? (Date.now() & 0xffffffff);
@@ -403,6 +428,9 @@ export function createGame(opts: GameOptions = {}): Game {
   const marketRng = makeRng((seed ^ 0x7654321) >>> 0);
   /* M20.4 新闻独立流（F-D7）：与卡牌 / 行情互不干扰 */
   const newsRng = makeRng((seed ^ 0x2468ace) >>> 0);
+  /* M20.5 景气度 / 查税独立流（D42/D43）：与既有四流互不干扰 ⇒ 既有序列逐字节不变 */
+  const econRng = makeRng((seed ^ 0x0ec0a11) >>> 0);
+  const auditRng = makeRng((seed ^ 0x0a0d17) >>> 0);
   const market: Market = createMarket(marketRng);
   const fateDeck: Deck<FateCardDef> = createDeck(
     opts.decks?.fate ?? FATE_DECK, cardRng, { shuffled: !opts.decks?.fate },
@@ -422,6 +450,7 @@ export function createGame(opts: GameOptions = {}): Game {
       mortgages: [],
       margin: null,
       facilities: {},
+      roundRent: 0,
     })),
     current: 0,
     round: 1,
@@ -447,9 +476,13 @@ export function createGame(opts: GameOptions = {}): Game {
     }),
     auction: null,
     /* M20.4：开局即发布第 1 轮新闻（F-D8），现金流表清零 */
-    news: rollNews(newsRng),
+    news: rollNews(newsRng, []),
     facilityCashflow: zeroCashflow(),
+    /* M20.5：景气度开局 1.0（零回归：单轮租金逐值不变）；新闻历史记首条以便冷却去重 */
+    economyIndex: ECON_INDEX_START,
+    newsHistory: [],
   };
+  state.newsHistory = state.news ? [state.news.id] : [];
 
   /** 某玩家的技能（未启用时返回 null，调用处按中性值处理） */
   const skill = (id: number): AbilityDef | null => (state.abilitiesOn ? abilityOfPlayer(id) : null);
@@ -776,7 +809,8 @@ export function createGame(opts: GameOptions = {}): Game {
         result = { kind: 'own', index, level: e.level };
       } else {
         const owner = playerById(state, e.owner);
-        const base = rentAt(state.estates, index);
+        /* M20.5 D42：租金随景气度浮动（`economyIndex = 1.0` 时逐值回旧口径） */
+        const base = Math.round(rentAt(state.estates, index) * state.economyIndex);
         const doubled = owner !== null && state.doubleRent[owner.id - 1];
         /* 技能「慈悲为怀」：应付租金按比例减免（未启用 → 比例 0，逐值回旧口径） */
         const relief = rentReliefOf(state, p.id);
@@ -792,6 +826,8 @@ export function createGame(opts: GameOptions = {}): Game {
           if (debt === 'suspended' || state.auction) {
             result = auctionSettle(index);
           } else {
+            /* M20.5 D43：地主本轮累计收租（查税基数）；拍卖 / 免除（waived）不计 */
+            if (owner && debt.paid > 0) owner.roundRent += debt.paid;
             /* 逾期罚息：额外 50% 直冲欠款本金（不给地主；spec §3.4 链一） */
             const pen = chargeOverduePenalty(p, rent);
             result = pen.suspended || state.auction
@@ -1213,6 +1249,22 @@ export function createGame(opts: GameOptions = {}): Game {
         state.lastEvent = { kind: 'card', card: kind, target: null };
         return { ok: true, kind };
       }
+      /* —— M20.5 经济道具（spec §5.6）—— */
+      case 'taxShield':
+        /* 被动持有：仅作为查税免疫的持有物，不可主动出牌（不消耗手牌） */
+        return { ok: false, reason: 'passive' };
+      case 'subsidy': {
+        p.cash += SUBSIDY_AMOUNT;
+        consumeCard(state.hands[i], kind);
+        state.lastEvent = { kind: 'subsidy', amount: SUBSIDY_AMOUNT };
+        return { ok: true, kind };
+      }
+      case 'boom': {
+        state.economyIndex = clampIndex(state.economyIndex + BOOM_DELTA);
+        consumeCard(state.hands[i], kind);
+        state.lastEvent = { kind: 'economy', index: state.economyIndex };
+        return { ok: true, kind };
+      }
       default: {
         state.doubleRent[i] = true;
         consumeCard(state.hands[i], kind);
@@ -1398,6 +1450,45 @@ export function createGame(opts: GameOptions = {}): Game {
     return { ok: true, amount: cost };
   };
 
+  /**
+   * M20.5 追加保证金（spec §5.3 D41）：只作用于当前玩家。
+   * - `cash`（缺省）：现金直接冲减保证金借款，`added = min(amount ?? 现金, 现金, 借款)`
+   * - `mortgage`：须站 9 号格 + 有可抵押自有地块；借入额 `min(变卖价 × 80%, 借款)` **直接补仓**（不落现金）
+   *   —— 超出部分不进抵押，避免「补仓名义无上限套现」（绕开信用贷款额度）。
+   */
+  const addMargin = (amount?: number, source: MarginSource = 'cash'): MarginOutcome => {
+    const p = currentPlayer(state);
+    const m = p.margin;
+    if (!m || m.principal <= 0) return { ok: false, reason: 'no-debt' };
+    if (source === 'mortgage') {
+      if (p.pos !== BANK_TILE_INDEX) return { ok: false, reason: 'not-at-bank' };
+      const owned = ownedBy(state.estates, p.id).filter(
+        (i) => !creditLocked(state, i) && !state.estates[i]?.processing,
+      );
+      if (owned.length === 0) return { ok: false, reason: 'no-estate' };
+      /* 取额度最大的可抵押地块（同价取小格号，与 mortgageLimitOf 口径一致） */
+      let best = owned[0];
+      for (const i of owned) if (mortgageLimitOf(state.estates, i) > mortgageLimitOf(state.estates, best)) best = i;
+      const limit = mortgageLimitOf(state.estates, best);
+      if (limit <= 0) return { ok: false, reason: 'no-limit' };
+      const added = Math.min(limit, m.principal);
+      p.mortgages.push({ principal: added, rate: MORTGAGE_RATE, due: state.round + MORTGAGE_TERM, overdue: 0, index: best });
+      p.mortgages.sort((a, b) => a.index - b.index);
+      p.margin = m.principal - added > 0 ? { ...m, principal: m.principal - added } : null;
+      state.lastEvent = { kind: 'marginAdd', player: p.id, added, source };
+      return { ok: true, added, principal: p.margin?.principal ?? 0 };
+    }
+    if (p.cash <= 0) return { ok: false, reason: 'not-enough-cash' };
+    const want = amount === undefined ? p.cash : amount;
+    if (!Number.isInteger(want) || want <= 0) return { ok: false, reason: 'bad-amount' };
+    const added = Math.min(want, p.cash, m.principal);
+    if (added <= 0) return { ok: false, reason: 'not-enough-cash' };
+    p.cash -= added;
+    p.margin = m.principal - added > 0 ? { ...m, principal: m.principal - added } : null;
+    state.lastEvent = { kind: 'marginAdd', player: p.id, added, source };
+    return { ok: true, added, principal: p.margin?.principal ?? 0 };
+  };
+
   /** 拍卖出价：给 `pending` 队首；收齐即落槌并继续（可能新开一块继续挂起） */
   const bidAuction = (amount: number): BidOutcome => {
     const a = state.auction;
@@ -1493,10 +1584,36 @@ export function createGame(opts: GameOptions = {}): Game {
   };
 
   /**
-   * 轮末统一收口（M20.4 spec §5.4，顺序固定、全确定性，7 步）：
+   * M20.5 轮末税务抽查（spec §5.4 D43 / D44）：逐玩家按 id 升序，
+   * 被查概率 = `clamp(本轮累计收租 × 0.0002, 0, 0.4)`；命中则补税 30%（走既有 `settleDebt` 清算链），
+   * 持有避税凭证（`taxShield`）则**命中后**免疫一次并消耗（未命中不消耗）。
+   * `chance === 0` 时**不调用 `auditRng()`**（短路保序列，与 `market.tick` 的 force 短路同法）。
+   */
+  const settleAudits = (): void => {
+    for (const p of state.players) {
+      if (p.bankrupt) continue;
+      const rent = p.roundRent;
+      const chance = auditChanceOf(rent);
+      const hit = chance > 0 && auditRng() < chance;
+      if (hit && has(state.hands[p.id - 1], 'taxShield')) {
+        consumeCard(state.hands[p.id - 1], 'taxShield');
+      } else if (hit) {
+        const tax = auditTaxOf(rent);
+        const d = settleDebt(p, tax, null);
+        if (d !== 'suspended') {
+          state.lastEvent = { kind: 'audit', player: p.id, rent, tax, paid: d.paid, bankrupt: d.bankrupt };
+        }
+      }
+      p.roundRent = 0;
+    }
+  };
+
+  /**
+   * 轮末统一收口（M20.4 spec §5.4 + M20.5 插 2 步，顺序固定、全确定性，9 步）：
    * ① 存款 / 信用贷款 / 抵押计息（同时累计银行现金流）→ ② 保证金借入复利
    * → ③ 股价 tick（玩家强制方向 + 当期新闻方向，命中不消耗随机源）
-   * → ④ 爆仓判定（强平）→ ⑤ 设施分红（用当期新闻系数）→ ⑥ 抽下一条新闻 → ⑦ 清空强制方向表。
+   * → ④ 爆仓判定（强平）→ ⑤ 设施分红（用当期新闻系数）→ ⑥ 税务抽查（D43）
+   * → ⑦ 景气度游走（D42）→ ⑧ 抽下一条新闻并记历史（D47）→ ⑨ 清空强制方向表。
    */
   const onRoundBoundary = (): void => {
     settleBooks();
@@ -1515,7 +1632,11 @@ export function createGame(opts: GameOptions = {}): Game {
       if (value < p.margin.principal * LIQUIDATION_RATIO) liquidate(p);
     }
     payFacilityDividends();
-    state.news = rollNews(newsRng);
+    settleAudits();
+    state.economyIndex = nextEconomyIndex(state.economyIndex, econRng, state.news);
+    const next = rollNews(newsRng, state.newsHistory);
+    state.newsHistory = [next.id, ...state.newsHistory].slice(0, NEWS_COOLDOWN);
+    state.news = next;
     state.stockForce = state.stockForce.map(() => null);
   };
 
@@ -1643,7 +1764,7 @@ export function createGame(opts: GameOptions = {}): Game {
   return {
     state, rollDice, moveCurrent, settleCurrent, buyCurrent, upgradeCurrent, endTurn,
     useCard, trade, skipTurn, clearEvent, sellEstate, bidAuction, autoResolveAuction,
-    deposit, withdraw, takeLoan, repayLoan, takeMortgage, redeemMortgage,
+    deposit, withdraw, takeLoan, repayLoan, takeMortgage, redeemMortgage, addMargin,
     buyItem, sellItem, buyFacility,
   };
 }

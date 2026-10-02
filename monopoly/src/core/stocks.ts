@@ -9,7 +9,7 @@
  * 命中的标的按下限幅度定向走动（`dir = 1` 按上限 +vol、`dir = -1` 按 −vol），
  * **命中时不调用 `rng()`**，故不改变未命中标的的既有随机序列（seed 回放逐字节一致）。
  */
-import { SHARE_LOT, STOCKS, type LotTier, type StockDef } from '../data/stocks';
+import { LIQUIDATION_RATIO, SHARE_LOT, STOCKS, type LotTier, type StockDef } from '../data/stocks';
 
 export type Quotes = Record<string, number>;
 
@@ -100,6 +100,20 @@ export function sellShares(portfolio: Portfolio, quotes: Quotes, code: string, s
   h.shares -= shares;
   if (h.shares === 0) delete (portfolio as Record<string, Holding | undefined>)[code];
   return { ok: true, code, shares, price, cost: proceeds, cash: cash + proceeds };
+}
+
+/**
+ * M20.5 爆仓线 = 保证金借款 × `LIQUIDATION_RATIO`（市值跌破即强制平仓；spec §6.2 D40）。
+ * 与 `onRoundBoundary` 的强平判定同源，保证「提示的线 = 真正强平的线」。
+ */
+export function marginLineOf(principal: number): number {
+  return Math.round(principal * LIQUIDATION_RATIO);
+}
+
+/** M20.5 距爆仓百分比：`round((市值 − 爆仓线) / 爆仓线 × 100)`；爆仓线 ≤ 0 时返回 0 */
+export function marginGapPctOf(value: number, line: number): number {
+  if (line <= 0) return 0;
+  return Math.round(((value - line) / line) * 100);
 }
 
 /** 持仓市值 = Σ shares × 当前价；空仓为 0 */
