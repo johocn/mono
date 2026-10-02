@@ -9,7 +9,7 @@ import {
 } from '../data/cards';
 import {
   DIVIDEND_PER_SHARE, DIVIDEND_REFUND, LEVERAGES, LIQUIDATION_RATIO, MARGIN_RATE, STOCKS,
-  STOCK_TILE_INDEX, type StockPlay,
+  STOCK_FEE_RATIO, STOCK_TILE_INDEX, type StockPlay,
 } from '../data/stocks';
 import { advance, type Advance } from './board-path';
 import {
@@ -36,10 +36,16 @@ import {
 } from '../data/bank';
 import {
   loanLimitOf, mortgageLimitOf, overdueOf, penaltyOf, type DebtBook, type MortgageBook,
+  interestOf,
 } from './bank';
 import { abilityOfPlayer, type AbilityDef } from '../data/abilities';
 import { personaParams, type AiParams, type Persona, type Seat } from '../data/ai';
 import { aiBidFor, lotOf, resolveLot, type AuctionBid, type AuctionLot, type AuctionTrigger } from './auction';
+import { FACILITIES, type FacilityId } from '../data/facilities';
+import { NEWS_TABLE, type NewsItem } from '../data/news';
+import {
+  canSubscribe, dividendOf, newsCoefOf, newsForceOf, type FacilityFail,
+} from './facility';
 
 /** 回合阶段机（spec §5.1）：idle → rolled → moved → settled → (endTurn) → idle */
 export type Phase = 'idle' | 'rolled' | 'moved' | 'settled';
@@ -69,6 +75,9 @@ export interface Player {
   /* —— M20.3-B 股票杠杆（spec §5.1）—— */
   /** 保证金借款（null = 无）；爆仓判定与卖出自动还债都作用于此 */
   margin: MarginBook | null;
+  /* —— M20.4 公共设施入股（spec §5.1）—— */
+  /** 设施持股（`FacilityId` → 股数；未持有为缺键）；每处至多 20 股、先到先得 */
+  facilities: Partial<Record<FacilityId, number>>;
 }
 
 /** 最近一次抽卡（翻牌动画消费）：`deck` + 卡面 id + 标题/文案（取自 `cards.ts` 数据） */
@@ -182,6 +191,11 @@ export interface GameState {
   seats: (Persona | null)[];
   /** 待拍态（null = 无拍卖） */
   auction: PendingAuction | null;
+  /* —— M20.4 公共设施入股 + 每轮新闻（spec §5.1）—— */
+  /** 当期新闻（每轮 1 条，F-D8；`null` = 尚未发布） */
+  news: NewsItem | null;
+  /** 本设施本轮累计的现金流（轮末分红后清空；供分红计算与 UI 说明，F-D4） */
+  facilityCashflow: Record<FacilityId, number>;
 }
 
 export interface GameOptions {
@@ -229,6 +243,8 @@ export type EventLog =
   | { kind: 'trade'; code: string; shares: number }
   | { kind: 'item-shop'; action: 'buy' | 'sell'; card: ItemCardKind; price: number }
   | { kind: 'sell'; index: number; price: number }
+  /** M20.4 设施认购（F-D1 / F-D13）：`facility` 处新增 `shares` 股、付 `cost` */
+  | { kind: 'facility'; facility: FacilityId; shares: number; cost: number }
   /** M20.3-B 爆仓强平：`debt` = 清仓后仍不足、已转入信用贷款的余债；`refund` = 还清后返还现金 */
   | { kind: 'marginCall'; player: number; debt: number; refund: number };
 
@@ -297,6 +313,11 @@ export type ItemShopOutcome =
   | { ok: true; kind: ItemCardKind; price: number }
   | { ok: false; reason: ItemShopFail };
 
+/** 设施认购结果（F-D2 / F-D13）：成功返回成交价与剩余现金；失败带 `FacilityFail` 原因 */
+export type FacilityOutcome =
+  | { ok: true; facility: FacilityId; shares: number; cost: number; cash: number }
+  | { ok: false; reason: FacilityFail };
+
 export interface Game {
   state: GameState;
   rollDice(): DiceRoll;
@@ -333,6 +354,9 @@ export interface Game {
   buyItem(kind: string): ItemShopOutcome;
   /** 卖出道具（每次 1 张）：移出手牌，加回收价（售价 × 50%）；未持有则失败 */
   sellItem(kind: string): ItemShopOutcome;
+  /* —— M20.4 公共设施入股（spec §5.3）—— */
+  /** 认购设施股：`shares` 股、每处至多 20 股先到先得；不推进回合（与银行 / 商店同构） */
+  buyFacility(facility: FacilityId, shares: number): FacilityOutcome;
   /** 监狱禁行时唯一的 idle 推进 */
   skipTurn(): { skipped: true; remaining: number };
   /** 关闭浮层（只清 lastEvent / lastDraw） */
@@ -358,6 +382,18 @@ export function rentReliefOf(state: GameState, id: number): number {
   return state.abilitiesOn ? abilityOfPlayer(id).rentRelief : 0;
 }
 
+/* —— M20.4 设施现金流的零值构造 / 新闻抽取（均确定性纯函数）—— */
+
+/** 五处设施本轮现金流全 0 的初始表（F-D4：未产生现金流时整条分红链恒为 0） */
+function zeroCashflow(): Record<FacilityId, number> {
+  return { bank: 0, exchange: 0, hospital: 0, lottery: 0, welfare: 0 };
+}
+
+/** 从新闻表按独立流抽 1 条（F-D8）：`Math.floor(rng() × 表长)`，索引必然在界内 */
+function rollNews(rng: () => number): NewsItem {
+  return NEWS_TABLE[Math.floor(rng() * NEWS_TABLE.length)];
+}
+
 export function createGame(opts: GameOptions = {}): Game {
   const count = opts.playerCount ?? 4;
   const seed = opts.seed ?? (Date.now() & 0xffffffff);
@@ -365,6 +401,8 @@ export function createGame(opts: GameOptions = {}): Game {
   /* 随机源按用途分流：骰子（dice 自身）/ 卡牌 / 股票 / 福利，同 seed 各自可复现 */
   const cardRng = makeRng((seed ^ 0x1234567) >>> 0);
   const marketRng = makeRng((seed ^ 0x7654321) >>> 0);
+  /* M20.4 新闻独立流（F-D7）：与卡牌 / 行情互不干扰 */
+  const newsRng = makeRng((seed ^ 0x2468ace) >>> 0);
   const market: Market = createMarket(marketRng);
   const fateDeck: Deck<FateCardDef> = createDeck(
     opts.decks?.fate ?? FATE_DECK, cardRng, { shuffled: !opts.decks?.fate },
@@ -383,6 +421,7 @@ export function createGame(opts: GameOptions = {}): Game {
       loan: null,
       mortgages: [],
       margin: null,
+      facilities: {},
     })),
     current: 0,
     round: 1,
@@ -407,6 +446,9 @@ export function createGame(opts: GameOptions = {}): Game {
       return s !== undefined ? s : 'conservative';
     }),
     auction: null,
+    /* M20.4：开局即发布第 1 轮新闻（F-D8），现金流表清零 */
+    news: rollNews(newsRng),
+    facilityCashflow: zeroCashflow(),
   };
 
   /** 某玩家的技能（未启用时返回 null，调用处按中性值处理） */
@@ -849,6 +891,8 @@ export function createGame(opts: GameOptions = {}): Game {
   const resolveLottery = (p: Player, index: number): LotterySettle => {
     const stake = Math.min(p.cash, LOTTERY_STAKE);
     p.cash -= stake;
+    /* M20.4 / F-D4：入场费计入乐透现金流，供轮末分红（不额外改现金） */
+    state.facilityCashflow.lottery += stake;
     const prize = rollLottery(cardRng);
     p.cash += prize;
     const result: LotterySettle = { kind: 'lottery', index, stake, prize };
@@ -1204,6 +1248,8 @@ export function createGame(opts: GameOptions = {}): Game {
         p.margin = p.margin
           ? { ...p.margin, principal: p.margin.principal + borrowed }
           : { principal: borrowed, rate: MARGIN_RATE };
+        /* M20.4 / F-D4：交易所现金流挂载点（当前费率为 0 ⇒ 恒 0，零余额回归） */
+        state.facilityCashflow.exchange += Math.round(cost * STOCK_FEE_RATIO);
         state.lastEvent = { kind: 'trade', code, shares };
         return { ok: true, code, shares, price, cost: own, cash: p.cash };
       }
@@ -1211,6 +1257,8 @@ export function createGame(opts: GameOptions = {}): Game {
       const out = buyShares(state.portfolios[i], state.quotes, code, shares, p.cash);
       if (out.ok) {
         p.cash = out.cash;
+        /* M20.4 / F-D4：交易所现金流挂载点（费率 0 ⇒ 恒 0） */
+        state.facilityCashflow.exchange += Math.round(out.cost * STOCK_FEE_RATIO);
         state.lastEvent = { kind: 'trade', code, shares };
       }
       return out;
@@ -1232,6 +1280,8 @@ export function createGame(opts: GameOptions = {}): Game {
       }
     }
     p.cash = cash;
+    /* M20.4 / F-D4：交易所现金流挂载点（费率 0 ⇒ 恒 0） */
+    state.facilityCashflow.exchange += Math.round(proceeds * STOCK_FEE_RATIO);
     state.lastEvent = { kind: 'trade', code, shares };
     return { ...base, cash };
   };
@@ -1388,10 +1438,16 @@ export function createGame(opts: GameOptions = {}): Game {
       if (p.deposit > 0) p.deposit = Math.round(p.deposit * (1 + DEPOSIT_RATE));
       if (p.loan) {
         if (p.loan.freeFirstRound) p.loan.freeFirstRound = false;
-        else p.loan.principal = Math.round(p.loan.principal * (1 + p.loan.rate));
+        else {
+          /* M20.4 / F-D4：银行现金流 = 轮末贷款利息（仅资本化记账，不动现金） */
+          state.facilityCashflow.bank += interestOf(p.loan);
+          p.loan.principal = Math.round(p.loan.principal * (1 + p.loan.rate));
+        }
         p.loan.overdue = overdueOf(p.loan, state.round);
       }
       for (const m of p.mortgages) {
+        /* M20.4 / F-D4：抵押利息同样计入银行现金流 */
+        state.facilityCashflow.bank += interestOf(m);
         m.principal = Math.round(m.principal * (1 + m.rate));
         m.overdue = overdueOf(m, state.round);
       }
@@ -1417,9 +1473,30 @@ export function createGame(opts: GameOptions = {}): Game {
   };
 
   /**
-   * 轮末统一收口（M20.3-B spec §5.3，顺序固定、全确定性）：
-   * ① 存款 / 信用贷款 / 抵押计息 → ② 保证金借入复利 → ③ 股价 tick（强制方向短路，不消耗随机源）
-   * → ④ 爆仓判定（强平）→ ⑤ 清空强制方向表。
+   * M20.4 设施分红结算（spec §5.4 第 ⑤ 步 / F-D3）：
+   * 逐处设施按「基础 5% + 本轮现金流 × 持股比例」× **当期新闻系数** 分红，
+   * 只加现金、不改持股；结算后把该处现金流清零（下一轮从 0 起算）。
+   * 未售出的设施（无人持股）整链恒为 0 ⇒ 零余额回归。
+   */
+  const payFacilityDividends = (): void => {
+    for (const def of FACILITIES) {
+      const coef = newsCoefOf(state.news, def.id);
+      const cashflow = state.facilityCashflow[def.id];
+      for (const p of state.players) {
+        if (p.bankrupt) continue;
+        const shares = p.facilities[def.id] ?? 0;
+        if (shares <= 0) continue;
+        p.cash += dividendOf(def, shares, cashflow, coef);
+      }
+      state.facilityCashflow[def.id] = 0;
+    }
+  };
+
+  /**
+   * 轮末统一收口（M20.4 spec §5.4，顺序固定、全确定性，7 步）：
+   * ① 存款 / 信用贷款 / 抵押计息（同时累计银行现金流）→ ② 保证金借入复利
+   * → ③ 股价 tick（玩家强制方向 + 当期新闻方向，命中不消耗随机源）
+   * → ④ 爆仓判定（强平）→ ⑤ 设施分红（用当期新闻系数）→ ⑥ 抽下一条新闻 → ⑦ 清空强制方向表。
    */
   const onRoundBoundary = (): void => {
     settleBooks();
@@ -1428,6 +1505,8 @@ export function createGame(opts: GameOptions = {}): Game {
       p.margin.principal = Math.round(p.margin.principal * (1 + MARGIN_RATE));
     }
     const force = state.stockForce.filter((f): f is StockForce => f !== null);
+    const nf = newsForceOf(state.news);
+    if (nf) force.push(nf);
     state.quotes = market.tick(force);
     state.priceHistory = market.history();
     for (const p of state.players) {
@@ -1435,6 +1514,8 @@ export function createGame(opts: GameOptions = {}): Game {
       const value = marketValue(state.portfolios[p.id - 1], state.quotes);
       if (value < p.margin.principal * LIQUIDATION_RATIO) liquidate(p);
     }
+    payFacilityDividends();
+    state.news = rollNews(newsRng);
     state.stockForce = state.stockForce.map(() => null);
   };
 
@@ -1538,6 +1619,22 @@ export function createGame(opts: GameOptions = {}): Game {
     return { ok: true, kind: card, price: resale };
   };
 
+  /* —— M20.4 设施认购 API（spec §5.3）——
+     与 M20.2 银行六 API / M20.3 商店两 API 同构：只改当前玩家现金与持股，
+     **不推进回合、不进 AiStep 分发**；校验复用纯函数 `canSubscribe`（先到先得）。 */
+
+  /** 认购设施股：`shares` 股、每处至多 20 股；失败 `unknown-facility` / `bad-shares` / `sold-out` / `not-enough-cash` */
+  const buyFacility = (facility: FacilityId, shares: number): FacilityOutcome => {
+    const p = currentPlayer(state);
+    const check = canSubscribe(state.players, facility, shares, p.cash);
+    /* `canSubscribe` 的失败分支必然带 `reason`（契约见 core/facility.ts），此处断言收窄 */
+    if (!check.ok) return { ok: false, reason: check.reason as FacilityFail };
+    p.cash -= check.cost;
+    p.facilities[facility] = (p.facilities[facility] ?? 0) + shares;
+    state.lastEvent = { kind: 'facility', facility, shares, cost: check.cost };
+    return { ok: true, facility, shares, cost: check.cost, cash: p.cash };
+  };
+
   const clearEvent = (): void => {
     state.lastDraw = null;
     state.lastEvent = null;
@@ -1547,7 +1644,7 @@ export function createGame(opts: GameOptions = {}): Game {
     state, rollDice, moveCurrent, settleCurrent, buyCurrent, upgradeCurrent, endTurn,
     useCard, trade, skipTurn, clearEvent, sellEstate, bidAuction, autoResolveAuction,
     deposit, withdraw, takeLoan, repayLoan, takeMortgage, redeemMortgage,
-    buyItem, sellItem,
+    buyItem, sellItem, buyFacility,
   };
 }
 
