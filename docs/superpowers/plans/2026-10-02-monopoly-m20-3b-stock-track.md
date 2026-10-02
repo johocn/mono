@@ -155,12 +155,13 @@
 
 ## Task 7：AI 策略（`core/ai.ts`）
 
-- [ ] `src/core/ai.ts`：`pickStock` 保持 `trade(code, 1)`（**AI 恒不用杠杆**，避免自杀式爆仓）。
-- [ ] `src/core/ai.ts`：新增「打 `dividend`」步——`Σ portfolio shares > 0` 时打出（无持仓不打，不浪费手牌）。
-- [ ] `src/core/ai.ts`：新增「打 `bullBear`」步——押**自己持仓最重**的那支为「涨」（并列取表序小者）；无持仓不打。
-- [ ] `test/core/ai.spec.ts`：断言 AI 有持仓时打 `dividend`、无持仓不打；有持仓时打 `bullBear` 且 `stock.code` = 最重仓、`dir === 'up'`。
-- [ ] 跑 `npx tsc --noEmit` 与 `npx vitest run test/core/ai.spec.ts`。
-- [ ] 提交：`git -C d:\zhao add monopoly/src/core/ai.ts monopoly/test/core/ai.spec.ts` → `-m 'M20.3-B Task7: AI 决策论打出红利卡与涨跌卡'`。
+- [x] `src/core/ai.ts`：`pickStock` 保持 `trade(code, 1)`（**AI 恒不用杠杆**，避免自杀式爆仓）——已有实现，未改。
+- [x] `src/core/ai.ts`：新增「打 `dividend`」步——`Σ portfolio shares > 0` 时打出（新增纯函数 `heldShares`）。
+- [x] `src/core/ai.ts`：新增「打 `bullBear`」步——押**自己持仓最重**的那支为「涨」（新增纯函数 `heaviestHolding`，并列取 `STOCKS` 表序小者）；无持仓不打。
+- [x] `src/core/ai.ts`：`AiStep` 的 `card` 变体增可选 `stock?: StockPlay`（`target` 放不下「标的 + 方向」两个字段），`applyStep` 改为 `g.useCard(step.card, step.target, step.stock)` 透传。
+- [x] `test/core/ai.spec.ts`：新增 `describe('ai 股票卡策略（M20.3-B spec §7）')` 5 个单测（`heldShares`/`heaviestHolding` 边界、两卡有/无持仓取舍、`applyStep` 透传 stock / dividend 入账）。
+- [x] 跑 `npx tsc --noEmit` 与 `npx vitest run`（786 测试全绿）。
+- [ ] 提交：`git -C d:\zhao add monopoly/src/core/ai.ts monopoly/test/core/ai.spec.ts docs/superpowers/plans/2026-10-02-monopoly-m20-3b-stock-track.md` → `-m 'M20.3-B Task7: AI 决策论打出红利卡与涨跌卡'`。
 
 ## Task 8：e2e / 截图 / 手册 / 收尾闸门
 

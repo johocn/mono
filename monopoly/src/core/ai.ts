@@ -11,7 +11,7 @@ import { loanLimitOf } from './bank';
 import type { ItemCardKind } from '../data/cards';
 import { STORE_CATALOG } from '../data/item-shop';
 import { RING_SIZE } from '../data/board';
-import { STOCK_TILE_INDEX, STOCKS } from '../data/stocks';
+import { STOCK_TILE_INDEX, STOCKS, type StockPlay } from '../data/stocks';
 import { SPEC_LEADER_MIN_ROUND, personaParams, type AiParams, type Persona } from '../data/ai';
 
 export { personaParams } from '../data/ai';
@@ -35,7 +35,8 @@ export type BankAction = 'deposit' | 'withdraw' | 'borrow' | 'repay' | 'mortgage
 /** 计划中的一步；`close` 见计划抬头「澄清 2」（收口浮层，避免陈旧卡面残留到下一位） */
 export type AiStep =
   | { kind: 'skip' }
-  | { kind: 'card'; card: ItemCardKind; target?: number }
+  /* `stock` 仅 `bullBear` 使用（M20.3-B：涨跌卡带方向 + 指定标的，`target` 放不下两个字段） */
+  | { kind: 'card'; card: ItemCardKind; target?: number; stock?: StockPlay }
   | { kind: 'trade'; code: string; shares: number }
   | { kind: 'buy' } | { kind: 'upgrade' }
   | { kind: 'roll' } | { kind: 'move' } | { kind: 'settle' }
@@ -50,7 +51,7 @@ export type AiStep =
 export function applyStep(g: Game, step: AiStep): unknown {
   switch (step.kind) {
     case 'skip': return g.skipTurn();
-    case 'card': return g.useCard(step.card, step.target);
+    case 'card': return g.useCard(step.card, step.target, step.stock);
     case 'trade': return g.trade(step.code, step.shares);
     case 'buy': return g.buyCurrent();
     case 'upgrade': return g.upgradeCurrent();
@@ -143,6 +144,23 @@ export function pickStock(state: GameState, P: AiParams, cash: number): string |
   if (cand.length === 0) return null;
   cand.sort((a, b) => (b.score - a.score) || (a.code < b.code ? -1 : 1));
   return cand[0].code;
+}
+
+/** M20.3-B 持仓总股数（Σ 各标的 `shares`）；无持仓 → 0（红利卡「有持仓才打」判据） */
+export function heldShares(state: GameState, id: number): number {
+  return Object.values(state.portfolios[id - 1] ?? {}).reduce((n, h) => n + h.shares, 0);
+}
+
+/** M20.3-B 持仓最重的标的代码（并列取 `STOCKS` 表序小者，纯确定）；无持仓 → null */
+export function heaviestHolding(state: GameState, id: number): string | null {
+  const book = state.portfolios[id - 1] ?? {};
+  let best: string | null = null;
+  let bestN = 0;
+  for (const def of STOCKS) {                 // 恒按表序遍历 ⇒ 并列时保序取首个，零随机
+    const n = book[def.code]?.shares ?? 0;
+    if (n > bestN) { bestN = n; best = def.code; }
+  }
+  return best;
 }
 
 /**
@@ -318,6 +336,18 @@ function settledPlan(state: GameState, persona: Persona, P: AiParams): AiStep[] 
   if (persona === 'speculative' && (state.hands[me.id - 1] ?? []).includes('doubleRent')
     && !state.doubleRent[me.id - 1] && me.cash >= P.reserve && ownedFrom(state, me.id, 2).length > 0) {
     post.push({ kind: 'card', card: 'doubleRent' });
+  }
+
+  /* ⑦ 股票卡（M20.3-B spec §7）：**有持仓才打**，避免白扔手牌 ——
+     红利卡按持仓每股定额（无持仓仅折现 ￥100，对 AI 属低价值）；涨跌卡押**自己持仓最重**那支为「涨」
+     （并列取 `STOCKS` 表序小者，`heaviestHolding` 纯确定），押跌等于打自己。 */
+  const hand = state.hands[me.id - 1] ?? [];
+  if (hand.includes('dividend') && heldShares(state, me.id) > 0) {
+    post.push({ kind: 'card', card: 'dividend' });
+  }
+  if (hand.includes('bullBear')) {
+    const heavy = heaviestHolding(state, me.id);
+    if (heavy !== null) post.push({ kind: 'card', card: 'bullBear', stock: { code: heavy, dir: 'up' } });
   }
 
   return [

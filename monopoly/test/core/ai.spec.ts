@@ -4,8 +4,9 @@ import {
   isPersona, parsePersonaList, personaParams,
 } from '../../src/data/ai';
 import { createGame, currentPlayer } from '../../src/core/game';
-import { applyStep, decideTurn, pickBank, type AiStep } from '../../src/core/ai';
+import { applyStep, decideTurn, heaviestHolding, heldShares, pickBank, type AiStep } from '../../src/core/ai';
 import { BANK_TILE_INDEX } from '../../src/data/bank';
+import { DIVIDEND_PER_SHARE } from '../../src/data/stocks';
 
 describe('ai 性格档案', () => {
   it('三种性格的标签与说明齐备', () => {
@@ -304,6 +305,69 @@ describe('ai pickBank 银行信贷策略（M20.2-D12）', () => {
     currentPlayer(g.state).pos = BANK_TILE_INDEX;
     expect(applyStep(g, { kind: 'bank', action: 'mortgage' })).toEqual({ ok: false, reason: 'no-estate' });
     expect(applyStep(g, { kind: 'bank', action: 'redeem', index: 3 })).toEqual({ ok: false, reason: 'no-mortgage' });
+  });
+});
+
+describe('ai 股票卡策略（M20.3-B spec §7）', () => {
+  /** 非交易所空地 + settled：排除 §③ 股票交易步干扰，只观察两张新卡的取舍 */
+  const setup = () => {
+    const g = createGame({ seed: 3 });
+    const me = currentPlayer(g.state);
+    me.pos = 5;
+    g.state.phase = 'settled';
+    return { g, me };
+  };
+  const hasCard = (g: ReturnType<typeof createGame>, card: string): boolean =>
+    decideTurn(g.state, 'aggressive').some((s) => s.kind === 'card' && s.card === card);
+
+  it('heldShares / heaviestHolding：Σ 各标的股数；最重仓并列取 STOCKS 表序小者', () => {
+    const { g, me } = setup();
+    expect(heldShares(g.state, me.id)).toBe(0);
+    expect(heaviestHolding(g.state, me.id)).toBeNull();
+    g.state.portfolios[me.id - 1].SY02 = { code: 'SY02', shares: 2, cost: 160 };
+    g.state.portfolios[me.id - 1].SY04 = { code: 'SY04', shares: 2, cost: 80 };
+    expect(heldShares(g.state, me.id)).toBe(4);
+    expect(heaviestHolding(g.state, me.id)).toBe('SY02');   // 并列 2 股 → 表序小者
+    g.state.portfolios[me.id - 1].SY04.shares = 3;
+    expect(heaviestHolding(g.state, me.id)).toBe('SY04');
+  });
+
+  it('持红利卡：无持仓不打（不浪费手牌）；有持仓才打', () => {
+    const { g, me } = setup();
+    g.state.hands[me.id - 1] = ['dividend'];
+    expect(hasCard(g, 'dividend')).toBe(false);
+    g.state.portfolios[me.id - 1].SY01 = { code: 'SY01', shares: 3, cost: 360 };
+    expect(hasCard(g, 'dividend')).toBe(true);
+  });
+
+  it('持涨跌卡：无持仓不打；有持仓押自己最重仓且方向恒为「涨」', () => {
+    const { g, me } = setup();
+    g.state.hands[me.id - 1] = ['bullBear'];
+    expect(hasCard(g, 'bullBear')).toBe(false);
+    g.state.portfolios[me.id - 1].SY03 = { code: 'SY03', shares: 1, cost: 60 };
+    g.state.portfolios[me.id - 1].SY02 = { code: 'SY02', shares: 4, cost: 320 };
+    const step = decideTurn(g.state, 'aggressive')
+      .find((s): s is Extract<AiStep, { kind: 'card' }> => s.kind === 'card' && s.card === 'bullBear');
+    expect(step?.stock).toEqual({ code: 'SY02', dir: 'up' });
+  });
+
+  it('applyStep 透传 stock：落库到 stockForce，并消耗手牌', () => {
+    const { g, me } = setup();
+    g.state.hands[me.id - 1] = ['bullBear'];
+    const r = applyStep(g, { kind: 'card', card: 'bullBear', stock: { code: 'SY01', dir: 'down' } }) as { ok: boolean };
+    expect(r.ok).toBe(true);
+    expect(g.state.stockForce[me.id - 1]).toEqual({ code: 'SY01', dir: -1 });
+    expect(g.state.hands[me.id - 1]).not.toContain('bullBear');
+  });
+
+  it('applyStep 透传 dividend：按持仓每股定额入账', () => {
+    const { g, me } = setup();
+    g.state.hands[me.id - 1] = ['dividend'];
+    g.state.portfolios[me.id - 1].SY01 = { code: 'SY01', shares: 3, cost: 360 };
+    const before = me.cash;
+    const r = applyStep(g, { kind: 'card', card: 'dividend' }) as { ok: boolean };
+    expect(r.ok).toBe(true);
+    expect(me.cash).toBe(before + 3 * DIVIDEND_PER_SHARE);
   });
 });
 
