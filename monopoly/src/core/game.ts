@@ -7,7 +7,10 @@ import {
   CHANCE_DECK, FATE_DECK, FREE_UPGRADE_REFUND, ITEM_CARDS, PARDON_REFUND,
   type ChanceCardDef, type FateCardDef, type ItemCardKind,
 } from '../data/cards';
-import { LEVERAGES, LIQUIDATION_RATIO, MARGIN_RATE, STOCK_TILE_INDEX, STOCKS } from '../data/stocks';
+import {
+  DIVIDEND_PER_SHARE, DIVIDEND_REFUND, LEVERAGES, LIQUIDATION_RATIO, MARGIN_RATE, STOCKS,
+  STOCK_TILE_INDEX, type StockPlay,
+} from '../data/stocks';
 import { advance, type Advance } from './board-path';
 import {
   barrierAt, bombDown, clearBarrier, createDeck, demolishDown, grant, has, placeBarrier,
@@ -276,7 +279,7 @@ export type BidOutcome =
 
 export type CardFail =
   | 'not-held' | 'no-target' | 'bad-phase' | 'occupied' | 'passive'
-  | 'not-estate' | 'own-tile' | 'invalid-target';
+  | 'not-estate' | 'own-tile' | 'invalid-target' | 'unknown-code';
 export type CardOutcome =
   | { ok: true; kind: ItemCardKind; target?: number }
   | { ok: false; reason: CardFail };
@@ -302,8 +305,8 @@ export interface Game {
   buyCurrent(): GameBuyOutcome;
   upgradeCurrent(): GameUpgradeOutcome;
   endTurn(): void;
-  /** 打出手牌（炸弹/路障/免罚/迁点/租金翻倍） */
-  useCard(kind: ItemCardKind, target?: number): CardOutcome;
+  /** 打出手牌（炸弹/路障/免罚/迁点/租金翻倍；M20.3-B 增涨跌卡 / 红利卡） */
+  useCard(kind: ItemCardKind, target?: number, stock?: StockPlay): CardOutcome;
   /** 股票交易：shares > 0 买 / < 0 卖（须站在 index 19 股票交易所）；杠杆买入给 `leverage`（2 / 3，默认 1） */
   trade(code: string, shares: number, leverage?: number): TradeOutcome;
   /** 自由出售自有地块：价 = `sellAt()`（变卖价 100%）；售出地块删键回归「可购买」 */
@@ -1111,7 +1114,7 @@ export function createGame(opts: GameOptions = {}): Game {
     return out;
   };
 
-  const useCard = (kind: ItemCardKind, target?: number): CardOutcome => {
+  const useCard = (kind: ItemCardKind, target?: number, stock?: StockPlay): CardOutcome => {
     const p = currentPlayer(state);
     const i = p.id - 1;
     if (!has(state.hands[i], kind)) return { ok: false, reason: 'not-held' };
@@ -1149,6 +1152,22 @@ export function createGame(opts: GameOptions = {}): Game {
         consumeCard(state.hands[i], kind);
         state.lastEvent = { kind: 'card', card: kind, target };
         return { ok: true, kind, target };
+      }
+      /* —— M20.3-B 股票轨两张卡（spec §5.5）：都不推进回合 —— */
+      case 'bullBear': {
+        if (!stock) return { ok: false, reason: 'no-target' };
+        if (!STOCKS.some((d) => d.code === stock.code)) return { ok: false, reason: 'unknown-code' };
+        state.stockForce[i] = { code: stock.code, dir: stock.dir === 'up' ? 1 : -1 };
+        consumeCard(state.hands[i], kind);
+        state.lastEvent = { kind: 'card', card: kind, target: null };
+        return { ok: true, kind };
+      }
+      case 'dividend': {
+        const shares = Object.values(state.portfolios[i]).reduce((n, h) => n + h.shares, 0);
+        p.cash += shares > 0 ? shares * DIVIDEND_PER_SHARE : DIVIDEND_REFUND;
+        consumeCard(state.hands[i], kind);
+        state.lastEvent = { kind: 'card', card: kind, target: null };
+        return { ok: true, kind };
       }
       default: {
         state.doubleRent[i] = true;

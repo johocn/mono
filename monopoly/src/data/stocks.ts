@@ -30,6 +30,11 @@ export const STOCK_TILE_INDEX = 19;
 export const LOT_TIERS = [1, SHARE_LOT * 5] as const;
 /** 数量档：具体股数（正整数）或 `'all'`（全仓，按买入用现金 / 卖出用持股推导） */
 export type LotTier = number | 'all';
+/** 涨跌卡出牌参数（UI 语义方向）；落库时映射为 `StockForce.dir`（`'up' → 1` / `'down' → -1`） */
+export interface StockPlay {
+  code: string;
+  dir: 'up' | 'down';
+}
 /** 杠杆档位：仅 `round >= MARGIN_UNLOCK_ROUND` 时可选，且只作用于新买入（B-D4） */
 export const LEVERAGES = [2, 3] as const;
 /** 杠杆解锁轮次（客户口径「第 8 轮起」，B-D9） */
