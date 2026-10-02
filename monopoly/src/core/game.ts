@@ -22,6 +22,7 @@ import {
   buyShares, createMarket, marketValue, sellShares,
   type Market, type Portfolio, type Quotes, type TradeOutcome as CoreTradeOutcome,
 } from './stocks';
+import { priceOf, resaleOf } from './item-shop';
 import {
   HOSPITAL_TURNS, JAIL_TURNS, LOTTERY_STAKE, TAX_CAP, TAX_RATE,
   nextJail, rollBonus, rollLottery, specialAt, type BonusReward,
@@ -212,6 +213,7 @@ export type EventLog =
   | { kind: 'auctionDone'; index: number; winner: number | null; price: number }
   | { kind: 'card'; card: ItemCardKind; target: number | null }
   | { kind: 'trade'; code: string; shares: number }
+  | { kind: 'item-shop'; action: 'buy' | 'sell'; card: ItemCardKind; price: number }
   | { kind: 'sell'; index: number; price: number };
 
 /** 细分落格结果的具名别名（供 lastEvent 精确赋值） */
@@ -271,6 +273,14 @@ export type TradeOutcome =
   | CoreTradeOutcome
   | { ok: false; reason: 'not-at-market' };
 
+/** 道具商店买卖失败原因（M20.3 spec §5.3） */
+export type ItemShopFail = 'unknown-kind' | 'already-owned' | 'not-owned' | 'not-enough-cash';
+
+/** 道具商店买卖结果：每次 1 张、不推进回合（与 M20.2 银行六 API 同构） */
+export type ItemShopOutcome =
+  | { ok: true; kind: ItemCardKind; price: number }
+  | { ok: false; reason: ItemShopFail };
+
 export interface Game {
   state: GameState;
   rollDice(): DiceRoll;
@@ -302,6 +312,11 @@ export interface Game {
   takeMortgage(index: number): BankOutcome;
   /** 赎回抵押：付清该笔本金，解锁地块 */
   redeemMortgage(index: number): BankOutcome;
+  /* —— M20.3 道具商店（spec §5.3）—— */
+  /** 买入道具（每次 1 张）：扣售价，加入当前玩家手牌；已持有 / 现金不足则失败 */
+  buyItem(kind: string): ItemShopOutcome;
+  /** 卖出道具（每次 1 张）：移出手牌，加回收价（售价 × 50%）；未持有则失败 */
+  sellItem(kind: string): ItemShopOutcome;
   /** 监狱禁行时唯一的 idle 推进 */
   skipTurn(): { skipped: true; remaining: number };
   /** 关闭浮层（只清 lastEvent / lastDraw） */
@@ -1379,6 +1394,41 @@ export function createGame(opts: GameOptions = {}): Game {
     return { skipped: true, remaining };
   };
 
+  /* —— M20.3 道具商店两 API（spec §5.3）——
+     与 M20.2 银行六 API 同构：只改当前玩家现金与手牌，**不推进回合、不进 AiStep 分发**。
+     手牌模型是「每种至多 1 张」（`grant` 去重），故「已持有」即「再买会重复」，
+     且未持有时必然有空槽（`hand.length < HAND_SIZE`），无需单独的手牌已满分支。 */
+
+  /** 买入：扣售价 → 入手牌；失败 `unknown-kind` / `already-owned` / `not-enough-cash` */
+  const buyItem = (kind: string): ItemShopOutcome => {
+    const price = priceOf(kind);
+    if (price === undefined) return { ok: false, reason: 'unknown-kind' };
+    const card = kind as ItemCardKind;
+    const p = currentPlayer(state);
+    const hand = state.hands[p.id - 1];
+    if (has(hand, card)) return { ok: false, reason: 'already-owned' };
+    if (p.cash < price) return { ok: false, reason: 'not-enough-cash' };
+    p.cash -= price;
+    grant(hand, card);
+    state.lastEvent = { kind: 'item-shop', action: 'buy', card, price };
+    return { ok: true, kind: card, price };
+  };
+
+  /** 卖出：移出手牌 → 加回收价（售价 × 50%）；失败 `unknown-kind` / `not-owned`。
+      结果里的 `price` 是**实收回收价**（与买入时的售价口径分列，便于 UI 直接显示）。 */
+  const sellItem = (kind: string): ItemShopOutcome => {
+    const price = priceOf(kind);
+    if (price === undefined) return { ok: false, reason: 'unknown-kind' };
+    const card = kind as ItemCardKind;
+    const p = currentPlayer(state);
+    const hand = state.hands[p.id - 1];
+    if (!consumeCard(hand, card)) return { ok: false, reason: 'not-owned' };
+    const resale = resaleOf(price);
+    p.cash += resale;
+    state.lastEvent = { kind: 'item-shop', action: 'sell', card, price: resale };
+    return { ok: true, kind: card, price: resale };
+  };
+
   const clearEvent = (): void => {
     state.lastDraw = null;
     state.lastEvent = null;
@@ -1388,6 +1438,7 @@ export function createGame(opts: GameOptions = {}): Game {
     state, rollDice, moveCurrent, settleCurrent, buyCurrent, upgradeCurrent, endTurn,
     useCard, trade, skipTurn, clearEvent, sellEstate, bidAuction, autoResolveAuction,
     deposit, withdraw, takeLoan, repayLoan, takeMortgage, redeemMortgage,
+    buyItem, sellItem,
   };
 }
 
