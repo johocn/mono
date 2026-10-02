@@ -137,21 +137,21 @@
 - [x] `src/ui/panels.ts`：`panelHitAreas` 增 `bullbear` 分支——方向键（`bullbear:dir`，`target='up'|'down'`）+ 4 行（`bullbear:pick`，`target=code`）+ 取消（`bullbear:cancel`）。
 - [x] `test/ui/panels.spec.ts` 追加：`bullbearOpen` 时 `overlayOf === 'bullbear'`；优先级低于 `stock` 高于 `draw`；命中区 `bullbear:pick` 的 `target` 为 4 个 code。
 - [x] 跑 `npx tsc --noEmit` 与 `npx vitest run test/ui/panels.spec.ts`（34 绿）。
-- [ ] 提交：`git -C d:\zhao add monopoly/src/ui/panels.ts monopoly/src/skin/layout.ts monopoly/test/ui/panels.spec.ts` → `-m 'M20.3-B Task5: 涨跌卡浮层纯函数与命中区'`。
+- [x] 提交：`git -C d:\zhao add monopoly/src/ui/panels.ts monopoly/src/skin/layout.ts monopoly/test/ui/panels.spec.ts` → `-m 'M20.3-B Task5: 涨跌卡浮层纯函数与命中区'`。
 
 ## Task 6：`main.ts` 接线（三档 / 杠杆 / 涨跌卡）
 
-- [ ] `src/main.ts`：新增 UI 态 `stockSel = STOCKS[0].code`、`stockLev = 1`、`bullbearOpen = false`、`bullbearDir: 'up'|'down' = 'up'`；每回合切换时重置（选股保留、杠杆回 1、面板关闭）。
-- [ ] `src/main.ts`：`stepOfPanel` 增 `stock:select`（切 `stockSel`）/ `stock:lev`（切 `stockLev`）只改 UI 态；
-      `stock:buy` / `stock:sell` 解析 `target` 的 `` `${code}:${tier}` ``，用 `lotShares` 换算股数后 `trade(code, ±n, stockLev)`。
-- [ ] `src/main.ts`：`panelHitAreas(...)` 调用处传入 `stockSel` / `stockLev`；`panelSpecs(...)` 调用处同样透传。
-- [ ] `src/main.ts`：`card:bullBear` 分支 → `bullbearOpen = true`（**不进选目标态**，与 `teleport/barrier` 区分）；
+- [x] `src/main.ts`：新增 UI 态 `stockSel = STOCKS[0].code`、`stockLev = 1`、`bullbearOpen = false`、`bullbearDir: 'up'|'down' = 'up'`；每回合切换时重置（选股保留、杠杆回 1、面板关闭）。
+- [x] `src/main.ts`：`stepOfPanel` 增 `stock:select`（切 `stockSel`）/ `stock:lev`（切 `stockLev`）只改 UI 态；
+      `stock:buy` / `stock:sell` 解析 `target` 的 `` `${code}:${tier}` ``，用 `tierShares` 换算股数后 `trade(code, ±n, stockLev)`。
+- [x] `src/main.ts`：`panelHitAreas(...)` 调用处传入 `stockSel` / `stockLev`；`panelSpecs(...)` 调用处同样透传。
+- [x] `src/main.ts`：`card:bullBear` 分支 → `bullbearOpen = true`（**不进选目标态**，与 `teleport/barrier` 区分）；
       `bullbear:dir` → 切 `bullbearDir`；`bullbear:pick` → `useCard('bullBear', undefined, { code: String(target), dir: bullbearDir })` 成功后关面板；`bullbear:cancel` → 关面板。
-- [ ] `src/main.ts`：`card:dividend` 直接 `useCard('dividend')`（点即用，无浮层）。
-- [ ] `src/ui/Hud.ts`：`card:bullBear` 归入「点即开浮层」类（不设置 `uiSel`）。
-- [ ] `src/ui/aiDriver.ts`：`bullbear` 浮层展开时暂停（与银行 / 商店同构；AI 不打涨跌卡浮层故仅需悬挂保护）。
-- [ ] `npx tsc --noEmit` 通过。
-- [ ] 提交：`git -C d:\zhao add monopoly/src/main.ts monopoly/src/ui/Hud.ts monopoly/src/ui/aiDriver.ts` → `-m 'M20.3-B Task6: 股票三档/杠杆/涨跌卡接线'`。
+- [x] `src/main.ts`：`card:dividend` 走通用兜底 `{ kind:'card', card:'dividend' }`（点即用，无浮层）。
+- [x] `src/ui/Hud.ts`：手牌槽命中实际由 `ui/panels.ts` 产出 `card:${kind}`，故 `card:bullBear` 在 `panels.ts` 的 `PanelActionId` 登记、由 `stepOfPanel` 拦截，Hud 无需改动。
+- [x] `src/ui/aiDriver.ts`：涨跌卡浮层展开时暂停——经 `main.ts` 注入的 `paused: () => bankOpen || storeOpen || bullbearOpen` 落实（aiDriver 无需改动）。
+- [x] `npx tsc --noEmit` 通过（781 测试全绿）。
+- [x] 提交：`git -C d:\zhao add monopoly/src/main.ts monopoly/src/ui/panels.ts docs/superpowers/plans/2026-10-02-monopoly-m20-3b-stock-track.md` → `-m 'M20.3-B Task6: 股票三档/杠杆/涨跌卡接线'`。
 
 ## Task 7：AI 策略（`core/ai.ts`）
 

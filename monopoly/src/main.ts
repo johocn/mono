@@ -21,7 +21,7 @@ import { candidatesFor, canTarget, type PickKind } from './core/targeting';
 import { bboxOf, choreography, frameFor, landingPose, type CamPose, type Cell, type ChoreographyOpts, type View } from './core/framing';
 import { createCamera, toWorld } from './render/camera';
 import { hudSpecs, mountHud, type HudActionId, type HudHandle } from './ui/Hud';
-import { handLayout, mountPanels, overlayOf, panelSpecs, type BankProductKind, type PanelActionId, type PanelHandle, type StoreUiState, type TargetingView } from './ui/panels';
+import { handLayout, mountPanels, overlayOf, panelSpecs, parseTierKey, tierShares, type BankProductKind, type BullbearUiState, type PanelActionId, type PanelHandle, type StockUiState, type StoreUiState, type TargetingView } from './ui/panels';
 import { createAiDriver, type AiDriver } from './ui/aiDriver';
 import { createAudioEngine } from './ui/audio';
 import { mountSetup, readPlan, resolveSeats, type SeatPlan } from './ui/setup';
@@ -35,7 +35,7 @@ import {
 import { SHARE_VERSION } from './data/share';
 import { FATE_DECK, type ItemCardKind } from './data/cards';
 import { DEMO_OWNER, PLAYER_NAME, type BuildLevel } from './data/board';
-import { STOCK_TILE_INDEX } from './data/stocks';
+import { STOCKS, STOCK_TILE_INDEX } from './data/stocks';
 import { BANK_TILE_INDEX } from './data/bank';
 import { STORE_CATALOG } from './data/item-shop';
 import { BUILDING_SCALE, BUILDING_Y_OFFSET, BUBBLE_HOLD_MS, BUBBLE_MOVE_HOLD_MS, CAM_AI_SCALE, CAM_BACK_MS, CAM_FALLBACK_MAX_ZOOM, CAM_FOLLOW_ZOOM, CAM_IDLE_ZOOM, CAM_MAX_ZOOM, CAM_MIN_ZOOM, CAM_PUSH_MS, CAM_SETTLE_MS, CAM_TILE_PAD, CAM_VIEW_CX, CAM_VIEW_CY, CAM_VIEW_H, CAM_VIEW_W, DEFAULT_GEO, FX_FRAMES, FX_LAND_BACK_MS, FX_LAND_PUNCH_MS, FX_LAND_PUSH_MS, FX_LEVELS, FX_NOFX_SPEED, LABEL_GROUND, PANEL_HAND_Y, PANEL_SLOT_H, STAGE_H, STAGE_W, TILE_PICK_TOL, UI_BREAK_W } from './skin/layout';
@@ -377,7 +377,7 @@ export async function boot(): Promise<void> {
   const camPlanOf = (step: AiStep, result: unknown): CamPlan | null => {
     const st = game?.state;
     if (!st || !camOn) return null;
-    const open = overlayOf(st, { bankOpen, storeOpen }) !== null;
+    const open = overlayOf(st, overlays()) !== null;
     const ai = (seats[st.current] ?? null) !== null;
     const ms = (v: number): number => (ai ? v * CAM_AI_SCALE : v);
     /** 推近（禁区时跳过） */
@@ -477,15 +477,28 @@ export async function boot(): Promise<void> {
   let storeOpen = false;
   let storeSel: ItemCardKind = STORE_CATALOG[0].kind;
   let handScroll = 0;
+  /* —— M20.3-B 股票 / 涨跌卡浮层 UI 态（spec §6.1/§6.2）：`stockSel` = 逐行选中的标的（换回合保留）、
+     `stockLev` = 杠杆倍数（1 = 不加，换回合重置回 1）；`bullbearOpen` / `bullbearDir` = 涨跌卡浮层
+     （手牌点 `card:bullBear` 展开选方向，再点标的行即落库） —— */
+  let stockSel = STOCKS[0].code;
+  let stockLev = 1;
+  let bullbearOpen = false;
+  let bullbearDir: 'up' | 'down' = 'up';
   /** 抽屉展开态：教程期间强制展开（第 3 步要亮 5 个槽）；AI 回合自动收起（该区位被「加速 / 跳过」占用） */
   const handOpenEff = (): boolean =>
     (handOpen || tutorial !== null) && !(seats[game?.state.current ?? 0] ?? null);
   /** 地块卡：仅「真人回合 + 停在格结算态 + 无浮层 + 抽屉收起」滑入（非常驻；互斥于抽屉，两者台位重叠） */
   const tileCardOn = (g: Game): boolean =>
-    g.state.phase === 'settled' && overlayOf(g.state, { bankOpen, storeOpen }) === null
+    g.state.phase === 'settled' && overlayOf(g.state, overlays()) === null
     && !handOpenEff() && !(seats[g.state.current] ?? null);
   /** 商店 UI 态快照（`panelSpecs` / `panelHitAreas` / `mountPanels` view 共用同一口径） */
   const storeUi = (): StoreUiState => ({ open: storeOpen, sel: storeSel });
+  /** 股票 / 涨跌卡浮层 UI 态快照（同上，与 `storeUi` 同规） */
+  const stockUi = (): StockUiState => ({ sel: stockSel, lev: stockLev });
+  const bullbearUi = (): BullbearUiState => ({ open: bullbearOpen, dir: bullbearDir });
+  /** `overlayOf` 入参快照（三个非模态浮层的开合；所有可见性仲裁共用同一口径，避免漏传一个） */
+  const overlays = (): { bankOpen: boolean; storeOpen: boolean; bullbearOpen: boolean } =>
+    ({ bankOpen, storeOpen, bullbearOpen });
 
   /**
    * 地砖归属色 / 楼体业主色 / 楼顶名牌名色 **共用同一个归属口**（M18 D1/D3）。
@@ -554,7 +567,8 @@ export async function boot(): Promise<void> {
         { tileCard: tileCardOn(g), handOpen: handOpenEff(), callout, bankOpen, storeOpen }),
       /* M5 浮层：手牌抽屉（默认收起）+ 抽卡翻牌 / 股票盘 / 结算面板（未触发时为空）；
          M20.2 银行浮层（版式 C）由 `{ open, sel }` 驱动、M20.3 商店浮层同理，可见性仍由 `overlayOf` 统一仲裁 */
-      ...panelSpecs(g.state, handOpenEff(), uiSel, { open: bankOpen, sel: bankSel }, handScroll, storeUi()),
+      ...panelSpecs(g.state, handOpenEff(), uiSel, { open: bankOpen, sel: bankSel }, handScroll, storeUi(),
+        stockUi(), bullbearUi()),
     ];
   };
 
@@ -592,7 +606,7 @@ export async function boot(): Promise<void> {
     slots?.update(calloutOf(game));
     /* 遮挡修复：`#mono-slots`（右上轮播 + 左下战报）是 DOM，恒在画布之上 ⇒ 任何浮层展开时
        整块隐藏，否则必然压住事件卡（canvas 的 `ui.card`）左下角。无浮层时 `false` = 逐像素回现状。 */
-    slots?.setHidden(game !== null && overlayOf(game.state, { bankOpen, storeOpen }) !== null);
+    slots?.setHidden(game !== null && overlayOf(game.state, overlays()) !== null);
     /* 选目标命中层仅在选目标态吃事件（否则 pointer-events:none 穿透到画布 / 其它覆盖层） */
     pickLayer.style.pointerEvents = uiSel ? 'auto' : 'none';
   };
@@ -735,6 +749,7 @@ export async function boot(): Promise<void> {
        M20.3 商店浮层同理（同为常驻 HUD 入口的非模态面板）。 */
     bankOpen = false;
     storeOpen = false;
+    bullbearOpen = false;      // 涨跌卡浮层同为非模态：任何推进动作前先收起
     /* M19-D5：破坏类卡（bomb / demolish）须在 `applyStep` 改 state **之前**捕捉目标格旧层级，
        以便 `ctxOfStep` 用旧楼元素（building.s{s}.l{oldLv}）播「下沉 + 碎屑」，而非已降级/已删的 estate。
        `ctxOf(result)` 在 runAction 内于 `applyStep` 之后才被调用，故此处捕捉后由闭包透传。 */
@@ -760,6 +775,9 @@ export async function boot(): Promise<void> {
       ),
       (r: unknown) => camPlanOf(step, r),
     );
+    /* 换回合收口（spec §3.8 / §6.1）：结束回合后杠杆档位回到 1×（下一位玩家不该继承上一位的风险偏好）；
+       股票浮层的「选中标的」保留（跨回合更顺手，切回同一支不必重选） */
+    if (step.kind === 'end') stockLev = 1;
     /* 落 9 号格自动弹银行浮层（spec §3.8）：只在结算动作之后判定（真人席位 + `settled` + 站 9 号格） */
     if (step.kind === 'settle') autoBankOf(g);
   };
@@ -850,8 +868,39 @@ export async function boot(): Promise<void> {
       }
       return null;
     }
-    if (a === 'stock:buy') return { kind: 'trade', code: String(target), shares: 1 };
-    if (a === 'stock:sell') return { kind: 'trade', code: String(target), shares: -1 };
+    /* M20.3-B 股票浮层（版式 A，spec §6.1）：`stock:select` 切逐行选中、`stock:lev` 切杠杆档，**只改 UI 态**；
+       买 / 卖三档 `data-target` 编成 `${code}:${tier}`，数量由 `tierShares` 按「现价 / 现金 / 持仓 / 杠杆」换算
+       （卖出恒不加杠杆，故 lev 传 1），**直接落库**到 `Game.trade`（与银行六 API 同构：不推进回合、无动效与气泡）。 */
+    if (a === 'stock:select') { stockSel = String(target); paint(); return null; }
+    if (a === 'stock:lev') { stockLev = Number(target); paint(); return null; }
+    if (a === 'stock:buy' || a === 'stock:sell') {
+      const g = game;
+      if (g) {
+        const [code, raw] = String(target).split(':');
+        const side = a === 'stock:buy' ? 'buy' : 'sell';
+        const lev = side === 'buy' ? stockLev : 1;
+        const n = tierShares(g.state, code, side, parseTierKey(raw), lev);
+        if (n > 0) g.trade(code, side === 'buy' ? n : -n, lev);
+        paint();
+      }
+      return null;
+    }
+    /* M20.3-B 涨跌卡浮层（spec §6.2）：`card:bullBear` 展开（非选目标态，故不落 `uiSel`）；
+       `bullbear:*` 只切 UI 态 / 点行落库——点标的行即成交，无需二次确认 */
+    if (a === 'card:bullBear') { bullbearOpen = true; bullbearDir = 'up'; paint(); return null; }
+    if (a.startsWith('bullbear:')) {
+      const g = game;
+      if (g) {
+        if (a === 'bullbear:cancel') bullbearOpen = false;
+        else if (a === 'bullbear:dir') bullbearDir = target as 'up' | 'down';
+        else if (a === 'bullbear:pick') {
+          g.useCard('bullBear', undefined, { code: String(target), dir: bullbearDir });
+          bullbearOpen = false;
+        }
+        paint();
+      }
+      return null;
+    }
     /* M20.3 商店浮层（spec §5.4）：`store:select` 只切 UI 选中态；买 / 卖**直接落库**到 `Game.buyItem` /
        `Game.sellItem`（与银行六 API 同构：不推进回合、不进 `AiStep`、无动效与气泡）。 */
     if (a === 'store:select') { storeSel = target as ItemCardKind; paint(); return null; }
@@ -914,7 +963,10 @@ export async function boot(): Promise<void> {
       if (fx.busy()) fx.skip();
       const step = stepOfPanel(a, target);
       if (step) dispatch(step);
-    }, () => ({ handOpen: handOpenEff(), sel: uiSel, bank: { open: bankOpen, sel: bankSel }, store: storeUi(), handScroll }));
+    }, () => ({
+      handOpen: handOpenEff(), sel: uiSel, bank: { open: bankOpen, sel: bankSel },
+      store: storeUi(), stock: stockUi(), bullbear: bullbearUi(), handScroll,
+    }));
     /* —— M20.3 手牌横滑手势（spec §4.3）：画布上无法用原生滚动（视觉在 Canvas、命中在 DOM），
        故在 `#mono-panels` 层做指针拖拽。落手牌行带且确有可滚量才进拖拽态；水平位移超过
        `HAND_SWIPE_TOL` 即视为滑动，并在**捕获阶段**拦掉紧随其后的一次 click，
@@ -970,8 +1022,9 @@ export async function boot(): Promise<void> {
       onFlush: () => fx.play({ kind: 'end' }, () => paint()),
       /* 「跳过本次」= 整席位一次落库，中间几步的取景没有观感价值（spec §6 P1 第 13 项）⇒ 直接归位 */
       onSkip: () => { if (camOn) camera.reset(0); },
-      /* 银行 / 商店浮层展开时与拍卖同语义挂起（M20.2 §3.8 / M20.3 §5.1）：面板在场时不推进 AI 走位 */
-      paused: () => bankOpen || storeOpen,
+      /* 银行 / 商店 / 涨跌卡浮层展开时与拍卖同语义挂起（M20.2 §3.8 / M20.3 §5.1 / M20.3-B §6.2）：
+         面板在场时不推进 AI 走位 */
+      paused: () => bankOpen || storeOpen || bullbearOpen,
     });
     driver.start();
     /* BGM 起播（spec §6.2）：未解锁时只记「想要」，首次手势 `unlock()` 时随解锁一起起播 */
@@ -1127,6 +1180,21 @@ export async function boot(): Promise<void> {
       storeOpen = open;
       if (sel) storeSel = sel;
       if (open) bankOpen = false;       // 与银行互斥
+      paint();
+    },
+    /* 股票浮层（M20.3-B spec §6.1）：`stock()` 读 UI 态（选中标的 + 杠杆档）；
+       `setStock(sel?, lev?)` 供 e2e / 取证脚本直接定位（仅改 UI 态，不落库） */
+    stock: () => stockUi(),
+    setStock: (sel?: string, lev?: number) => {
+      if (sel) stockSel = sel;
+      if (lev) stockLev = lev;
+      paint();
+    },
+    /* 涨跌卡浮层（M20.3-B spec §6.2）：`bullbear()` 读 UI 态；`setBullbear(open, dir?)` 同上 */
+    bullbear: () => bullbearUi(),
+    setBullbear: (open: boolean, dir?: 'up' | 'down') => {
+      bullbearOpen = open;
+      if (dir) bullbearDir = dir;
       paint();
     },
     /* 手牌横滑（M20.3 spec §4.3）：`handScroll()` 读当前值（已 clamp）；`setHandScroll(v)` 供取证脚本直接定位 */

@@ -52,6 +52,8 @@ import {
 /** 浮层动作位（DOM 命中层 `data-action`；`data-target` 给目标格号 / 股票代码 / 银行产品 / 出价金额） */
 export type PanelActionId =
   | 'card:bomb' | 'card:barrier' | 'card:teleport' | 'card:doubleRent' | 'card:demolish'
+  /* M20.3-B 涨跌卡（spec §6.2）：展开选方向浮层（非选目标态）；`card:dividend` 无专用动作，走通用兜底 */
+  | 'card:bullBear'
   | 'card:cancel'
   | 'stock:buy' | 'stock:sell' | 'stock:select' | 'stock:lev' | 'card:close' | 'settle:close'
   /* M20.3-B 涨跌卡浮层（spec §6.2）：方向分段（`target = 'up'|'down'`）+ 逐行选标的（`target = code`）+ 取消 */
@@ -275,6 +277,13 @@ export const TIER_SEQ: LotTier[] = [...LOT_TIERS, 'all'];
 /** `data-target` 第二段的档位编码（整数档写数字，全仓写 `all`） */
 export function tierKey(tier: LotTier): string {
   return tier === 'all' ? 'all' : String(tier);
+}
+
+/** `tierKey` 的逆：`data-target` 第二段 → 数量档（`'all'` 原样；坏值／非正回落到 1 手，成交仍受 `tierShares` clamp） */
+export function parseTierKey(raw: string): LotTier {
+  if (raw === 'all') return 'all';
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : 1;
 }
 
 /**
@@ -989,7 +998,7 @@ export function mountPanels(
   root: HTMLElement, game: Game, act: PanelAct,
   view: () => {
     handOpen: boolean; sel?: TargetingView | null; bank?: BankUiState;
-    store?: StoreUiState; handScroll?: number;
+    store?: StoreUiState; stock?: StockUiState; bullbear?: BullbearUiState; handScroll?: number;
   } = () => ({ handOpen: false }),
 ): PanelHandle {
   const layer = document.createElement('div');
@@ -1001,7 +1010,7 @@ export function mountPanels(
     layer.textContent = '';
     const v = view();
     const scroll = v.handScroll ?? 0;
-    for (const a of panelHitAreas(game.state, v.handOpen, v.sel ?? null, v.bank, scroll, v.store)) {
+    for (const a of panelHitAreas(game.state, v.handOpen, v.sel ?? null, v.bank, scroll, v.store, v.stock, v.bullbear)) {
       const b = document.createElement('button');
       b.dataset.action = a.action;
       if (a.target !== undefined) b.dataset.target = String(a.target);
