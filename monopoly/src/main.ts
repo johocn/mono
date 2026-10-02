@@ -19,7 +19,7 @@ import { applyStep, type AiStep } from './core/ai';
 import { pathIndices, type Advance } from './core/board-path';
 import { candidatesFor, canTarget, type PickKind } from './core/targeting';
 import { bboxOf, choreography, frameFor, landingPose, type CamPose, type Cell, type ChoreographyOpts, type View } from './core/framing';
-import { createCamera } from './render/camera';
+import { createCamera, toWorld } from './render/camera';
 import { hudSpecs, mountHud, type HudActionId, type HudHandle } from './ui/Hud';
 import { mountPanels, overlayOf, panelSpecs, type BankProductKind, type PanelActionId, type PanelHandle, type TargetingView } from './ui/panels';
 import { createAiDriver, type AiDriver } from './ui/aiDriver';
@@ -780,11 +780,23 @@ export async function boot(): Promise<void> {
     return { px: (clientX - rect.left) / k, py: (clientY - rect.top) / k };
   };
 
+  /**
+   * 舞台逻辑坐标 → 棋盘格号。**必须先过相机逆变换**（`toWorld`）：相机是 `world` 容器的
+   * `scale/zoom + position` 变换，而 `tileAtPoint` 比对的是世界（未变换）坐标下的格心。
+   * 取景态（`camOn`、落格特写 zoom ≈ 3.2–3.6）下若直接拿舞台坐标反查，点到的永远是放大后的别处，
+   * 表现为「炸弹/路障点不上棋盘、道具不生效」。容差同口径折算到世界空间（`tol / zoom`）。
+   */
+  const pickIdxAt = (clientX: number, clientY: number): number | null => {
+    const { px, py } = toStageXY(clientX, clientY);
+    const pose = camera.current();
+    const w = toWorld(px, py, pose);
+    return tileAtPoint(w.x, w.y, { geo, tol: TILE_PICK_TOL / pose.zoom });
+  };
+
   const onBoardMove = (e: PointerEvent): void => {
     const g = game;
     if (!uiSel || !g) return;
-    const { px, py } = toStageXY(e.clientX, e.clientY);
-    const idx = tileAtPoint(px, py, { geo, tol: TILE_PICK_TOL });
+    const idx = pickIdxAt(e.clientX, e.clientY);
     /* 悬停态变化才重画（重画预演条三行文案） */
     const hovered = idx !== null && canTarget(uiSel.kind, idx, g.state) ? idx : null;
     if (hovered === uiSel.hovered) return;
@@ -796,8 +808,7 @@ export async function boot(): Promise<void> {
     const g = game;
     if (!uiSel || !g) return;
     const kind = uiSel.kind;
-    const { px, py } = toStageXY(e.clientX, e.clientY);
-    const idx = tileAtPoint(px, py, { geo, tol: TILE_PICK_TOL });
+    const idx = pickIdxAt(e.clientX, e.clientY);
     uiSel = null;
     /* 命中候选格 → 落库（`sell` 走自由出售；其余是打手牌）；点空处 = 取消（清态重画） */
     if (idx !== null && canTarget(kind, idx, g.state)) {
