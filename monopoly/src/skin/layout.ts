@@ -120,6 +120,15 @@ export const PANEL_SLOT_H = 52;
 export const PANEL_SLOT_GAP = 6;
 export const PANEL_SLOT_X0 = 15;                 // (390 − (6×55 + 5×6)) / 2
 
+/* —— M20.3 手牌滑动条（元素 `ui.handBar`）：落在手牌行（550..602）上方的空档 542..545。
+   play 模式下 508..584 是落地地块卡的台位，但地块卡与手牌抽屉**互斥**（抽屉展开即不出地块卡），
+   故 542 不冲突；再往下 607 是 HUD 快键行、632 是资产条，故只能取这段 3px 细条。
+   宽度恒为舞台宽（轨道铺满），滑块宽度由内容宽反比给出（见 `panels.handBarView`）。 */
+export const PANEL_HAND_BAR_Y = 542;             // 顶
+export const PANEL_HAND_BAR_H = 3;
+export const PANEL_HAND_BAR_W = 390;
+export const PANEL_HAND_BAR_PAD = 1;             // 滑块最小宽度（内容极宽时仍可见）
+
 /* —— M19-D2 选目标：屏幕反查容差 + 预演条 + 取消键 ——
    预演条占手牌行（10+272+6+96 = 384 ≤ 390），与手牌槽同中心线，二选一显示 */
 export const TILE_PICK_TOL = 30;

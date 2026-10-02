@@ -28,12 +28,17 @@ const stepTo = (g: Game, index: number): void => {
 };
 
 describe('panels：手牌 6 槽（纯函数）', () => {
-  it('恒 6 槽、顺序 = ITEM_CARDS.kind、开局全持有', () => {
+  it('恒 6 槽、开局全持有；顺序 = 常用度 priority 升序（M20.3 三键排序）', () => {
     const g = createGame({ dice: fixed(1, 1) });
     const slots = handSlots(g.state);
     expect(slots).toHaveLength(6);
-    expect(slots.map((s) => s.kind)).toEqual(ITEM_CARDS.map((c) => c.kind));
-    expect(slots.map((s) => s.name)).toEqual(ITEM_CARDS.map((c) => c.name));
+    /* 全持有 ⇒ 第 ① 键（held）全同，退化为 ② priority 升序 */
+    expect(slots.map((s) => s.kind)).toEqual(
+      ['pardon', 'doubleRent', 'bomb', 'barrier', 'teleport', 'demolish'],
+    );
+    expect(slots.map((s) => s.priority)).toEqual([10, 20, 30, 40, 50, 60]);
+    /* 槽集合 = 全部道具种类（排序只换位置、不丢卡） */
+    expect([...slots.map((s) => s.kind)].sort()).toEqual([...ITEM_CARDS.map((c) => c.kind)].sort());
     expect(slots.every((s) => s.held)).toBe(true);
   });
 
@@ -178,16 +183,16 @@ describe('panels：DOM 命中层矩形', () => {
     expect(panelHitAreas(g.state, false)).toEqual([]);
   });
 
-  it('抽屉展开：6 个手牌键（无 target，动作序列含 demolish），全部落在舞台内', () => {
+  it('抽屉展开：6 个手牌键（按 priority 升序），全部落在舞台内', () => {
     const g = createGame({ dice: fixed(1, 1) });
     g.state.estates[3] = { index: 3, owner: 2, level: 1, processing: false };
     const hits = panelHitAreas(g.state, true);
     expect(hits.map((h) => h.action)).toEqual([
-      'card:bomb', 'card:barrier', 'card:pardon', 'card:teleport', 'card:doubleRent', 'card:demolish',
+      'card:pardon', 'card:doubleRent', 'card:bomb', 'card:barrier', 'card:teleport', 'card:demolish',
     ]);
     /* M19：手牌键不再由 UI 自动挑目标（改由「选目标态」棋盘点选） */
     for (const h of hits) expect(h.target).toBeUndefined();
-    expect(hits[2].enabled).toBe(false);      // pardon 被动卡
+    expect(hits[0].enabled).toBe(false);      // pardon 被动卡
     for (const h of hits) {
       expect(h.x).toBeGreaterThanOrEqual(0);
       expect(h.x + h.w).toBeLessThanOrEqual(390);

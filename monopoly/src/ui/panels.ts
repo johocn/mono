@@ -31,12 +31,13 @@ import {
   PANEL_CANCEL_W, PANEL_CANCEL_X,
   PANEL_CARD_CX, PANEL_CARD_CY, PANEL_CARD_S,
   PANEL_CHART_H, PANEL_CHART_W, PANEL_CHART_X, PANEL_CHART_Y, PANEL_CLOSE_H, PANEL_CLOSE_W,
-  PANEL_CLOSE_X, PANEL_CLOSE_Y, PANEL_CX, PANEL_DEBT_CX, PANEL_DEBT_CY, PANEL_DRAW_X, PANEL_DRAW_Y, PANEL_HAND_Y,
+  PANEL_CLOSE_X, PANEL_CLOSE_Y, PANEL_CX, PANEL_DEBT_CX, PANEL_DEBT_CY, PANEL_DRAW_X, PANEL_DRAW_Y,
+  PANEL_HAND_BAR_H, PANEL_HAND_BAR_W, PANEL_HAND_BAR_Y, PANEL_HAND_Y,
   PANEL_PREVIEW_W, PANEL_PREVIEW_X,
   PANEL_ROW_GAP, PANEL_ROW_H, PANEL_ROW_W, PANEL_ROW_X, PANEL_SETTLE_ROW_GAP,
   PANEL_SETTLE_ROW_H, PANEL_SETTLE_ROW_Y, PANEL_SLOT_GAP, PANEL_SLOT_H, PANEL_SLOT_W,
   PANEL_SLOT_X0, PANEL_STOCK_ROW_Y, PANEL_TRADE_GAP, PANEL_TRADE_H, PANEL_TRADE_W,
-  PANEL_TRADE_X0, PANEL_TRADE_Y, PANEL_X, PANEL_Y,
+  PANEL_TRADE_X0, PANEL_TRADE_Y, PANEL_X, PANEL_Y, STAGE_W,
 } from '../skin/layout';
 
 /** 浮层动作位（DOM 命中层 `data-action`；`data-target` 给目标格号 / 股票代码 / 银行产品 / 出价金额） */
@@ -81,6 +82,8 @@ export function firstFoeTile(state: GameState): number | undefined {
 export interface HandSlotView {
   kind: ItemCardKind;
   name: string;
+  /** 常用度排序键（`ITEM_CARDS.priority`，小 = 更常用）；随视图透出便于单测与调试 */
+  priority: number;
   held: boolean;
   enabled: boolean;
 }
@@ -102,15 +105,69 @@ export function cardEnabled(kind: ItemCardKind, state: GameState): boolean {
   return true;
 }
 
-/** 手牌 6 槽：顺序恒等 `ITEM_CARDS.kind`（槽位不因持有与否移动） */
+/**
+ * 手牌槽（M20.3 spec §4.1 **三键稳定排序**）：
+ * ① `held` 降序（持有在前，未持有点过后仍占位但淡显在后）；
+ * ② `priority` 升序（常用在前，口径见 `cards.ts`）；
+ * ③ `ITEM_CARDS` 表序升序兜底（保证全序、零随机——`sort` 本身稳定，此处显式写出以便阅读与断言）。
+ */
 export function handSlots(state: GameState): HandSlotView[] {
   const hand = state.hands[state.current] ?? [];
-  return ITEM_CARDS.map((c) => ({
-    kind: c.kind,
-    name: c.name,
-    held: hand.includes(c.kind),
-    enabled: cardEnabled(c.kind, state),
-  }));
+  const heldRank = (kind: ItemCardKind): number => (hand.includes(kind) ? 0 : 1);
+  return ITEM_CARDS
+    .map((c, order) => ({ c, order }))
+    .sort((a, b) => {
+      const h = heldRank(a.c.kind) - heldRank(b.c.kind);
+      if (h !== 0) return h;
+      if (a.c.priority !== b.c.priority) return a.c.priority - b.c.priority;
+      return a.order - b.order;
+    })
+    .map(({ c }) => ({
+      kind: c.kind,
+      name: c.name,
+      priority: c.priority,
+      held: hand.includes(c.kind),
+      enabled: cardEnabled(c.kind, state),
+    }));
+}
+
+/** 手牌行版式：槽集合 + 内容宽 + 最大滚动量 + 可见槽下标（M20.3 spec §4.2） */
+export interface HandLayoutView {
+  /** 已按三键排序的槽（下标即槽位，与 `visible` 同一坐标系） */
+  slots: HandSlotView[];
+  /** 全部槽铺开的总宽（`n·W + (n−1)·GAP`；n = 0 时 0） */
+  contentW: number;
+  /** `max(0, contentW − STAGE_W)`；为 0 表示一屏放得下、无需滑动 */
+  maxScroll: number;
+  /** **已 clamp 到 `[0, maxScroll]`** 的滚动量：渲染与命中区必须用它，避免两处各自 clamp 出偏差 */
+  scroll: number;
+  /** 与舞台有交集的槽下标（半露也算可见；完全在 `[0, STAGE_W]` 之外的不入画、不可点） */
+  visible: number[];
+}
+
+/**
+ * 手牌行版式（纯函数）。可见判据 = 槽的 `[cx−W/2, cx+W/2]` 与 `[0, STAGE_W]` 有交集，
+ * 即 `cx ∈ ( −W/2, STAGE_W + W/2 )`；半露的槽照常产出，由画布自身裁掉溢出部分。
+ */
+export function handLayout(state: GameState, scroll = 0): HandLayoutView {
+  const slots = handSlots(state);
+  const n = slots.length;
+  const contentW = n === 0 ? 0 : n * PANEL_SLOT_W + (n - 1) * PANEL_SLOT_GAP;
+  const maxScroll = Math.max(0, contentW - STAGE_W);
+  const s = Math.min(Math.max(scroll, 0), maxScroll);
+  const visible: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const cx = handSlotCx(i, 0) - s;
+    if (cx > -PANEL_SLOT_W / 2 && cx < STAGE_W + PANEL_SLOT_W / 2) visible.push(i);
+  }
+  return { slots, contentW, maxScroll, scroll: s, visible };
+}
+
+/** 滑动条视图（`ui.handBar` 的入画数据）；一屏放得下 → `null`（元素不入画） */
+export function handBarView(state: GameState, scroll = 0): { ratio: number; offset: number } | null {
+  const { contentW, maxScroll, scroll: s } = handLayout(state, scroll);
+  if (maxScroll <= 0 || contentW <= 0) return null;
+  return { ratio: STAGE_W / contentW, offset: s / maxScroll };
 }
 
 /* —— 股票盘 —— */
@@ -336,14 +393,14 @@ export function bankDetail(state: GameState, kind: BankProductKind): BankDetailV
 
 /* —— 视图组装（pass 4 + 定格台位；c 恒 0，depth = r 递增即绘制序） —— */
 
-/** 手牌行第 i 槽的中心 x */
-export function handSlotCx(i: number): number {
-  return PANEL_SLOT_X0 + PANEL_SLOT_W / 2 + i * (PANEL_SLOT_W + PANEL_SLOT_GAP);
+/** 手牌行第 i 槽的中心 x（`scroll` = 已 clamp 的横滑量；spec §4.2 版式 A） */
+export function handSlotCx(i: number, scroll = 0): number {
+  return PANEL_SLOT_X0 + PANEL_SLOT_W / 2 + i * (PANEL_SLOT_W + PANEL_SLOT_GAP) - scroll;
 }
 
 export function panelSpecs(
   state: GameState, handOpen = false, sel: TargetingView | null = null,
-  bank: BankUiState = { open: false, sel: 'deposit' },
+  bank: BankUiState = { open: false, sel: 'deposit' }, handScroll = 0,
 ): ElementSpec[] {
   const out: ElementSpec[] = [];
   let r = 0;
@@ -362,12 +419,20 @@ export function panelSpecs(
     push('ui.cancel', PANEL_CANCEL_X + PANEL_CANCEL_W / 2, PANEL_HAND_Y + PANEL_SLOT_H / 2,
       { label: '取消', enabled: true });
   } else if (handOpen) {
-    /* 手牌 6 槽：收进牌袋抽屉，仅展开时入画（spec §7.3；教程期间由 `main.ts` 强制展开） */
-    handSlots(state).forEach((slot, i) => {
-      push('ui.handSlot', handSlotCx(i), PANEL_HAND_Y + PANEL_SLOT_H / 2, {
+    /* 手牌：收进牌袋抽屉，仅展开时入画（spec §7.3；教程期间由 `main.ts` 强制展开）。
+       M20.3 版式 A：单行 + 横向滑动，只画与舞台有交集的槽；一屏放不下时补一条 `ui.handBar` */
+    const layout = handLayout(state, handScroll);
+    for (const i of layout.visible) {
+      const slot = layout.slots[i];
+      push('ui.handSlot', handSlotCx(i, layout.scroll), PANEL_HAND_Y + PANEL_SLOT_H / 2, {
         name: slot.name, held: slot.held, enabled: slot.enabled,
       });
-    });
+    }
+    const bar = handBarView(state, handScroll);
+    if (bar !== null) {
+      push('ui.handBar', PANEL_HAND_BAR_W / 2, PANEL_HAND_BAR_Y + PANEL_HAND_BAR_H / 2,
+        { ratio: bar.ratio, offset: bar.offset });
+    }
   }
 
   const overlay = overlayOf(state, { bankOpen: bank.open });
@@ -474,7 +539,7 @@ export interface PanelHit {
  */
 export function panelHitAreas(
   state: GameState, handOpen = false, sel: TargetingView | null = null,
-  bank: BankUiState = { open: false, sel: 'deposit' },
+  bank: BankUiState = { open: false, sel: 'deposit' }, handScroll = 0,
 ): PanelHit[] {
   const out: PanelHit[] = [];
   if (sel !== null) {
@@ -488,13 +553,16 @@ export function panelHitAreas(
   if (!overlay) {
     /* 抽屉收起时手牌不可点（画面也没画）；牌袋键由 `Hud.ts` 提供 */
     if (!handOpen) return out;
-    handSlots(state).forEach((slot, i) => {
+    /* M20.3：手牌键与 `panelSpecs` 同源 `handLayout`，一律减去已 clamp 的滚动量 */
+    const layout = handLayout(state, handScroll);
+    for (const i of layout.visible) {
+      const slot = layout.slots[i];
       out.push({
         action: `card:${slot.kind}` as PanelActionId,
-        x: PANEL_SLOT_X0 + i * (PANEL_SLOT_W + PANEL_SLOT_GAP), y: PANEL_HAND_Y,
+        x: handSlotCx(i, layout.scroll) - PANEL_SLOT_W / 2, y: PANEL_HAND_Y,
         w: PANEL_SLOT_W, h: PANEL_SLOT_H, enabled: slot.enabled,
       });
-    });
+    }
     return out;
   }
   if (overlay === 'auction' && state.auction) {
@@ -581,7 +649,8 @@ export type PanelAct = (a: PanelActionId, target?: number | string) => void;
  */
 export function mountPanels(
   root: HTMLElement, game: Game, act: PanelAct,
-  view: () => { handOpen: boolean; sel?: TargetingView | null; bank?: BankUiState } = () => ({ handOpen: false }),
+  view: () => { handOpen: boolean; sel?: TargetingView | null; bank?: BankUiState; handScroll?: number } =
+    () => ({ handOpen: false }),
 ): PanelHandle {
   const layer = document.createElement('div');
   layer.id = 'mono-panels';
@@ -591,7 +660,8 @@ export function mountPanels(
   const update = (): void => {
     layer.textContent = '';
     const v = view();
-    for (const a of panelHitAreas(game.state, v.handOpen, v.sel ?? null, v.bank)) {
+    const scroll = v.handScroll ?? 0;
+    for (const a of panelHitAreas(game.state, v.handOpen, v.sel ?? null, v.bank, scroll)) {
       const b = document.createElement('button');
       b.dataset.action = a.action;
       if (a.target !== undefined) b.dataset.target = String(a.target);
