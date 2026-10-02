@@ -66,38 +66,38 @@
 
 ## Task 1：数据层与设施纯函数（`data/facilities.ts` + `data/news.ts` + `core/facility.ts`）
 
-- [ ] 新建 `src/data/facilities.ts`：按 spec §4.1 落 `FacilityId` / `FacilityDef` / `FACILITIES`（银行 200 / 交易所 180 / 医院 150 / 乐透 120 / 福利 100，各 20 股、rate 0.05，
+- [x] 新建 `src/data/facilities.ts`：按 spec §4.1 落 `FacilityId` / `FacilityDef` / `FACILITIES`（银行 200 / 交易所 180 / 医院 150 / 乐透 120 / 福利 100，各 20 股、rate 0.05，
       `tiles` 逐项 `[9]` / `[19]` / `[25]` / `[21]` / `[7, 27]`）/ `FACILITY_SHARES = 20` / `FACILITY_DIV_RATE = 0.05` /
       `facilityOf(id)` / `facilityAtTile(index)`（两格归一处；非设施格 → null）。逐项带中文口径注释（引 D25 / D26）。
-- [ ] 新建 `src/data/news.ts`：按 spec §4.2 落 `Sentiment` / `NewsScope` / `NewsItem` / `NEWS_COEF = { good: 1.5, bad: 0.5 }` /
+- [x] 新建 `src/data/news.ts`：按 spec §4.2 落 `Sentiment` / `NewsScope` / `NewsItem` / `NEWS_COEF = { good: 1.5, bad: 0.5 }` /
       `NEWS_TABLE`（10 条：设施 6 + 个股 4，id / title 照 spec 表逐字）。
-- [ ] 新建 `src/core/facility.ts`（与 `core/bank.ts` 同规：只依赖 `data/*` 与 `core/stocks.ts` 的类型）：
+- [x] 新建 `src/core/facility.ts`（与 `core/bank.ts` 同规：只依赖 `data/*` 与 `core/stocks.ts` 的类型）：
       `newsCoefOf(news, id)`（设施新闻且命中 → 利好 1.5 / 利空 0.5，否则 1）/ `newsForceOf(news)`（仅 `scope === 'stock'` → `{ code: target, dir: sentiment === 'good' ? 1 : -1 }`，否则 null）/
       `soldSharesOf(players, id)`（Σ 各玩家持股）/ `canSubscribe(players, id, shares, cash)`（四分支）/ `dividendOf(def, shares, cashflow, coef)`（F-D3 公式，`Math.round`）。
-- [ ] 新建 `test/data/facilities.spec.ts`：5 处 id / name / tiles / price / shares / rate 逐值；`FACILITY_SHARES === 20`；
+- [x] 新建 `test/data/facilities.spec.ts`：5 处 id / name / tiles / price / shares / rate 逐值；`FACILITY_SHARES === 20`；
       `facilityAtTile(7) === facilityAtTile(27) === 'welfare'`；`facilityAtTile(12 / 23 / 0) === null`；`facilityOf` 越界防御；
       `NEWS_TABLE` 每条 id 唯一、`scope === 'stock'` 时 target 在 `STOCKS` 内、`scope === 'facility'` 时 target 在 `FACILITIES` 内。
-- [ ] 新建 `test/core/facility.spec.ts`：`newsCoefOf` 四态（利好命中 / 利空命中 / 设施不相关 / null → 1）；
+- [x] 新建 `test/core/facility.spec.ts`：`newsCoefOf` 四态（利好命中 / 利空命中 / 设施不相关 / null → 1）；
       `newsForceOf` 两态（stock 利好 → dir 1、stock 利空 → dir -1、facility → null、null → null）；
       `soldSharesOf` 聚合（0 股 / 多玩家 / 缺键）；`canSubscribe` 四分支（`bad-shares` / `sold-out` / `not-enough-cash` / ok 且 `cost` 正确）；
       `dividendOf` 逐值（如 `bank` 10 股 cf=200 coef=1.5 → `round((10×200×0.05 + 200×10/20) × 1.5)` = `round((100 + 100) × 1.5)` = 300）。
-- [ ] 跑 `npx tsc --noEmit` 与 `npx vitest run test/data/facilities.spec.ts test/core/facility.spec.ts`。
-- [ ] 提交：`git -C d:\zhao add monopoly/src/data/facilities.ts monopoly/src/data/news.ts monopoly/src/core/facility.ts monopoly/test/data/facilities.spec.ts monopoly/test/core/facility.spec.ts` → `-m 'M20.4 Task1: 设施与新闻数据层、分红/系数纯函数'`。
+- [x] 跑 `npx tsc --noEmit` 与 `npx vitest run test/data/facilities.spec.ts test/core/facility.spec.ts`。
+- [x] 提交：`git -C d:\zhao add monopoly/src/data/facilities.ts monopoly/src/data/news.ts monopoly/src/core/facility.ts monopoly/test/data/facilities.spec.ts monopoly/test/core/facility.spec.ts` → `-m 'M20.4 Task1: 设施与新闻数据层、分红/系数纯函数'`。
 
 ## Task 2：core 认购与轮末分红 / 新闻（`core/game.ts`）
 
-- [ ] `src/core/game.ts`：`Player` 增 `facilities: Partial<Record<FacilityId, number>>`；`GameState` 增 `news: NewsItem | null` 与 `facilityCashflow: Record<FacilityId, number>`；
+- [x] `src/core/game.ts`：`Player` 增 `facilities: Partial<Record<FacilityId, number>>`；`GameState` 增 `news: NewsItem | null` 与 `facilityCashflow: Record<FacilityId, number>`；
       `createGame` 初始化为 `{}` / `rollNews(newsRng)`（发布第 1 轮）/ 全零；新增 `const newsRng = makeRng((seed ^ 0x2468ace) >>> 0)`。
-- [ ] `src/core/game.ts`：新增 `rollNews(rng)` = `NEWS_TABLE[Math.floor(rng() * NEWS_TABLE.length)]` 与 `payFacilityDividends()`（spec §5.4 逐字）。
-- [ ] `src/core/game.ts`：新增 `buyFacility(facility, shares): FacilityOutcome`（spec §5.3：`bad-shares` / `sold-out` / `not-enough-cash` / ok；
+- [x] `src/core/game.ts`：新增 `rollNews(rng)` = `NEWS_TABLE[Math.floor(rng() * NEWS_TABLE.length)]` 与 `payFacilityDividends()`（spec §5.4 逐字）。
+- [x] `src/core/game.ts`：新增 `buyFacility(facility, shares): FacilityOutcome`（spec §5.3：`bad-shares` / `sold-out` / `not-enough-cash` / ok；
       成功写 `p.cash` / `p.facilities` / `lastEvent = { kind:'facility', facility, shares, cost }`）。`Game` 接口同步。
-- [ ] `src/core/game.ts`：`EventLog` 增 `| { kind: 'facility'; facility: FacilityId; shares: number; cost: number }`。
-- [ ] `src/core/game.ts`：三处现金流累计（F-D4）——
+- [x] `src/core/game.ts`：`EventLog` 增 `| { kind: 'facility'; facility: FacilityId; shares: number; cost: number }`。
+- [x] `src/core/game.ts`：三处现金流累计（F-D4）——
       ① `settleBooks()` 内：对每位未破产玩家的 `p.loan`（非首轮免息支路）与每笔 `p.mortgages` 累加 `interestOf(book)` 到 `state.facilityCashflow.bank`（**不动任何现金**）；
       ② `resolveLottery()`：`p.cash -= stake` 之后累加 `stake` 到 `state.facilityCashflow.lottery`；
       ③ `trade()`：买卖成功分支累加 `Math.round(cost * STOCK_FEE_RATIO)`（现恒 0，留口子）。
-- [ ] `src/core/game.ts`：`onRoundBoundary` 扩为 **7 步**（spec §5.4 代码块逐字）：settleBooks → 保证金复利 → `force` = 玩家 force + `newsForceOf(state.news)` → `market.tick(force)` → 爆仓判定 → `payFacilityDividends()` → `state.news = rollNews(newsRng)` → 清空 `stockForce`。
-- [ ] 新建 `test/core/game-facility.spec.ts`：
+- [x] `src/core/game.ts`：`onRoundBoundary` 扩为 **7 步**（spec §5.4 代码块逐字）：settleBooks → 保证金复利 → `force` = 玩家 force + `newsForceOf(state.news)` → `market.tick(force)` → 爆仓判定 → `payFacilityDividends()` → `state.news = rollNews(newsRng)` → 清空 `stockForce`。
+- [x] 新建 `test/core/game-facility.spec.ts`：
       ① `buyFacility` 四分支 + 落库（现金 / 持股 / `lastEvent`）+ 售罄（20 股上限，含「跨玩家先到先得」）；
       ② 分红两分支（有持股 → 现金精确增；无持股 → 现金逐值不变）；
       ③ 利好设施分红 = 基础 × 1.5、利空 = × 0.5（用注入的 decks / 直接改 `state.news` 构造）；
@@ -105,68 +105,71 @@
       ⑤ 乐透入场费计入 `facilityCashflow.lottery` 且**玩家现金净额与 M20.3-B 语义一致**；
       ⑥ 新闻每轮末换 1 条、**同 seed 同序列**（两次 `createGame(seed)` 逐轮比对 `state.news.id`）；
       ⑦ **零余额回归闸门**：全设施未售出的对局，断言现金序列与 M20.3-B 基线一致（只允许 tick 受 `newsForceOf` 影响，可用该函数复算）。
-- [ ] 跑 `npx tsc --noEmit` 与 `npx vitest run test/core/game-facility.spec.ts test/core/game.spec.ts test/core/game-stock-track.spec.ts`。
-- [ ] 提交：`git -C d:\zhao add monopoly/src/core/game.ts monopoly/test/core/game-facility.spec.ts` → `-m 'M20.4 Task2: 设施认购、现金流累计与轮末分红/新闻'`。
+- [x] 跑 `npx tsc --noEmit` 与 `npx vitest run test/core/game-facility.spec.ts test/core/game.spec.ts test/core/game-stock-track.spec.ts`。
+- [x] 提交：`git -C d:\zhao add monopoly/src/core/game.ts monopoly/test/core/game-facility.spec.ts` → `-m 'M20.4 Task2: 设施认购、现金流累计与轮末分红/新闻'`。
 
 ## Task 3：AI 认购策略（`core/ai.ts`）
 
-- [ ] `src/core/ai.ts`：`AiStep` 增 `{ kind: 'facility'; facility: FacilityId; shares: number }`；`applyStep` → `case 'facility': return g.buyFacility(step.facility, step.shares)`。
-- [ ] `src/core/ai.ts`：新增 `FACILITY_RESERVE = 500` 与 `pickFacility(state, P)`（spec §7：现金 < 500 不认购；按 `FACILITIES` 表序取第一处「未售罄 且 现金 ≥ price×2」的设施认购 1 股；已满仓 / 无合适 → null）。
-- [ ] `src/core/ai.ts`：`settledPlan` 插入第 ④ 步（买地 → 升级 → 股票 → **设施** → 银行 → 商店 → 投机 → 卡片）。
-- [ ] `test/core/ai.spec.ts`：新增 `describe('ai 设施认购策略（M20.4 spec §7）')`：现金 < ￥500 不认购；按表序选第一处可买设施；已满仓跳过；`applyStep` 透传入账。
-- [ ] 跑 `npx tsc --noEmit` 与 `npx vitest run test/core/ai.spec.ts`。
-- [ ] 提交：`git -C d:\zhao add monopoly/src/core/ai.ts monopoly/test/core/ai.spec.ts` → `-m 'M20.4 Task3: AI 按表序认购设施股'`。
+- [x] `src/core/ai.ts`：`AiStep` 增 `{ kind: 'facility'; facility: FacilityId; shares: number }`；`applyStep` → `case 'facility': return g.buyFacility(step.facility, step.shares)`。
+- [x] `src/core/ai.ts`：新增 `FACILITY_RESERVE = 500` 与 `pickFacility(state, P)`（spec §7：现金 < 500 不认购；按 `FACILITIES` 表序取第一处「未售罄 且 现金 ≥ price×2」的设施认购 1 股；已满仓 / 无合适 → null）。
+- [x] `src/core/ai.ts`：`settledPlan` 插入第 ④ 步（买地 → 升级 → 股票 → **设施** → 银行 → 商店 → 投机 → 卡片）。
+- [x] `test/core/ai.spec.ts`：新增 `describe('ai 设施认购策略（M20.4 spec §7）')`：现金 < ￥500 不认购；按表序选第一处可买设施；已满仓跳过；`applyStep` 透传入账。
+- [x] 跑 `npx tsc --noEmit` 与 `npx vitest run test/core/ai.spec.ts`。
+- [x] 提交：`git -C d:\zhao add monopoly/src/core/ai.ts monopoly/test/core/ai.spec.ts` → `-m 'M20.4 Task3: AI 按表序认购设施股'`。
 
 ## Task 4：HUD 第 5 枚快键 + 设施浮层 + 新闻条（`skin/layout.ts` + `registry.ts` + `skin.json` + `ui/panels.ts` + `ui/Hud.ts`）
 
-- [ ] `src/skin/layout.ts`：快键行重排（spec §6.3）：新增 `HUD_QK_FACILITY_X = 7`，`HUD_QK_STORE_X = 83`、`HUD_QK_BANK_X = 159`、`HUD_QK_FAST_X = 235`、`HUD_QK_SKIP_X = 311`；
+- [x] `src/skin/layout.ts`：快键行重排（spec §6.3）：新增 `HUD_QK_FACILITY_X = 7`，`HUD_QK_STORE_X = 83`、`HUD_QK_BANK_X = 159`、`HUD_QK_FAST_X = 235`、`HUD_QK_SKIP_X = 311`；
       附中文注释说明步距 76 与「既有四枚相对顺序不变，只整体平移」。新增 `NEWS_TICKER_X = 10` / `NEWS_TICKER_Y = 474` / `NEWS_TICKER_W = 370` / `NEWS_TICKER_H = 26`（附「自由带 406..508 在 play 模式为空」的注释）。
-- [ ] `src/skin/registry.ts` + `public/skins/default/skin.json` + `tools/registry-ids.json`：注册 `ui.newsTicker`（370×26，L4 内建兜底 `fb({...})`；利好 / 利空两态语义色）。
-- [ ] `src/ui/panels.ts`：`OverlayKind` 增 `'facility'`；`overlayOf` 的 `opts` 增 `facilityOpen?: boolean`，优先级链 `auction > settle > bank > store > facility > stock > bullbear > draw`。
-- [ ] `src/ui/panels.ts`：新增 `FacilityUiState` / `FACILITY_UI_DEFAULTS` / `facilityRows(state, sel)`（5 行、含 `selected` 与 summary）
+- [x] `src/skin/registry.ts` + `public/skins/default/skin.json` + `tools/registry-ids.json`：注册 `ui.newsTicker`（370×26，L4 内建兜底 `fb({...})`；利好 / 利空两态语义色）。
+- [x] `src/ui/panels.ts`：`OverlayKind` 增 `'facility'`；`overlayOf` 的 `opts` 增 `facilityOpen?: boolean`，优先级链 `auction > settle > bank > store > facility > stock > bullbear > draw`。
+- [x] `src/ui/panels.ts`：新增 `FacilityUiState` / `FACILITY_UI_DEFAULTS` / `facilityRows(state, sel)`（5 行、含 `selected` 与 summary）
       / `facilityDetail(state, sel)`（5 行 detail + 两枚键 label / enabled）；`panelSpecs` / `panelHitAreas` 签名末位增 `facility: FacilityUiState`（带默认值，既有调用零改动）。
-- [ ] `src/ui/panels.ts`：`panelSpecs` 增 facility 分支（spec §6.1 台位表：`showcase.panel` + `ui.badge`「公共设施 · 入股」+ 5 行 `ui.bankRow` row + 5 行 line + 两枚 `ui.button.*` + `ui.qk`「关闭」）；
+- [x] `src/ui/panels.ts`：`panelSpecs` 增 facility 分支（spec §6.1 台位表：`showcase.panel` + `ui.badge`「公共设施 · 入股」+ 5 行 `ui.bankRow` row + 5 行 line + 两枚 `ui.button.*` + `ui.qk`「关闭」）；
       `panelHitAreas` 增 facility 分支（`facility:select` / `facility:buy1` / `facility:buy5` / `facility:close`）。
-- [ ] `src/ui/panels.ts`：新增 `newsTickerSpecOf(state)`（spec §6.2：`state.news === null` → null，否则 `ui.newsTicker` 的 id / 台位 / state）。
-- [ ] `src/ui/Hud.ts`：`HudActionId` 增 `'facility'`；`HudUiOpts` 增 `facilityOpen?: boolean`；新增 `pushFacilityKey()`（r = 17，标签「设施 / 设施 ✓」），
+- [x] `src/ui/panels.ts`：新增 `newsTickerSpecOf(state)`（spec §6.2：`state.news === null` → null，否则 `ui.newsTicker` 的 id / 台位 / state）。
+- [x] `src/ui/Hud.ts`：`HudActionId` 增 `'facility'`；`HudUiOpts` 增 `facilityOpen?: boolean`；新增 `pushFacilityKey()`（r = 17，标签「设施 / 设施 ✓」），
       原本 r=17/18 的静音键与后续 r 顺延 +1（r 只需单调递增）；`hitAreas` 增 `{ action: 'facility', x: HUD_QK_FACILITY_X, ... }`（仅真人回合，常开）。
-- [ ] 新建 `test/ui/panels-facility.spec.ts`：`overlayOf` 三态（`facilityOpen` → `'facility'`；优先级低于 `store`、高于 `stock`）；
+- [x] `src/skin/layout.ts`：**同步复算 `BUBBLE_DEPTH` 22 → 24**（实施期发现的真实回归）。第 5 枚快键使 HUD 行号整体 +1（地块卡 19→20 / 卡上两键 20·21→21·22 / 债务条 22→23），
+      气泡若仍是 22 便与「升级」键同深度、被稳定排序压住 ⇒ 线上 `npm run check:prod` 的 V14 `buy.overlapped` 翻 true。
+      另在 `test/render/bubble.spec.ts` 补「最坏态（地块卡 + 卡上键 + 债务条 + 浮层同时在场）」自动闸门，防下次 HUD 加枚时再漏。
+- [x] 新建 `test/ui/panels-facility.spec.ts`：`overlayOf` 三态（`facilityOpen` → `'facility'`；优先级低于 `store`、高于 `stock`）；
       浮层 5 行且恰一行 `selected`；两枚键 label 含认购价、启用判据（现金不足 / 售罄 → 禁用）；命中区四类动作 + **行底 576 ≤ 600、键底 556 ≤ 600、所有可点元素底 ≤ 606**；`newsTickerSpecOf` 两态与台位。
-- [ ] `test/ui/hud.spec.ts`：把「**四枚** `ui.qk`」计数断言改为 **五枚**，并补 `cx` 逐值（含 `HUD_QK_FACILITY_X`）；
+- [x] `test/ui/hud.spec.ts`：把「**四枚** `ui.qk`」计数断言改为 **五枚**，并补 `cx` 逐值（含 `HUD_QK_FACILITY_X`）；
       保留既有相对顺序断言（随常量自动通过）；补 `hitAreas` 含 `facility`。
-- [ ] 相关既有截图脚本 `local/mono-shots-m5.mjs`（若断言快键行坐标 / 元素计数）同步修正为 5 槽口径。
-- [ ] 跑 `npx tsc --noEmit` 与 `npx vitest run test/ui/panels-facility.spec.ts test/ui/panels.spec.ts test/ui/panels-store.spec.ts test/ui/hud.spec.ts`。
-- [ ] 提交：`git -C d:\zhao add monopoly/src/skin/layout.ts monopoly/src/skin/registry.ts monopoly/public/skins/default/skin.json monopoly/tools/registry-ids.json monopoly/src/ui/panels.ts monopoly/src/ui/Hud.ts monopoly/test/ui/panels-facility.spec.ts monopoly/test/ui/hud.spec.ts monopoly/local/mono-shots-m5.mjs` → `-m 'M20.4 Task4: 第5枚HUD快键、设施浮层与新闻条元素'`。
+- [x] 相关既有截图脚本 `local/mono-shots-m5.mjs`（若断言快键行坐标 / 元素计数）同步修正为 5 槽口径。
+- [x] 跑 `npx tsc --noEmit` 与 `npx vitest run test/ui/panels-facility.spec.ts test/ui/panels.spec.ts test/ui/panels-store.spec.ts test/ui/hud.spec.ts`。
+- [x] 提交：`git -C d:\zhao add monopoly/src/skin/layout.ts monopoly/src/skin/registry.ts monopoly/public/skins/default/skin.json monopoly/tools/registry-ids.json monopoly/src/ui/panels.ts monopoly/src/ui/Hud.ts monopoly/test/ui/panels-facility.spec.ts monopoly/test/ui/hud.spec.ts monopoly/local/mono-shots-m5.mjs` → `-m 'M20.4 Task4: 第5枚HUD快键、设施浮层与新闻条元素'`。
 
 ## Task 5：`main.ts` 接线与 e2e
 
-- [ ] `src/main.ts`：新增 UI 态 `facilityOpen = false` / `facilitySel: FacilityId = 'bank'`；每回合切换时关闭浮层（选中保留）。
-- [ ] `src/main.ts`：`overlays()` 增 `facilityOpen`（透传 `panelSpecs` / `panelHitAreas`）；`paused` 纳入 `facilityOpen`（AI 驱动器在浮层展开时暂停）。
-- [ ] `src/main.ts`：`stepOfPanel` 增 `facility:select`（切 `facilitySel`，只改 UI 态）/ `facility:buy1` / `facility:buy5`（`buyFacility(facilitySel, 1|5)`）/ `facility:close`（关浮层）；
+- [x] `src/main.ts`：新增 UI 态 `facilityOpen = false` / `facilitySel: FacilityId = 'bank'`；每回合切换时关闭浮层（选中保留）。
+- [x] `src/main.ts`：`overlays()` 增 `facilityOpen`（透传 `panelSpecs` / `panelHitAreas`）；`paused` 纳入 `facilityOpen`（AI 驱动器在浮层展开时暂停）。
+- [x] `src/main.ts`：`stepOfPanel` 增 `facility:select`（切 `facilitySel`，只改 UI 态）/ `facility:buy1` / `facility:buy5`（`buyFacility(facilitySel, 1|5)`）/ `facility:close`（关浮层）；
       HUD 命中层 `facility` 动作 → 切 `facilityOpen`（与 `bank` / `store` 同构，三者互斥：开一个先把另两个关掉）。
-- [ ] `src/main.ts`：渲染合并处推入 `newsTickerSpecOf(state)`（`hudSpecs` 之后、`panelSpecs` 之前 —— 保证浮层自然盖住新闻条）。
-- [ ] `local/mono-e2e-playthrough.mjs`：新增 `facility:buy1` 点击路径（在 `overlay` 分支里加 `facility` → 点 `facility:buy1`），tally 记录动作名。
-- [ ] `local/mono-prod-check.mjs`：复核 V11 等 gate（V11 按**标签**判断 ⇒ 快键行平移不受影响）；按需补「设施浮层 / 新闻条」gate。
-- [ ] 跑 `npx tsc --noEmit` 与 `npx vitest run`（全量），再跑 `node local/mono-e2e-playthrough.mjs`（整局 PASS）。
-- [ ] 提交：`git -C d:\zhao add monopoly/src/main.ts monopoly/local/mono-e2e-playthrough.mjs monopoly/local/mono-prod-check.mjs` → `-m 'M20.4 Task5: main 接线设施浮层/新闻条与 e2e 路径'`。
+- [x] `src/main.ts`：渲染合并处推入 `newsTickerSpecOf(state)`（`hudSpecs` 之后、`panelSpecs` 之前 —— 保证浮层自然盖住新闻条）。
+- [x] `local/mono-e2e-playthrough.mjs`：新增 `facility:buy1` 点击路径（在 `overlay` 分支里加 `facility` → 点 `facility:buy1`），tally 记录动作名。
+- [x] `local/mono-prod-check.mjs`：复核 V11 等 gate（V11 按**标签**判断 ⇒ 快键行平移不受影响）；按需补「设施浮层 / 新闻条」gate。
+- [x] 跑 `npx tsc --noEmit` 与 `npx vitest run`（全量），再跑 `node local/mono-e2e-playthrough.mjs`（整局 PASS）。
+- [x] 提交：`git -C d:\zhao add monopoly/src/main.ts monopoly/local/mono-e2e-playthrough.mjs monopoly/local/mono-prod-check.mjs` → `-m 'M20.4 Task5: main 接线设施浮层/新闻条与 e2e 路径'`。
 
 ## Task 6：手机截图取证与操作手册
 
-- [ ] 新建 `local/mono-shots-m20-4.mjs`（手机视口 390×844 @ dpr=2，`nofx`，机器闸门逐项布尔）：4 张截图 →
+- [x] 新建 `local/mono-shots-m20-4.mjs`（手机视口 390×844 @ dpr=2，`nofx`，机器闸门逐项布尔）：4 张截图 →
       ① 设施浮层（选中行 + 两枚认购键）；② 认购后详情（已售 / 持股 / 预估分红）；③ 新闻条（利好 / 利空各一张）；④ 轮末分红后现金变化。
       输出到 `docs/verify/`（命名 `mono-m20-4-01-facility.png` … `-04-dividend.png`，与既有 `mono-*.png` 同口径）。
-- [ ] **目视复核每张 PNG**（硬约束）：确认①浮层内两枚认购键与「关闭」键均**点得中**（不被 HUD 快键行 607..629 压住）；
+- [x] **目视复核每张 PNG**（硬约束）：确认①浮层内两枚认购键与「关闭」键均**点得中**（不被 HUD 快键行 607..629 压住）；
       ②新闻条不与棋盘底角 / 战报条（342..406）重叠；③第 5 枚快键「设施」不压状态行文字到不可读。发现问题即修复并补单测。
-- [ ] `docs/manual-mono.md`：追加「M20.4 公共设施入股与每轮新闻」专节 —— 两需求的落点表 / 分红公式与四个现金流挂载点（含「本轮现金流分成体感偏弱」的明示）/
+- [x] `docs/manual-mono.md`：追加「M20.4 公共设施入股与每轮新闻」专节 —— 两需求的落点表 / 分红公式与四个现金流挂载点（含「本轮现金流分成体感偏弱」的明示）/
       新闻三影响面与**裁剪板块租金的说明** / 设施浮层与新闻条版式 / 第 5 枚快键 / AI 策略 / 确定性（独立 rng 流）/ 四级回退 / 回归口径命令 / 4 张截图清单 / 取证脚本闸门清单。
-- [ ] 跑 `npx vitest run`（全量）与 `npm run lint:skin`。
-- [ ] 提交：`git -C d:\zhao add monopoly/local/mono-shots-m20-4.mjs monopoly/docs/manual-mono.md monopoly/docs/verify` → `-m 'M20.4 Task6: 设施与新闻取证截图、操作手册'`。
+- [x] 跑 `npx vitest run`（全量）与 `npm run lint:skin`。
+- [x] 提交：`git -C d:\zhao add monopoly/local/mono-shots-m20-4.mjs monopoly/docs/manual-mono.md monopoly/docs/verify` → `-m 'M20.4 Task6: 设施与新闻取证截图、操作手册'`。
 
 ## Task 7：收尾闸门（一气呵成）
 
-- [ ] `npm run check`（lint + lint:skin + test，全绿）。
-- [ ] `npm run build`（`check-hardcoded` clean）。
-- [ ] `npm run deploy`（本地构建产物 → 服务器解压 / `pm2 restart`）。
-- [ ] `npm run check:prod`（线上约 20 项 gate 全通过）。
-- [ ] 提交本计划的勾选状态：`git -C d:\zhao add docs/superpowers/plans/2026-10-02-monopoly-m20-4-facility-and-news.md docs/superpowers/specs/2026-10-02-monopoly-m20-4-facility-and-news-design.md` → `-m 'M20.4: 设计真源与实施计划回填'`。
-- [ ] `git -C d:\zhao push`。
+- [x] `npm run check`（lint + lint:skin + test，全绿）。
+- [x] `npm run build`（`check-hardcoded` clean）。
+- [x] `npm run deploy`（本地构建产物 → 服务器解压 / `pm2 restart`）。
+- [x] `npm run check:prod`（线上约 20 项 gate 全通过）。
+- [x] 提交本计划的勾选状态：`git -C d:\zhao add docs/superpowers/plans/2026-10-02-monopoly-m20-4-facility-and-news.md docs/superpowers/specs/2026-10-02-monopoly-m20-4-facility-and-news-design.md` → `-m 'M20.4: 设计真源与实施计划回填'`。
+- [x] `git -C d:\zhao push`。
