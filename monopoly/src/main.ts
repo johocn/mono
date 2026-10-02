@@ -21,7 +21,7 @@ import { candidatesFor, canTarget, type PickKind } from './core/targeting';
 import { bboxOf, choreography, frameFor, landingPose, type CamPose, type Cell, type ChoreographyOpts, type View } from './core/framing';
 import { createCamera, toWorld } from './render/camera';
 import { hudSpecs, mountHud, type HudActionId, type HudHandle } from './ui/Hud';
-import { handLayout, mountPanels, newsTickerSpecOf, overlayOf, panelSpecs, parseTierKey, tierShares, type BankProductKind, type BullbearUiState, type FacilityUiState, type PanelActionId, type PanelHandle, type StockUiState, type StoreUiState, type TargetingView } from './ui/panels';
+import { applyAmountKey, applyAmountTier, handLayout, mountPanels, newsTickerSpecOf, overlayOf, panelSpecs, parseAmount, parseTierKey, tierShares, type BankProductKind, type BullbearUiState, type FacilityUiState, type PanelActionId, type PanelHandle, type StockUiState, type StoreUiState, type TargetingView } from './ui/panels';
 import { createAiDriver, type AiDriver } from './ui/aiDriver';
 import { createAudioEngine } from './ui/audio';
 import { mountSetup, readPlan, resolveSeats, type SeatPlan } from './ui/setup';
@@ -473,6 +473,12 @@ export async function boot(): Promise<void> {
      `sel` = 左侧三行里被选中的产品（详见 `panels.BankUiState`） —— */
   let bankOpen = false;
   let bankSel: BankProductKind = 'deposit';
+  /* M20.5（spec §6.1 D39）：存款页金额键盘当前输入串（纯数字串，默认 `''` ⇒ 显示 ￥0）；
+     切换产品 / 关浮层 / 成交后一律清空，避免上一笔金额残留 */
+  let bankAmount = '';
+  /** 银行 UI 态快照（三处调用点共用同一口径） */
+  const bankUi = (): { open: boolean; sel: BankProductKind; amount: string } =>
+    ({ open: bankOpen, sel: bankSel, amount: bankAmount });
   /* —— M20.3 商店浮层 UI 态（spec §5.1）：`open` 由 HUD「商店」键驱动，与 `bankOpen` 互斥；
      `sel` = 左列选中商品（顺序恒等 `STORE_CATALOG`）；`handScroll` = 手牌横滑量（clamp 由 `handLayout` 兜） —— */
   let storeOpen = false;
@@ -579,7 +585,7 @@ export async function boot(): Promise<void> {
       ...(newsTick ? [newsTick] : []),
       /* M5 浮层：手牌抽屉（默认收起）+ 抽卡翻牌 / 股票盘 / 结算面板（未触发时为空）；
          M20.2 银行浮层（版式 C）由 `{ open, sel }` 驱动、M20.3 商店浮层同理，可见性仍由 `overlayOf` 统一仲裁 */
-      ...panelSpecs(g.state, handOpenEff(), uiSel, { open: bankOpen, sel: bankSel }, handScroll, storeUi(),
+      ...panelSpecs(g.state, handOpenEff(), uiSel, bankUi(), handScroll, storeUi(),
         stockUi(), bullbearUi(), facilityUi()),
     ];
   };
@@ -748,6 +754,7 @@ export async function boot(): Promise<void> {
     if ((seats[g.state.current] ?? null) !== null) return;
     if (currentPlayer(g.state).pos !== BANK_TILE_INDEX) return;
     bankOpen = true;
+    bankAmount = '';            // M20.5：开面板清空金额输入（避免上一笔残留）
     storeOpen = false;          // 与商店互斥：落 9 号格自动弹银行时收起商店
     paint();
   };
@@ -760,6 +767,7 @@ export async function boot(): Promise<void> {
        都先收起，落 9 号格的结算随后由 `autoBankOf` 自动重开——否则面板会一直挡着后续走位。
        M20.3 商店浮层同理（同为常驻 HUD 入口的非模态面板）。 */
     bankOpen = false;
+    bankAmount = '';           // M20.5：非模态面板收起即清空金额输入
     storeOpen = false;
     bullbearOpen = false;      // 涨跌卡浮层同为非模态：任何推进动作前先收起
     /* M19-D5：破坏类卡（bomb / demolish）须在 `applyStep` 改 state **之前**捕捉目标格旧层级，
@@ -862,20 +870,27 @@ export async function boot(): Promise<void> {
   const stepOfPanel = (a: PanelActionId, target?: number | string): AiStep | null => {
     if (a === 'card:cancel') { uiSel = null; paint(); return null; }
     if (a === 'card:close' || a === 'settle:close') return { kind: 'close' };
-    /* M20.2 银行浮层（spec §3.8）：`bank:select` 只切 UI 选中态，其余六个动作**直接落库**到 `Game` 信贷 API
-       （不经 `AiStep`——它们不推进回合、无动效与气泡）；金额口径见 `panels.panelHitAreas` 的注释。 */
-    if (a === 'bank:select') { bankSel = target as BankProductKind; paint(); return null; }
-    if (a === 'bank:close') { bankOpen = false; paint(); return null; }
+    /* M20.2 银行浮层（spec §3.8）：`bank:select` 只切 UI 选中态，其余动作**直接落库**到 `Game` 信贷 API
+       （不经 `AiStep`——它们不推进回合、无动效与气泡）；M20.5（spec §6.1 D39）存取款改为**金额输入制**，
+       键盘 / 快捷档只改 `bankAmount`，两枚确认键分别落 `deposit` / `withdraw`。 */
+    if (a === 'bank:select') { bankSel = target as BankProductKind; bankAmount = ''; paint(); return null; }
+    if (a === 'bank:close') { bankOpen = false; bankAmount = ''; paint(); return null; }
     if (a.startsWith('bank:')) {
       const g = game;
       if (g) {
         const p = currentPlayer(g.state);
-        if (a === 'bank:deposit') g.deposit(p.cash);              // 存入 = 全部现金（金额不随 `data-target` 传）
-        else if (a === 'bank:withdraw') g.withdraw(p.deposit);    // 取出 = 全部存款
+        if (a === 'bank:key') bankAmount = applyAmountKey(bankAmount, String(target));
+        else if (a === 'bank:tier') bankAmount = applyAmountTier(bankAmount, Number(target));
+        /* 上限截断（spec §6.1）：存入按现金、取出按存款；金额为 0 时两键已禁用，此处再兜一次防御 */
+        else if (a === 'bank:deposit') { g.deposit(Math.min(parseAmount(bankAmount), p.cash)); bankAmount = ''; }
+        else if (a === 'bank:withdraw') { g.withdraw(Math.min(parseAmount(bankAmount), p.deposit)); bankAmount = ''; }
         else if (a === 'bank:borrow') g.takeLoan();               // 借款额由引擎按额度算
         else if (a === 'bank:repay') g.repayLoan();               // 还款 = 全额（现金不足则由引擎截断）
         else if (a === 'bank:mortgage' && typeof target === 'number') g.takeMortgage(target);
         else if (a === 'bank:redeem' && typeof target === 'number') g.redeemMortgage(target);
+        /* M20.5（spec §6.2 D41）：追加保证金——`cash` 用现金补足、`mortgage` 自动抵押额度最大地块换现金补足 */
+        else if (a === 'bank:marginCash') g.addMargin(undefined, 'cash');
+        else if (a === 'bank:marginMortgage') g.addMargin(undefined, 'mortgage');
         paint();
       }
       return null;
@@ -976,7 +991,11 @@ export async function boot(): Promise<void> {
       if (a === 'sell') { uiSel = { kind: 'sell', hovered: null }; paint(); return; }
       /* 银行 / 商店 / 设施浮层开合（M20.2 §3.8 / M20.3 §5.1 / M20.4 §6.1）：只改 UI 态、不推进状态，
          故不走 `dispatch`（也就不吃动效与气泡）；三者互斥——开启一方即收起另两方 */
-      if (a === 'bank') { bankOpen = !bankOpen; storeOpen = false; facilityOpen = false; paint(); return; }
+      if (a === 'bank') {
+        bankOpen = !bankOpen;
+        if (bankOpen) bankAmount = '';   // M20.5：开面板清空金额输入
+        storeOpen = false; facilityOpen = false; paint(); return;
+      }
       if (a === 'store') { storeOpen = !storeOpen; bankOpen = false; facilityOpen = false; paint(); return; }
       if (a === 'facility') { facilityOpen = !facilityOpen; bankOpen = false; storeOpen = false; paint(); return; }
       if (fx.busy()) fx.skip();   // 点屏加速：状态早已落库，跳过只影响观感时长
@@ -990,7 +1009,7 @@ export async function boot(): Promise<void> {
       const step = stepOfPanel(a, target);
       if (step) dispatch(step);
     }, () => ({
-      handOpen: handOpenEff(), sel: uiSel, bank: { open: bankOpen, sel: bankSel },
+      handOpen: handOpenEff(), sel: uiSel, bank: bankUi(),
       store: storeUi(), stock: stockUi(), bullbear: bullbearUi(), facility: facilityUi(), handScroll,
     }));
     /* —— M20.3 手牌横滑手势（spec §4.3）：画布上无法用原生滚动（视觉在 Canvas、命中在 DOM），
@@ -1193,13 +1212,16 @@ export async function boot(): Promise<void> {
     /* 破产拍卖（M20.1）：`auction()` 读待拍态（null = 无拍卖），供 e2e / 取证脚本取证 */
     auction: () => game?.state.auction ?? null,
     /* 银行信贷（M20.2）：`bank()` 读 UI 态；`setBank(open, sel?)` 供 e2e / 取证脚本直接开面板取景 */
-    bank: () => ({ open: bankOpen, sel: bankSel }),
+    bank: () => bankUi(),
     setBank: (open: boolean, sel?: BankProductKind) => {
       bankOpen = open;
       if (sel) bankSel = sel;
+      bankAmount = '';                                         // M20.5：开合一律清空金额输入
       if (open) { storeOpen = false; facilityOpen = false; }   // 与商店 / 设施互斥
       paint();
     },
+    /* M20.5（spec §6.1）金额键盘：`setBankAmount(raw)` 供 e2e / 取证脚本直接定位输入串 */
+    setBankAmount: (raw: string) => { bankAmount = raw; paint(); },
     /* 道具商店（M20.3 spec §5.1）：`store()` 读 UI 态；`setStore(open, sel?)` 供 e2e / 取证脚本直接开面板 */
     store: () => storeUi(),
     setStore: (open: boolean, sel?: ItemCardKind) => {

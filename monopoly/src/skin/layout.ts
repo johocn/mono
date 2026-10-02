@@ -282,27 +282,59 @@ export const PANEL_BANK_BTN2_Y = 510;            // 次键顶边
 export const PANEL_BANK_BTN_H = 46;              // = 注册表两枚操作键的高（与 HUD 同源）
 export const PANEL_BANK_CLOSE_X = 300;           // 右上「关闭」键左缘（复用 72×22 的 ui.qk）
 export const PANEL_BANK_CLOSE_Y = 307;           // 关闭键顶边（中心 y 与 PANEL_BADGE_Y 同线）
+
+/* —— M20.5 银行「存款」页金额键盘（spec §6.1 D39；方案 A · 数字键盘）——
+   右列（184..370，中心 277）自上而下：示数条（`ui.amount`）→ 数字键盘（`ui.key` 3 列 × 4 行）
+   → 快捷档 3 枚 → 两枚确认键并排（「存入 ￥X」/「取出 ￥X」）。整段收在 606 之上——
+   HUD 快键行（607..629）画在浮层之上且照常可点，越过 606 的键会被压住。 */
+export const PANEL_BANK_AMOUNT_W = 186;          // = 右列净宽
+export const PANEL_BANK_AMOUNT_H = 30;
+export const PANEL_BANK_AMOUNT_CX = PANEL_BANK_DETAIL_CX;   // 277
+/* 示数条中心 y（351 ⇒ 336..366）：必须落在角标（305..331）与右上「关闭」键（307..329）之下，
+   否则示数条会压住角标文案与关闭键（M20.5 取证截图 mono-m20-5-01 暴露，整段改下移 17px）。 */
+export const PANEL_BANK_AMOUNT_CY = 351;
+export const PANEL_BANK_KEY_W = 56;              // = 注册表 `ui.key` 的 box 宽
+export const PANEL_BANK_KEY_H = 34;              // = 注册表 `ui.key` 的 box 高
+export const PANEL_BANK_KEY_X0 = 187;            // 首列左缘（3 列 step 65 → 187 / 252 / 317，右缘 373）
+export const PANEL_BANK_KEY_Y0 = 372;            // 首行顶边（4 行 step 38 → 372..520）
+export const PANEL_BANK_KEY_STEP_X = 65;
+export const PANEL_BANK_KEY_STEP_Y = 38;
+export const PANEL_BANK_TIER_W = PANEL_BANK_KEY_W;   // 快捷档与数字键同尺寸（同列对齐）
+export const PANEL_BANK_TIER_H = PANEL_BANK_KEY_H;
+export const PANEL_BANK_TIER_Y = 524;            // 顶边（524..558）
+/* 两枚确认键并排：89×2 + 8 间隙 = 186 = 右列净宽 ⇒ 左键 184..273、右键 281..370；
+   比数字键更扁（24 高）以便整段收在 606 之上，故用独立注册项 `ui.keyWide`（89×24）。 */
+export const PANEL_BANK_CONFIRM_W = 89;          // = 注册表 `ui.keyWide` 的 box 宽
+export const PANEL_BANK_CONFIRM_H = 24;          // = 注册表 `ui.keyWide` 的 box 高
+export const PANEL_BANK_CONFIRM_GAP = 8;
+export const PANEL_BANK_CONFIRM_X0 = PANEL_BANK_DETAIL_CX - (PANEL_BANK_CONFIRM_W * 2 + PANEL_BANK_CONFIRM_GAP) / 2;  // 184
+export const PANEL_BANK_CONFIRM_Y = 564;         // 顶边（564..588）
+/* 确认键字号覆写（`state.fs`，见 `render/providers/proc-panel.ts` 的 `uiKey`）：
+   标签「存入 ￥999999」在默认 14px 下约 92px，溢出 89 的键宽；压到 11px 后约 72px，两侧各留 ≥ 8px。 */
+export const PANEL_BANK_CONFIRM_FS = 11;
 /* M20.4 设施浮层两枚认购键的字号覆写（`state.fs`，见 `render/providers/proc-hud.ts` 的 `uiButton`）：
    标签「认购 1 股 ￥200」/「认购 5 股 ￥1000」较银行键标签长——15px 下实测 110.4 / 119.7 宽，
    溢出 98 / 110 的键宽 ⇒ 深色字压到深色底板上，肉眼像被裁切。压到 12px 后 88.3 / 95.7，两侧各留 ≥ 5px。
    台位 / 键宽仍 100% 复用银行版式（F-D12），仅字号逐实例覆写。 */
 export const PANEL_FACILITY_CTA_FS = 12;
 
-/* —— M20.3 道具商店浮层（版式 100% 复用银行 C 的左右分栏、元素与键位，仅纵向排版更紧）——
-   银行左列只有 3 行（行盒 152×40 / 间距 8），而商店目录有 8 项（M20.3-B 追加两种后）。
-   沿用 40/8 会把第 6 行推到 624，越出 300..600 的底板，故商店整行按 `s = 0.8` 缩一档：
-   行盒 152×40 → 121.6×32，8 行 step 32 → 342..598，落在 300..600 之内（不压角标、不越底板）。
-   缩水只走 `panelSpecs` 的第 5 参 `s`（`uiBankRow` preset 的**行盒**随 `s` 缩放，字与行距是绝对值、
-   恰好仍然装得进 32 高的行盒），故**零新增皮肤元素**。命中区用同一组常量（`X` / `W` / `H` = 同一个
-   `s` 推导式），视觉与命中同源。x 中心不变（= 银行行中心），只收窄左右各 15.2。 */
+/* —— M20.3 道具商店浮层（版式 100% 复用银行 C 的左右分栏、元素与键位）——
+   M20.5（spec §6.4 D46）目录 8 → 11 项后 300 高的 `showcase.panel` 装不下（256px / 11 行 ≈ 23px/行，
+   字会溢出），故整块改用已在册的 `showcase.panelTall`（370×480 @ `PANEL_DRAW_Y = 150` ⇒ 150..630）。
+   左列 11 行沿用 `PANEL_STORE_ROW_S = 0.8` 的 121.6×32 行盒（`uiBankRow` 的 `s` 缩放），
+   y0 = 190、step 32 → 190..542，紧贴角标（`PANEL_BADGE_DRAW_Y` = 174，占 161..187）之下。
+   右列详情自 190 起，两枚操作键落在 500 / 552（均 < 606，避开 HUD 快键行）。 */
 export const PANEL_STORE_ROW_S = 0.8;
 export const PANEL_STORE_ROW_W = PANEL_BANK_ROW_W * PANEL_STORE_ROW_S;   // 121.6
 export const PANEL_STORE_ROW_X = PANEL_BANK_ROW_X + (PANEL_BANK_ROW_W - PANEL_STORE_ROW_W) / 2;  // 35.2
-export const PANEL_STORE_ROW_H = PANEL_BANK_ROW_H * PANEL_STORE_ROW_S;   // 32（8 行铺满 342..598）
+export const PANEL_STORE_ROW_H = PANEL_BANK_ROW_H * PANEL_STORE_ROW_S;   // 32（11 行铺满 190..542）
 export const PANEL_STORE_ROW_GAP = 0;            // 行盒已缩到 step 高度，行间不再留缝
-export const PANEL_STORE_ROW_Y0 = 342;           // 首行顶边
+export const PANEL_STORE_ROW_Y0 = 190;           // 首行顶边
 export const PANEL_STORE_LINE_W = 186;           // 右列折行宽（= 右列净宽 370−184）
+export const PANEL_STORE_LINE_Y0 = 190;          // 右列详情首行中心 y
 export const PANEL_STORE_DESC_DY = 46;           // 用途描述占两行，故其下移量大于常规行距 22
+export const PANEL_STORE_BTN_Y = 500;            // 主键顶边（500..546）
+export const PANEL_STORE_BTN2_Y = 552;           // 次键顶边（552..598）
 
 /* 浮层关闭键（抽卡翻牌用）：卡面放大后移到卡面正下方、水平居中（卡底 476.8 → 键 488..524） */
 export const PANEL_CLOSE_W = 140;

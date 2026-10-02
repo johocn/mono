@@ -3,11 +3,12 @@
  * 只产出「要做什么」（`AiStep[]`，对既有 Game API 的调用意图）；
  * 「什么时候做、做多久」全部由 `src/ui/aiDriver.ts` 决定。
  */
-import { creditLocked, currentPlayer, buyDiscountOf, netWorth, type Game, type GameState, type Phase } from './game';
+import { creditLocked, currentPlayer, buyDiscountOf, netWorth, type Game, type GameState, type MarginSource, type Phase } from './game';
 import { buyable, canBuy, discounted, ownedBy } from './estate';
 import { buyPrice, canUpgrade, nextLevel } from '../data/economy';
 import { BANK_TILE_INDEX } from '../data/bank';
 import { loanLimitOf } from './bank';
+import { marketValue } from './stocks';
 import type { ItemCardKind } from '../data/cards';
 import { STORE_CATALOG } from '../data/item-shop';
 import { RING_SIZE } from '../data/board';
@@ -34,8 +35,11 @@ const STORE_BOMB_MULT = 2;
 /** M20.4 设施认购保留现金：低于此数不认购（避免把现金买空后无力付租破产） */
 const FACILITY_RESERVE = 500;
 
-/** M20.2 银行信贷动作（与 `Game` 六个 API 一一对应） */
-export type BankAction = 'deposit' | 'withdraw' | 'borrow' | 'repay' | 'mortgage' | 'redeem';
+/** M20.5 追加保证金的触发比（spec §7）：持仓市值 < 保证金借款 × 该值即视为逼近爆仓线 */
+const MARGIN_TOPUP_RATIO = 1.3;
+
+/** M20.2 银行信贷动作（与 `Game` 七个 API 一一对应；`margin` 为 M20.5 D41 追加保证金） */
+export type BankAction = 'deposit' | 'withdraw' | 'borrow' | 'repay' | 'mortgage' | 'redeem' | 'margin';
 
 /** 计划中的一步；`close` 见计划抬头「澄清 2」（收口浮层，避免陈旧卡面残留到下一位） */
 export type AiStep =
@@ -47,7 +51,8 @@ export type AiStep =
   | { kind: 'roll' } | { kind: 'move' } | { kind: 'settle' }
   | { kind: 'sell'; index: number }          /* M20.1 自由出售自有地块 */
   | { kind: 'auctionBid'; amount: number }   /* M20.1 拍卖出价（0 = 放弃） */
-  | { kind: 'bank'; action: BankAction; amount?: number; index?: number }   /* M20.2 银行信贷 */
+  /* M20.2 银行信贷；M20.5 追加保证金：`amount` 缺省 = 全额、`source` 缺省 = 现金 */
+  | { kind: 'bank'; action: BankAction; amount?: number; index?: number; source?: MarginSource }
   | { kind: 'buyItem'; card: ItemCardKind }    /* M20.3 商店买入 */
   | { kind: 'sellItem'; card: ItemCardKind }   /* M20.3 商店卖出 */
   | { kind: 'facility'; facility: FacilityId; shares: number }   /* M20.4 设施认购 */
@@ -72,6 +77,7 @@ export function applyStep(g: Game, step: AiStep): unknown {
       if (step.action === 'borrow') return g.takeLoan();
       if (step.action === 'repay') return g.repayLoan(step.amount);
       if (step.action === 'mortgage') return g.takeMortgage(step.index ?? -1);
+      if (step.action === 'margin') return g.addMargin(step.amount, step.source);
       return g.redeemMortgage(step.index ?? -1);
     }
     case 'buyItem': return g.buyItem(step.card);
@@ -198,6 +204,20 @@ export function pickBank(state: GameState, P: AiParams): AiStep[] {
   if (p.bankrupt) return [];
   const atBank = p.pos === BANK_TILE_INDEX;
 
+  /* ⓪ M20.5（spec §7）：保证金借款逼近爆仓线（市值 < 借款 × MARGIN_TOPUP_RATIO）→ **最优先**补仓。
+     现金够（留 `reserve`）走现金；现金不够且站 9 号格、尚有可抵押地块 → 抵押补仓（一次一笔，
+     驱动器每步前重算，故逐笔推进即可）。`amount` 不传 = 全额现金会掏空钱包，故显式传可用余钱。 */
+  if (p.margin && p.margin.principal > 0) {
+    const value = marketValue(state.portfolios[p.id - 1] ?? {}, state.quotes);
+    if (value < p.margin.principal * MARGIN_TOPUP_RATIO) {
+      const spare = p.cash - P.reserve;
+      if (spare > 0) return [{ kind: 'bank', action: 'margin', source: 'cash', amount: spare }];
+      if (atBank && firstMortgageable(state, p.id) !== null) {
+        return [{ kind: 'bank', action: 'margin', source: 'mortgage' }];
+      }
+    }
+  }
+
   /* ① 临近到期 / 已逾期：优先还款（任意回合可还，不限 9 号格） */
   if (p.loan && p.loan.due - state.round <= 2 && p.cash > 0) {
     return [{ kind: 'bank', action: 'repay' }];
@@ -210,8 +230,8 @@ export function pickBank(state: GameState, P: AiParams): AiStep[] {
     if (!p.loan && loanLimitOf(netWorth(state, p)) > 0) return [{ kind: 'bank', action: 'borrow' }];
   }
 
-  /* ③ 现金充裕且无债务：把余钱存银行（留 reserve，纯现金收益） */
-  const debtless = !p.loan && p.mortgages.length === 0;
+  /* ③ 现金充裕且无债务（含保证金借款，M20.5）：把余钱存银行（留 reserve，纯现金收益） */
+  const debtless = !p.loan && p.mortgages.length === 0 && (p.margin?.principal ?? 0) <= 0;
   const amount = p.cash - P.reserve;
   if (debtless && p.cash > P.depositLine && amount > 0) {
     return [{ kind: 'bank', action: 'deposit', amount }];
@@ -383,6 +403,14 @@ function settledPlan(state: GameState, persona: Persona, P: AiParams): AiStep[] 
   if (hand.includes('bullBear')) {
     const heavy = heaviestHolding(state, me.id);
     if (heavy !== null) post.push({ kind: 'card', card: 'bullBear', stock: { code: heavy, dir: 'up' } });
+  }
+
+  /* ⑨ 经济道具（M20.5 spec §7）：`subsidy` 立即落袋，**抽到即用**；`boom` 抬景气度 ——
+     景气只放大「玩家之间的租金」，故须自有地块才受益（无地打等于替全场上调租金），
+     与 ⑧ 的「有持仓才打」同规；`taxShield` **被动持有、绝不出牌**（出牌即报 `passive`）。 */
+  if (hand.includes('subsidy')) post.push({ kind: 'card', card: 'subsidy' });
+  if (hand.includes('boom') && ownedBy(state.estates, me.id).length > 0) {
+    post.push({ kind: 'card', card: 'boom' });
   }
 
   return [

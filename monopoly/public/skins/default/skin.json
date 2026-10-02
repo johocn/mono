@@ -155,6 +155,9 @@
     "ui.bidDebt": { "kind": "proc", "preset": "uiBidDebt", "params": {} },
     "ui.debtBar": { "kind": "proc", "preset": "uiDebtBar", "params": {} },
     "ui.bankRow": { "kind": "proc", "preset": "uiBankRow", "params": {} },
+    "ui.amount": { "kind": "proc", "preset": "uiAmount", "params": {} },
+    "ui.key": { "kind": "proc", "preset": "uiKey", "params": {} },
+    "ui.keyWide": { "kind": "proc", "preset": "uiKey", "params": {} },
     "ui.handBar": { "kind": "proc", "preset": "uiHandBar", "params": {} },
     "ui.newsTicker": { "kind": "proc", "preset": "uiNewsTicker", "params": {} },
 

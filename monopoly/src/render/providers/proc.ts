@@ -16,8 +16,8 @@ export interface TextRequest {
   size: number;
   fill: string;
   rotate?: number;                       // 角度（度）
-  /** 水平对齐：center（默认，用于店招/灯笼）· left（用于橱窗信息条，x 即左边缘） */
-  align?: 'center' | 'left';
+  /** 水平对齐：center（默认，用于店招/灯笼）· left（用于橱窗信息条，x 即左边缘）· right（用于金额条右上角提示，x 即右边缘） */
+  align?: 'center' | 'left' | 'right';
   /** 自动换行宽度（px）：给出后按该宽度折行（CJK 逐字断行），用于放大的事件卡正文 */
   wrapW?: number;
 }
@@ -130,7 +130,8 @@ import {
 import { diceBody, diceFace, uiButton, uiDock, uiLabel, uiPanel, uiPlayerBar } from './proc-hud';
 import { uiMusicOff, uiMusicOn, uiSoundOff, uiSoundOn } from './proc-audio';
 import {
-  tileCard, uiBadge, uiBankRow, uiBid, uiBidDebt, uiCard, uiCardBack, uiDebtBar, uiHandBar, uiHandSlot,
+  tileCard, uiAmount, uiBadge, uiBankRow, uiBid, uiBidDebt, uiCard, uiCardBack, uiDebtBar, uiHandBar,
+  uiHandSlot, uiKey,
   uiNewsTicker,
   uiPreview, uiSettleRow, uiStockChart, uiStockRow,
 } from './proc-panel';
@@ -205,6 +206,8 @@ export const PROC_PRESETS: Record<string, ProcPreset> = {
   uiBidDebt,
   uiDebtBar,
   uiBankRow,
+  uiAmount,
+  uiKey,
   uiHandBar,
   uiNewsTicker,
   fxCoin,

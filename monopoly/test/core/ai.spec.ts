@@ -311,6 +311,80 @@ describe('ai pickBank 银行信贷策略（M20.2-D12）', () => {
   });
 });
 
+describe('ai 保证金补仓与经济道具（M20.5 spec §7）', () => {
+  const bank = (seed = 3) => {
+    const g = createGame({ seed });
+    const me = currentPlayer(g.state);
+    me.pos = BANK_TILE_INDEX;
+    return { g, me };
+  };
+  /** 保证金账户 + 空仓（市值 0 < 借款 × 1.3 ⇒ 逼近爆仓） */
+  const nearLiquidation = (g: ReturnType<typeof createGame>, principal = 1000) => {
+    currentPlayer(g.state).margin = { principal, rate: 0.08 };
+  };
+
+  it('逼近爆仓 + 现金有余 → 现金补仓（金额 = 现金 − reserve，不掏空钱包）', () => {
+    const { g, me } = bank();
+    nearLiquidation(g);
+    me.cash = 1000;                                  // 保守 reserve = 400 ⇒ spare = 600
+    expect(pickBank(g.state, personaParams('conservative')))
+      .toEqual([{ kind: 'bank', action: 'margin', source: 'cash', amount: 600 }]);
+  });
+
+  it('现金不足（≤ reserve）+ 站 9 号格 + 有可抵押地块 → 抵押补仓', () => {
+    const { g, me } = bank();
+    nearLiquidation(g);
+    me.cash = 300;                                   // spare = 100 − 400 < 0
+    g.state.estates[3] = { index: 3, owner: me.id, level: 2, processing: false };
+    expect(pickBank(g.state, personaParams('conservative')))
+      .toEqual([{ kind: 'bank', action: 'margin', source: 'mortgage' }]);
+  });
+
+  it('不站 9 号格 + 现金不足 → 不补仓（也不借款，避免与 ② 分支混淆）', () => {
+    const { g, me } = bank();
+    nearLiquidation(g);
+    me.pos = 5;
+    me.cash = 300;
+    g.state.estates[3] = { index: 3, owner: me.id, level: 2, processing: false };
+    expect(pickBank(g.state, personaParams('conservative'))).toEqual([]);
+  });
+
+  it('市值高于借款 × 1.3 → 不补仓；有保证金借款时不存款（视同有债务）', () => {
+    const { g, me } = bank();
+    me.margin = { principal: 100, rate: 0.08 };
+    g.state.portfolios[me.id - 1] = { SY01: { code: 'SY01', shares: 4, cost: 0 } };
+    me.cash = 5000;
+    expect(pickBank(g.state, personaParams('conservative'))).toEqual([]);
+  });
+
+  it('applyStep 映射 `margin`：现金补仓逐值可验、归零即清账户', () => {
+    const { g, me } = bank();
+    me.margin = { principal: 500, rate: 0.08 };
+    me.cash = 1000;
+    expect(applyStep(g, { kind: 'bank', action: 'margin', source: 'cash', amount: 200 }))
+      .toEqual({ ok: true, added: 200, principal: 300 });
+    expect(me.cash).toBe(800);
+    expect(applyStep(g, { kind: 'bank', action: 'margin', source: 'cash', amount: 300 }))
+      .toEqual({ ok: true, added: 300, principal: 0 });
+    expect(me.margin).toBeNull();
+  });
+
+  it('settled 计划：`subsidy` 抽到即用、`boom` 有地才用、`taxShield` 绝不出牌', () => {
+    const g = createGame({ seed: 3 });
+    const me = currentPlayer(g.state);
+    me.pos = 5;                                      // 非银行 / 非交易所，只看用牌
+    g.state.phase = 'settled';
+    g.state.hands[me.id - 1] = ['subsidy', 'boom', 'taxShield'];
+    const cardsOf = (): string[] => decideTurn(g.state, 'conservative')
+      .filter((s) => s.kind === 'card')
+      .map((s) => (s as { card: string }).card);
+    expect(cardsOf()).toEqual(['subsidy']);           // 无地：boom 不打（等于替全场上调租金）
+    g.state.estates[7] = { index: 7, owner: me.id, level: 1, processing: false };
+    expect(cardsOf()).toEqual(['subsidy', 'boom']);
+    expect(cardsOf()).not.toContain('taxShield');
+  });
+});
+
 describe('ai 股票卡策略（M20.3-B spec §7）', () => {
   /** 非交易所空地 + settled：排除 §③ 股票交易步干扰，只观察两张新卡的取舍 */
   const setup = () => {

@@ -188,10 +188,10 @@ export function hudSpecs(
     });
   };
   /* 债务条（M20.2 spec §3.8）：顶部 HUD 条中段，四段读当前玩家信贷口径；
-     无信贷（存款 / 贷款 / 抵押全空）时**整条隐藏**，保老对局画面逐像素不变（零回归） */
+     无信贷（存款 / 贷款 / 抵押 / 保证金借款全空）时**整条隐藏**，保老对局画面逐像素不变（零回归） */
   const pushDebtBar = (): void => {
     const p = currentPlayer(state);
-    if (p.deposit <= 0 && p.loan === null && p.mortgages.length === 0) return;
+    if (p.deposit <= 0 && p.loan === null && p.mortgages.length === 0 && (p.margin?.principal ?? 0) <= 0) return;
     const v = bankDebtView(state, p.id);
     bar('ui.debtBar', 23, HUD_DEBT_X + HUD_DEBT_W / 2, HUD_DEBT_Y + HUD_DEBT_H / 2, {
       deposit: v.deposit, debt: v.debt, mortgageCount: v.mortgageCount, overdue: v.overdue,

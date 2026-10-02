@@ -10,10 +10,10 @@
  */
 import { PLAYER_NAME, RING_SIZE, brandAt } from '../data/board';
 import { ITEM_CARDS, type ItemCardKind } from '../data/cards';
-import { LEVERAGES, LOT_TIERS, MARGIN_UNLOCK_ROUND, STOCKS, STOCK_TILE_INDEX, type LotTier } from '../data/stocks';
-import { lotShares } from '../core/stocks';
+import { LEVERAGES, LIQUIDATION_RATIO, LOT_TIERS, MARGIN_UNLOCK_ROUND, MARGIN_WARN_RATIO, STOCKS, STOCK_TILE_INDEX, type LotTier } from '../data/stocks';
+import { lotShares, marginGapPctOf, marginLineOf, marketValue } from '../core/stocks';
 import {
-  BANK_DEPOSIT_BONUS, BANK_TILE_INDEX, DEPOSIT_RATE, LOAN_NET_RATIO, LOAN_RATE, LOAN_TERM,
+  BANK_TILE_INDEX, LOAN_NET_RATIO, LOAN_RATE, LOAN_TERM,
   MORTGAGE_LTV, MORTGAGE_RATE, MORTGAGE_TERM,
 } from '../data/bank';
 import { loanLimitOf, mortgageLimitOf } from '../core/bank';
@@ -28,6 +28,11 @@ import {
   HUD_QK_H, HUD_QK_W,
   NEWS_TICKER_H, NEWS_TICKER_W, NEWS_TICKER_X, NEWS_TICKER_Y,
   PANEL_BADGE_DRAW_Y, PANEL_BADGE_Y,
+  PANEL_BANK_AMOUNT_CX, PANEL_BANK_AMOUNT_CY, PANEL_BANK_CONFIRM_FS, PANEL_BANK_CONFIRM_GAP,
+  PANEL_BANK_CONFIRM_H, PANEL_BANK_CONFIRM_W, PANEL_BANK_CONFIRM_X0, PANEL_BANK_CONFIRM_Y,
+  PANEL_BANK_KEY_H, PANEL_BANK_KEY_STEP_X, PANEL_BANK_KEY_STEP_Y, PANEL_BANK_KEY_W,
+  PANEL_BANK_KEY_X0, PANEL_BANK_KEY_Y0,
+  PANEL_BANK_TIER_H, PANEL_BANK_TIER_W, PANEL_BANK_TIER_Y,
   PANEL_BANK_BTN2_W, PANEL_BANK_BTN2_X, PANEL_BANK_BTN2_Y, PANEL_BANK_BTN_H,
   PANEL_BANK_BTN_W, PANEL_BANK_BTN_X, PANEL_BANK_BTN_Y, PANEL_BANK_CLOSE_X, PANEL_BANK_CLOSE_Y,
   PANEL_BANK_DETAIL_CX, PANEL_BANK_LINE_DY, PANEL_BANK_LINE_Y0,
@@ -48,7 +53,8 @@ import {
   PANEL_SLOT_X0, PANEL_STOCK_BADGE_CX, PANEL_STOCK_BUY_Y, PANEL_STOCK_LEV_GAP, PANEL_STOCK_LEV_X0,
   PANEL_STOCK_LEV_Y, PANEL_STOCK_ROW_GAP, PANEL_STOCK_ROW_Y, PANEL_STOCK_SELL_Y,
   PANEL_STOCK_TIER_GAP, PANEL_STOCK_TIER_H, PANEL_STOCK_TIER_S, PANEL_STOCK_TIER_W,
-  PANEL_STOCK_TIER_X0, PANEL_STOCK_Y, PANEL_STORE_DESC_DY, PANEL_STORE_LINE_W, PANEL_STORE_ROW_GAP,
+  PANEL_STOCK_TIER_X0, PANEL_STOCK_Y, PANEL_STORE_BTN2_Y, PANEL_STORE_BTN_Y, PANEL_STORE_DESC_DY,
+  PANEL_STORE_LINE_W, PANEL_STORE_LINE_Y0, PANEL_STORE_ROW_GAP,
   PANEL_STORE_ROW_H, PANEL_STORE_ROW_S, PANEL_STORE_ROW_W, PANEL_STORE_ROW_X, PANEL_STORE_ROW_Y0,
   PANEL_X, PANEL_Y, STAGE_W,
 } from '../skin/layout';
@@ -63,9 +69,12 @@ export type PanelActionId =
   /* M20.3-B 涨跌卡浮层（spec §6.2）：方向分段（`target = 'up'|'down'`）+ 逐行选标的（`target = code`）+ 取消 */
   | 'bullbear:dir' | 'bullbear:pick' | 'bullbear:cancel'
   | 'auction:bid' | 'auction:pass'
-  /* M20.2 银行信贷（spec §3.8）：选中产品行 + 六个 API + 关闭 */
+  /* M20.2 银行信贷（spec §3.8）：选中产品行 + 六个 API + 关闭
+     M20.5（spec §6.1 D39）：存款页金额键盘（`bank:key` target = 键面文字 / `bank:tier` target = 金额）
+     + 确认键沿用 `bank:deposit` / `bank:withdraw`；保证金页两键 `bank:marginCash` / `bank:marginMortgage` */
   | 'bank:select' | 'bank:deposit' | 'bank:withdraw' | 'bank:borrow' | 'bank:repay'
-  | 'bank:mortgage' | 'bank:redeem' | 'bank:close'
+  | 'bank:mortgage' | 'bank:redeem' | 'bank:key' | 'bank:tier'
+  | 'bank:marginCash' | 'bank:marginMortgage' | 'bank:close'
   /* M20.3 道具商店（spec §5.4）：选中商品行 + 买 / 卖 + 关闭（`data-target` 一律给 kind） */
   | 'store:select' | 'store:buy' | 'store:sell' | 'store:close'
   /* M20.4 公共设施入股（spec §6.1）：选中设施行 + 认购 1 / 5 股 + 关闭（`data-target` 一律给 FacilityId） */
@@ -77,10 +86,12 @@ export interface TargetingView {
   hovered: number | null;
 }
 
-/** M20.2 银行浮层 UI 态（`main.ts` 持有；`sel` = 左列选中行） */
+/** M20.2 银行浮层 UI 态（`main.ts` 持有；`sel` = 左列选中行）
+ *  M20.5：`amount` = 存款页键盘当前输入串（纯数字串，默认 `''` ⇒ 显示 ￥0） */
 export interface BankUiState {
   open: boolean;
   sel: BankProductKind;
+  amount?: string;
 }
 
 /** M20.3 商店浮层 UI 态（`main.ts` 持有；`sel` = 左列选中商品） */
@@ -158,7 +169,8 @@ export interface HandSlotView {
 export function cardEnabled(kind: ItemCardKind, state: GameState): boolean {
   const i = state.current;
   if (!(state.hands[i] ?? []).includes(kind)) return false;
-  if (kind === 'pardon') return false;
+  /* pardon / taxShield 均为「持有即生效」的被动牌：不可主动出牌，故槽位置灰（M20.5 spec §5.6 D44） */
+  if (kind === 'pardon' || kind === 'taxShield') return false;
   if (kind === 'teleport') return state.phase === 'rolled';
   if (kind === 'bomb' || kind === 'demolish') return firstFoeTile(state) !== undefined;
   if (kind === 'barrier') return Object.keys(state.barriers).length < RING_SIZE;
@@ -431,8 +443,8 @@ export function overlayOf(
 
 /* —— M20.2 银行信贷浮层（版式 C：左列表右详情；spec §3.8） —— */
 
-/** 三条产品线（左列三行） */
-export type BankProductKind = 'deposit' | 'loan' | 'mortgage';
+/** 四条产品线（左列四行；M20.5 新增「保证金」） */
+export type BankProductKind = 'deposit' | 'loan' | 'mortgage' | 'margin';
 
 /** 利率/比例 → 百分数整数（`0.03*100 = 3.0000000000000004`，故必须取整） */
 const pct = (ratio: number): number => Math.round(ratio * 100);
@@ -479,44 +491,133 @@ export function firstMortgageableTile(state: GameState): number | undefined {
   return list.length > 0 ? list[0] : undefined;
 }
 
-/** 左侧三行摘要（选中态由 UI 态的 `selected` 传入） */
+/** 左侧四行摘要（选中态由 UI 态的 `selected` 传入） */
 export function bankRows(state: GameState, selected: BankProductKind = 'deposit'): BankRowView[] {
   const p = currentPlayer(state);
+  const margin = p.margin?.principal ?? 0;
   const rows: { kind: BankProductKind; title: string; summary: string }[] = [
     { kind: 'deposit', title: '存款', summary: p.deposit > 0 ? `￥${p.deposit}` : '无存款' },
     { kind: 'loan', title: '信用贷款', summary: p.loan ? `欠 ￥${p.loan.principal}` : '无债务' },
     { kind: 'mortgage', title: '抵押', summary: p.mortgages.length > 0 ? `${p.mortgages.length} 块锁定` : '无抵押' },
+    { kind: 'margin', title: '保证金', summary: margin > 0 ? `欠 ￥${margin}` : '无杠杆' },
   ];
   return rows.map((row) => ({ ...row, selected: row.kind === selected }));
 }
 
-/** 债务条口径（HUD 顶部条与浮层共用） */
+/** 债务条口径（HUD 顶部条与浮层共用）；`debt` 并入保证金借款（M20.5 D40：不新增第 5 段） */
 export function bankDebtView(state: GameState, playerId: number): BankDebtView {
   const p = state.players.find((x) => x.id === playerId);
   if (!p) return { deposit: 0, debt: 0, mortgageCount: 0, overdue: 0 };
-  const debt = (p.loan?.principal ?? 0) + p.mortgages.reduce((sum, m) => sum + m.principal, 0);
+  const debt = (p.loan?.principal ?? 0) + p.mortgages.reduce((sum, m) => sum + m.principal, 0) + (p.margin?.principal ?? 0);
   const overdue = Math.max(p.loan?.overdue ?? 0, ...p.mortgages.map((m) => m.overdue), 0);
   return { deposit: p.deposit, debt, mortgageCount: p.mortgages.length, overdue };
 }
 
-/** 右侧详情（数值行 + 两枚操作键可点性）；可点性与引擎六 API 的边界一致 */
-export function bankDetail(state: GameState, kind: BankProductKind): BankDetailView {
+/* —— M20.5 存款页金额键盘（spec §6.1 D39）：输入与解析全为纯函数，UI 与命中层共用一份键面 —— */
+
+/** 键盘键面（3 列 × 4 行，数组顺序即视觉行序：1 2 3 / 4 5 6 / 7 8 9 / 清空 0 ⌫） */
+export const AMOUNT_KEYS: readonly string[] = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '清空', '0', '⌫'];
+/** 快捷档（点一下在现值上累加） */
+export const AMOUNT_TIERS: readonly number[] = [100, 500, 1000];
+/** 输入串位数上限（6 位 ⇒ 最大 ￥999,999，足够覆盖初始资金与额度） */
+export const AMOUNT_MAX_DIGITS = 6;
+const AMOUNT_CEIL = 10 ** AMOUNT_MAX_DIGITS - 1;
+
+/** 键盘输入 → 新输入串（`清空` 归零 / `⌫` 退一位 / 数字追加并截断，前导 0 不累积） */
+export function applyAmountKey(cur: string, key: string): string {
+  if (key === '清空') return '';
+  if (key === '⌫') return cur.slice(0, -1);
+  if (!/^[0-9]$/.test(key)) return cur;
+  return ((cur === '0' ? '' : cur) + key).slice(0, AMOUNT_MAX_DIGITS);
+}
+
+/** 输入串 → 金额（空串 / 非正数 → 0） */
+export function parseAmount(raw: string): number {
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/** 快捷档：在现值上累加并截到上限 */
+export function applyAmountTier(raw: string, add: number): string {
+  return String(Math.min(parseAmount(raw) + add, AMOUNT_CEIL));
+}
+
+/** 存款页示数条 + 两枚确认键口径（`raw` = 键盘输入串） */
+export interface BankAmountView {
+  /** 示数条大字（当前输入金额） */
+  text: string;
+  /** 示数条右上小字（可用现金 / 存款上限） */
+  hint: string;
+  amount: number;
+  /** 两枚确认键可点性（金额为 0 一律禁用；各自再叠「现金 / 存款够不够」） */
+  depositEnabled: boolean;
+  withdrawEnabled: boolean;
+  /** 快捷档可点性（已到输入上限则禁用） */
+  tiersEnabled: boolean;
+}
+
+export function bankAmountView(state: GameState, raw = ''): BankAmountView {
+  const p = currentPlayer(state);
+  const amount = parseAmount(raw);
+  return {
+    text: `￥${amount}`,
+    hint: `现金 ${p.cash} · 存款 ${p.deposit}`,
+    amount,
+    depositEnabled: amount > 0 && p.cash > 0,
+    withdrawEnabled: amount > 0 && p.deposit > 0,
+    tiersEnabled: parseAmount(raw) < AMOUNT_CEIL,
+  };
+}
+
+/** 保证金页详情（spec §6.1 D40 / D41）：借款 / 持仓市值 / 爆仓线 / 距爆仓 + 两枚补仓键 */
+export function bankMarginView(state: GameState): BankDetailView {
   const p = currentPlayer(state);
   const atBank = p.pos === BANK_TILE_INDEX;
-  if (kind === 'deposit') {
-    return {
-      kind,
-      title: '存款',
-      lines: [
-        `存款余额 ￥${p.deposit}`,
-        `可用现金 ￥${p.cash}`,
-        `轮息 +${pct(DEPOSIT_RATE)}%（轮末复利）`,
-        `落 9 号格领红包 ${pct(BANK_DEPOSIT_BONUS)}%`,
-      ],
-      primary: { label: '存入', enabled: p.cash > 0 },
-      secondary: { label: '取出', enabled: p.deposit > 0 },
-    };
-  }
+  const principal = p.margin?.principal ?? 0;
+  const value = marketValue(state.portfolios[p.id - 1], state.quotes);
+  const line = marginLineOf(principal);
+  const gap = marginGapPctOf(value, line);
+  const tile = firstMortgageableTile(state);
+  const lines = principal <= 0
+    ? ['当前无保证金借款', `持仓市值 ￥${value}`, `现金 ￥${p.cash}`, '加杠杆买入后此处显示爆仓线']
+    : [
+        `借款 ￥${principal}`,
+        `持仓市值 ￥${value}`,
+        `爆仓线 ￥${line}（借款 × ${pct(LIQUIDATION_RATIO)}%）`,
+        gap <= 0 ? '已爆仓 · 轮末将被强制平仓' : `距爆仓 ${gap}%`,
+      ];
+  return {
+    kind: 'margin',
+    title: '保证金',
+    lines,
+    primary: { label: '现金追加', enabled: principal > 0 && p.cash > 0 },
+    secondary: { label: '抵押补仓', enabled: atBank && principal > 0 && tile !== undefined },
+  };
+}
+
+/** 股票浮层角标（spec §6.2 D40）：保证金存在且市值 < 借款 × `MARGIN_WARN_RATIO` → 警示文案 */
+export interface StockBadgeView {
+  text: string;
+  warn: boolean;
+}
+
+export function stockBadgeView(state: GameState): StockBadgeView {
+  const p = currentPlayer(state);
+  const principal = p.margin?.principal ?? 0;
+  if (principal <= 0) return { text: '股票交易所', warn: false };
+  const value = marketValue(state.portfolios[p.id - 1], state.quotes);
+  if (value >= principal * MARGIN_WARN_RATIO) return { text: '股票交易所', warn: false };
+  const gap = marginGapPctOf(value, marginLineOf(principal));
+  return { text: gap <= 0 ? '⚠已爆仓' : `⚠爆仓 ${gap}%`, warn: true };
+}
+
+/** 走「文本行 + 两枚操作键」版式的产品页（存款走金额键盘、保证金走 `bankMarginView`，不在此列） */
+export type BankDetailKind = Exclude<BankProductKind, 'deposit' | 'margin'>;
+
+/** 右侧详情（数值行 + 两枚操作键可点性）；可点性与引擎六 API 的边界一致 */
+export function bankDetail(state: GameState, kind: BankDetailKind): BankDetailView {
+  const p = currentPlayer(state);
+  const atBank = p.pos === BANK_TILE_INDEX;
   if (kind === 'loan') {
     const limit = loanLimitOf(netWorth(state, p));
     const lines = p.loan
@@ -684,14 +785,19 @@ export function facilityDetail(state: GameState, id: FacilityId): FacilityDetail
   };
 }
 
-/** M20.4 新闻条（spec §6.2）：`state.news === null` → 不出（`null`）；否则 1 条（深度 0 ⇒ 浮层自然盖住） */
+/** M20.4 新闻条（spec §6.2）：`state.news === null` → 不出（`null`）；否则 1 条（深度 0 ⇒ 浮层自然盖住）
+ *  M20.5（spec §6.5 D48）：`prefix` 前置景气度摘要（如「景气 105%」） */
 export function newsTickerSpecOf(state: GameState): ElementSpec | null {
   const news = state.news;
   if (!news) return null;
   return {
     id: 'ui.newsTicker', slot: null, c: 0, r: 0, pass: 4,
     fixed: { cx: NEWS_TICKER_X + NEWS_TICKER_W / 2, cy: NEWS_TICKER_Y + NEWS_TICKER_H / 2 },
-    state: { sentiment: news.sentiment, scope: news.scope, target: news.target, title: news.title, coef: newsCoefOf(state.news, news.target as FacilityId) },
+    state: {
+      sentiment: news.sentiment, scope: news.scope, target: news.target, title: news.title,
+      coef: newsCoefOf(state.news, news.target as FacilityId),
+      prefix: `景气 ${Math.round(state.economyIndex * 100)}%`,
+    },
   };
 }
 
@@ -773,8 +879,9 @@ export function panelSpecs(
       });
     }
   } else if (overlay === 'bank') {
-    /* 版式 C（spec §3.8）：左列 3 行产品 + 右列详情文本行 + 两枚操作键 + 右上关闭键。
-       底板/角标复用既有元素；文本行用 `ui.bankRow` 的 line 变体（只画居中文字，不画底框） */
+    /* 版式 C（spec §3.8）：左列 4 行产品 + 右列「按产品页分支」+ 右上关闭键。
+       M20.5（spec §6.1）：存款页 = 金额键盘（示数条 + 12 键 + 3 快捷档 + 2 确认键）；
+       保证金页 = 4 行文案 + 现金追加 / 抵押补仓；信用贷款 / 抵押 = 文本行 + 两枚操作键。 */
     push('showcase.panel', PANEL_X, PANEL_Y);
     push('ui.badge', PANEL_CX, PANEL_BADGE_Y, { text: '鹿乡银行 · 9 号格' });
     bankRows(state, bank.sel).forEach((row, i) => {
@@ -782,25 +889,52 @@ export function panelSpecs(
         PANEL_BANK_ROW_Y0 + PANEL_BANK_ROW_H / 2 + i * (PANEL_BANK_ROW_H + PANEL_BANK_ROW_GAP),
         { variant: 'row', title: row.title, summary: row.summary, selected: row.selected });
     });
-    const detail = bankDetail(state, bank.sel);
-    detail.lines.forEach((line, i) => {
-      push('ui.bankRow', PANEL_BANK_DETAIL_CX, PANEL_BANK_LINE_Y0 + i * PANEL_BANK_LINE_DY,
-        { variant: 'line', text: line });
-    });
-    push('ui.button.primary',
-      PANEL_BANK_BTN_X + PANEL_BANK_BTN_W / 2, PANEL_BANK_BTN_Y + PANEL_BANK_BTN_H / 2,
-      { label: detail.primary.label, enabled: detail.primary.enabled });
-    push('ui.button.secondary',
-      PANEL_BANK_BTN2_X + PANEL_BANK_BTN2_W / 2, PANEL_BANK_BTN2_Y + PANEL_BANK_BTN_H / 2,
-      { label: detail.secondary.label, enabled: detail.secondary.enabled });
+    if (bank.sel === 'deposit') {
+      const av = bankAmountView(state, bank.amount ?? '');
+      push('ui.amount', PANEL_BANK_AMOUNT_CX, PANEL_BANK_AMOUNT_CY, { text: av.text, hint: av.hint });
+      AMOUNT_KEYS.forEach((key, i) => {
+        const col = i % 3;
+        const row = Math.floor(i / 3);
+        push('ui.key',
+          PANEL_BANK_KEY_X0 + col * PANEL_BANK_KEY_STEP_X + PANEL_BANK_KEY_W / 2,
+          PANEL_BANK_KEY_Y0 + row * PANEL_BANK_KEY_STEP_Y + PANEL_BANK_KEY_H / 2,
+          { label: key, enabled: true });
+      });
+      AMOUNT_TIERS.forEach((add, i) => {
+        push('ui.key',
+          PANEL_BANK_KEY_X0 + i * PANEL_BANK_KEY_STEP_X + PANEL_BANK_TIER_W / 2,
+          PANEL_BANK_TIER_Y + PANEL_BANK_TIER_H / 2,
+          { label: `+${add}`, enabled: av.tiersEnabled, primary: true });
+      });
+      /* 两枚确认键并排（存入主 / 取出次）：各自按可用现金 / 存款截断，金额为 0 一律禁用。
+         用更宽的 `ui.keyWide`（89×24）+ 逐实例字号覆写，避免长标签溢出键宽。 */
+      push('ui.keyWide',
+        PANEL_BANK_CONFIRM_X0 + PANEL_BANK_CONFIRM_W / 2, PANEL_BANK_CONFIRM_Y + PANEL_BANK_CONFIRM_H / 2,
+        { label: `存入 ￥${av.amount}`, enabled: av.depositEnabled, primary: true, fs: PANEL_BANK_CONFIRM_FS });
+      push('ui.keyWide',
+        PANEL_BANK_CONFIRM_X0 + PANEL_BANK_CONFIRM_W + PANEL_BANK_CONFIRM_GAP + PANEL_BANK_CONFIRM_W / 2,
+        PANEL_BANK_CONFIRM_Y + PANEL_BANK_CONFIRM_H / 2,
+        { label: `取出 ￥${av.amount}`, enabled: av.withdrawEnabled, fs: PANEL_BANK_CONFIRM_FS });
+    } else {
+      const detail = bank.sel === 'margin' ? bankMarginView(state) : bankDetail(state, bank.sel);
+      detail.lines.forEach((line, i) => {
+        push('ui.bankRow', PANEL_BANK_DETAIL_CX, PANEL_BANK_LINE_Y0 + i * PANEL_BANK_LINE_DY,
+          { variant: 'line', text: line });
+      });
+      push('ui.button.primary',
+        PANEL_BANK_BTN_X + PANEL_BANK_BTN_W / 2, PANEL_BANK_BTN_Y + PANEL_BANK_BTN_H / 2,
+        { label: detail.primary.label, enabled: detail.primary.enabled });
+      push('ui.button.secondary',
+        PANEL_BANK_BTN2_X + PANEL_BANK_BTN2_W / 2, PANEL_BANK_BTN2_Y + PANEL_BANK_BTN_H / 2,
+        { label: detail.secondary.label, enabled: detail.secondary.enabled });
+    }
     push('ui.qk', PANEL_BANK_CLOSE_X + HUD_QK_W / 2, PANEL_BANK_CLOSE_Y + HUD_QK_H / 2,
       { label: '关闭', enabled: true });
   } else if (overlay === 'store') {
-    /* 版式与银行 C 同构：左列商品行（顺序恒等目录）+ 右列详情（首行用途描述折行）+ 两枚操作键 + 关闭键。
-       8 项装不进银行的 40/8 行距，故整行缩 `PANEL_STORE_ROW_S`（行盒与命中区同源，见 layout 注释）；
-       右列 x / 键位全部复用 `PANEL_BANK_*`。 */
-    push('showcase.panel', PANEL_X, PANEL_Y);
-    push('ui.badge', PANEL_CX, PANEL_BADGE_Y, { text: '道具商店' });
+    /* 版式与银行 C 同构（M20.5 D46 改用高底板）：左列 11 行商品（顺序恒等目录）+ 右列详情
+       （首行用途描述折行）+ 两枚操作键（落在 500 / 552）+ 关闭键。行盒仍缩 `PANEL_STORE_ROW_S`。 */
+    push('showcase.panelTall', PANEL_X, PANEL_DRAW_Y);
+    push('ui.badge', PANEL_CX, PANEL_BADGE_DRAW_Y, { text: '道具商店' });
     storeRows(state, store.sel).forEach((row, i) => {
       push('ui.bankRow', PANEL_BANK_ROW_X + PANEL_BANK_ROW_W / 2,
         PANEL_STORE_ROW_Y0 + PANEL_STORE_ROW_H / 2 + i * (PANEL_STORE_ROW_H + PANEL_STORE_ROW_GAP),
@@ -808,7 +942,7 @@ export function panelSpecs(
         PANEL_STORE_ROW_S);
     });
     const detail = storeDetail(state, store.sel);
-    let lineY = PANEL_BANK_LINE_Y0;
+    let lineY = PANEL_STORE_LINE_Y0;
     detail.lines.forEach((line, i) => {
       /* 首行（用途描述）超出右列净宽，交由 `ui.bankRow` 的 line 变体折行，故其后下移量更大 */
       push('ui.bankRow', PANEL_BANK_DETAIL_CX, lineY,
@@ -816,10 +950,10 @@ export function panelSpecs(
       lineY += i === 0 ? PANEL_STORE_DESC_DY : PANEL_BANK_LINE_DY;
     });
     push('ui.button.primary',
-      PANEL_BANK_BTN_X + PANEL_BANK_BTN_W / 2, PANEL_BANK_BTN_Y + PANEL_BANK_BTN_H / 2,
+      PANEL_BANK_BTN_X + PANEL_BANK_BTN_W / 2, PANEL_STORE_BTN_Y + PANEL_BANK_BTN_H / 2,
       { label: detail.primary.label, enabled: detail.primary.enabled });
     push('ui.button.secondary',
-      PANEL_BANK_BTN2_X + PANEL_BANK_BTN2_W / 2, PANEL_BANK_BTN2_Y + PANEL_BANK_BTN_H / 2,
+      PANEL_BANK_BTN2_X + PANEL_BANK_BTN2_W / 2, PANEL_STORE_BTN2_Y + PANEL_BANK_BTN_H / 2,
       { label: detail.secondary.label, enabled: detail.secondary.enabled });
     push('ui.qk', PANEL_BANK_CLOSE_X + HUD_QK_W / 2, PANEL_BANK_CLOSE_Y + HUD_QK_H / 2,
       { label: '关闭', enabled: true });
@@ -858,7 +992,8 @@ export function panelSpecs(
        买 / 卖两行整段收在 606 之上——HUD 快键行（607..629）画在浮层之上且照常可点，
        否则「卖」行会被压住、点不到（见 `layout.ts` 股票浮层段落说明）。台位与 `panelHitAreas` 一一对应。 */
     push('showcase.panelStock', PANEL_X, PANEL_STOCK_Y);
-    push('ui.badge', PANEL_STOCK_BADGE_CX, PANEL_BADGE_Y, { text: '股票交易所' });
+    const badge = stockBadgeView(state);
+    push('ui.badge', PANEL_STOCK_BADGE_CX, PANEL_BADGE_Y, { text: badge.text, warn: badge.warn });
     stockRows(state, stock.sel).forEach((row, i) => {
       push('ui.stockRow', PANEL_ROW_X + PANEL_ROW_W / 2,
         PANEL_STOCK_ROW_Y + PANEL_ROW_H / 2 + i * (PANEL_ROW_H + PANEL_STOCK_ROW_GAP),
@@ -990,7 +1125,9 @@ export function panelHitAreas(
       w: PANEL_BID_W, h: PANEL_BID_H, enabled: true,
     });
   } else if (overlay === 'bank') {
-    /* 左列三行（选中）+ 右列两枚操作键 + 关闭键；操作键的动作/目标随选中产品切换 */
+    /* 左列 4 行（选中）+ 右列按产品页分支 + 关闭键。
+       M20.5（spec §6.1 D39）：存款页出金额键盘（12 键 + 3 快捷档 + 2 确认键，全部 y < 606）；
+       保证金页出「现金追加 / 抵押补仓」两键；信用贷款 / 抵押仍为两枚操作键。 */
     bankRows(state, bank.sel).forEach((row, i) => {
       out.push({
         action: 'bank:select', target: row.kind,
@@ -998,26 +1135,67 @@ export function panelHitAreas(
         w: PANEL_BANK_ROW_W, h: PANEL_BANK_ROW_H, enabled: true,
       });
     });
-    const detail = bankDetail(state, bank.sel);
-    const p = currentPlayer(state);
-    const primaryAction: PanelActionId =
-      bank.sel === 'deposit' ? 'bank:deposit' : bank.sel === 'loan' ? 'bank:borrow' : 'bank:mortgage';
-    const secondaryAction: PanelActionId =
-      bank.sel === 'deposit' ? 'bank:withdraw' : bank.sel === 'loan' ? 'bank:repay' : 'bank:redeem';
-    out.push({
-      action: primaryAction,
-      /* 抵押键携带待抵押地块格号（引擎 API 需 index） */
-      target: bank.sel === 'mortgage' ? firstMortgageableTile(state) : undefined,
-      x: PANEL_BANK_BTN_X, y: PANEL_BANK_BTN_Y, w: PANEL_BANK_BTN_W, h: PANEL_BANK_BTN_H,
-      enabled: detail.primary.enabled,
-    });
-    out.push({
-      action: secondaryAction,
-      /* 赎回键携带最早一笔抵押（引擎按 index 赎） */
-      target: bank.sel === 'mortgage' ? p.mortgages[0]?.index : undefined,
-      x: PANEL_BANK_BTN2_X, y: PANEL_BANK_BTN2_Y, w: PANEL_BANK_BTN2_W, h: PANEL_BANK_BTN_H,
-      enabled: detail.secondary.enabled,
-    });
+    if (bank.sel === 'deposit') {
+      const av = bankAmountView(state, bank.amount ?? '');
+      AMOUNT_KEYS.forEach((key, i) => {
+        const col = i % 3;
+        const row = Math.floor(i / 3);
+        out.push({
+          action: 'bank:key', target: key,
+          x: PANEL_BANK_KEY_X0 + col * PANEL_BANK_KEY_STEP_X,
+          y: PANEL_BANK_KEY_Y0 + row * PANEL_BANK_KEY_STEP_Y,
+          w: PANEL_BANK_KEY_W, h: PANEL_BANK_KEY_H, enabled: true,
+        });
+      });
+      AMOUNT_TIERS.forEach((add, i) => {
+        out.push({
+          action: 'bank:tier', target: add,
+          x: PANEL_BANK_KEY_X0 + i * PANEL_BANK_KEY_STEP_X, y: PANEL_BANK_TIER_Y,
+          w: PANEL_BANK_TIER_W, h: PANEL_BANK_TIER_H, enabled: av.tiersEnabled,
+        });
+      });
+      out.push({
+        action: 'bank:deposit',
+        x: PANEL_BANK_CONFIRM_X0, y: PANEL_BANK_CONFIRM_Y,
+        w: PANEL_BANK_CONFIRM_W, h: PANEL_BANK_CONFIRM_H, enabled: av.depositEnabled,
+      });
+      out.push({
+        action: 'bank:withdraw',
+        x: PANEL_BANK_CONFIRM_X0 + PANEL_BANK_CONFIRM_W + PANEL_BANK_CONFIRM_GAP, y: PANEL_BANK_CONFIRM_Y,
+        w: PANEL_BANK_CONFIRM_W, h: PANEL_BANK_CONFIRM_H, enabled: av.withdrawEnabled,
+      });
+    } else if (bank.sel === 'margin') {
+      const detail = bankMarginView(state);
+      out.push({
+        action: 'bank:marginCash',
+        x: PANEL_BANK_BTN_X, y: PANEL_BANK_BTN_Y, w: PANEL_BANK_BTN_W, h: PANEL_BANK_BTN_H,
+        enabled: detail.primary.enabled,
+      });
+      out.push({
+        action: 'bank:marginMortgage',
+        x: PANEL_BANK_BTN2_X, y: PANEL_BANK_BTN2_Y, w: PANEL_BANK_BTN2_W, h: PANEL_BANK_BTN_H,
+        enabled: detail.secondary.enabled,
+      });
+    } else {
+      const detail = bankDetail(state, bank.sel);
+      const p = currentPlayer(state);
+      const primaryAction: PanelActionId = bank.sel === 'loan' ? 'bank:borrow' : 'bank:mortgage';
+      const secondaryAction: PanelActionId = bank.sel === 'loan' ? 'bank:repay' : 'bank:redeem';
+      out.push({
+        action: primaryAction,
+        /* 抵押键携带待抵押地块格号（引擎 API 需 index） */
+        target: bank.sel === 'mortgage' ? firstMortgageableTile(state) : undefined,
+        x: PANEL_BANK_BTN_X, y: PANEL_BANK_BTN_Y, w: PANEL_BANK_BTN_W, h: PANEL_BANK_BTN_H,
+        enabled: detail.primary.enabled,
+      });
+      out.push({
+        action: secondaryAction,
+        /* 赎回键携带最早一笔抵押（引擎按 index 赎） */
+        target: bank.sel === 'mortgage' ? p.mortgages[0]?.index : undefined,
+        x: PANEL_BANK_BTN2_X, y: PANEL_BANK_BTN2_Y, w: PANEL_BANK_BTN2_W, h: PANEL_BANK_BTN_H,
+        enabled: detail.secondary.enabled,
+      });
+    }
     out.push({
       action: 'bank:close', x: PANEL_BANK_CLOSE_X, y: PANEL_BANK_CLOSE_Y,
       w: HUD_QK_W, h: HUD_QK_H, enabled: true,
@@ -1034,12 +1212,12 @@ export function panelHitAreas(
     const detail = storeDetail(state, store.sel);
     out.push({
       action: 'store:buy', target: store.sel,
-      x: PANEL_BANK_BTN_X, y: PANEL_BANK_BTN_Y, w: PANEL_BANK_BTN_W, h: PANEL_BANK_BTN_H,
+      x: PANEL_BANK_BTN_X, y: PANEL_STORE_BTN_Y, w: PANEL_BANK_BTN_W, h: PANEL_BANK_BTN_H,
       enabled: detail.primary.enabled,
     });
     out.push({
       action: 'store:sell', target: store.sel,
-      x: PANEL_BANK_BTN2_X, y: PANEL_BANK_BTN2_Y, w: PANEL_BANK_BTN2_W, h: PANEL_BANK_BTN_H,
+      x: PANEL_BANK_BTN2_X, y: PANEL_STORE_BTN2_Y, w: PANEL_BANK_BTN2_W, h: PANEL_BANK_BTN_H,
       enabled: detail.secondary.enabled,
     });
     out.push({

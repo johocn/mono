@@ -5,8 +5,8 @@ import { STOCKS } from '../../src/data/stocks';
 import { createGame, type Game, type GameState, type PendingAuction } from '../../src/core/game';
 import { REGISTRY } from '../../src/skin/registry';
 import {
-  auctionBidTiers, auctionDebtView, bankDebtView, bankDetail, bankRows, drawCard, handSlots, overlayOf,
-  panelHitAreas, panelSpecs, settlePanel, stockRows,
+  auctionBidTiers, auctionDebtView, bankAmountView, bankDebtView, bankDetail, bankRows, drawCard,
+  handSlots, overlayOf, panelHitAreas, panelSpecs, settlePanel, stockRows,
 } from '../../src/ui/panels';
 
 /** 固定点数骰：每步走 2 格 */
@@ -27,25 +27,28 @@ const stepTo = (g: Game, index: number): void => {
   g.settleCurrent();
 };
 
-describe('panels：手牌 8 槽（纯函数）', () => {
-  it('恒 8 槽、开局全持有；顺序 = 常用度 priority 升序（M20.3 三键排序）', () => {
+describe('panels：手牌 11 槽（纯函数）', () => {
+  it('恒 11 槽、开局全持有；顺序 = 常用度 priority 升序（M20.3 三键排序）', () => {
     const g = createGame({ dice: fixed(1, 1) });
     const slots = handSlots(g.state);
-    expect(slots).toHaveLength(8);
+    expect(slots).toHaveLength(11);
     /* 全持有 ⇒ 第 ① 键（held）全同，退化为 ② priority 升序 */
     expect(slots.map((s) => s.kind)).toEqual(
-      ['pardon', 'doubleRent', 'bomb', 'barrier', 'teleport', 'demolish', 'bullBear', 'dividend'],
+      ['pardon', 'taxShield', 'doubleRent', 'subsidy', 'bomb', 'barrier', 'teleport', 'boom', 'demolish', 'bullBear', 'dividend'],
     );
-    expect(slots.map((s) => s.priority)).toEqual([10, 20, 30, 40, 50, 60, 70, 80]);
+    expect(slots.map((s) => s.priority)).toEqual([10, 15, 20, 25, 30, 40, 50, 55, 60, 70, 80]);
     /* 槽集合 = 全部道具种类（排序只换位置、不丢卡） */
     expect([...slots.map((s) => s.kind)].sort()).toEqual([...ITEM_CARDS.map((c) => c.kind)].sort());
     expect(slots.every((s) => s.held)).toBe(true);
   });
 
-  it('pardon 恒不可点；teleport 仅 rolled；bomb 需对手地块；doubleRent 随时可开', () => {
+  it('pardon / taxShield 恒不可点；teleport 仅 rolled；bomb 需对手地块；doubleRent 随时可开', () => {
     const g = createGame({ dice: fixed(1, 1) });
     const by = (k: string) => handSlots(g.state).find((s) => s.kind === k)!;
     expect(by('pardon').enabled).toBe(false);
+    expect(by('taxShield').enabled).toBe(false);     // M20.5：被动持有、不可出牌
+    expect(by('subsidy').enabled).toBe(true);        // 抽到即用
+    expect(by('boom').enabled).toBe(true);
     expect(by('teleport').enabled).toBe(false);      // idle
     expect(by('doubleRent').enabled).toBe(true);
     expect(by('bomb').enabled).toBe(false);          // 场上无对手地块
@@ -62,7 +65,7 @@ describe('panels：手牌 8 槽（纯函数）', () => {
     const bomb = handSlots(g.state).find((s) => s.kind === 'bomb')!;
     expect(bomb.held).toBe(false);
     expect(bomb.enabled).toBe(false);
-    expect(handSlots(g.state)).toHaveLength(8);
+    expect(handSlots(g.state)).toHaveLength(11);
   });
 });
 
@@ -250,8 +253,8 @@ describe('panels：DOM 命中层矩形', () => {
     g.state.estates[3] = { index: 3, owner: 2, level: 1, processing: false };
     const hits = panelHitAreas(g.state, true);
     expect(hits.map((h) => h.action)).toEqual([
-      'card:pardon', 'card:doubleRent', 'card:bomb', 'card:barrier', 'card:teleport', 'card:demolish',
-      'card:bullBear',
+      'card:pardon', 'card:taxShield', 'card:doubleRent', 'card:subsidy', 'card:bomb', 'card:barrier',
+      'card:teleport',
     ]);
     /* M19：手牌键不再由 UI 自动挑目标（改由「选目标态」棋盘点选） */
     for (const h of hits) expect(h.target).toBeUndefined();
@@ -509,30 +512,47 @@ describe('panels：银行浮层（M20.2 版式 C：左列表右详情）', () =>
     expect(overlayOf(g.state, { bankOpen: true })).toBe('auction');
   });
 
-  it('bankRows：三行摘要与选中态（无信贷 → 默认文案；有信贷 → 数值）', () => {
+  it('bankRows：四行摘要与选中态（无信贷 → 默认文案；有信贷 → 数值）', () => {
     const g = atBank();
     const rows = bankRows(g.state);
-    expect(rows.map((r) => r.kind)).toEqual(['deposit', 'loan', 'mortgage']);
-    expect(rows.map((r) => r.title)).toEqual(['存款', '信用贷款', '抵押']);
-    expect(rows.map((r) => r.summary)).toEqual(['无存款', '无债务', '无抵押']);
-    expect(rows.map((r) => r.selected)).toEqual([true, false, false]);
-    expect(bankRows(g.state, 'loan').map((r) => r.selected)).toEqual([false, true, false]);
+    expect(rows.map((r) => r.kind)).toEqual(['deposit', 'loan', 'mortgage', 'margin']);
+    expect(rows.map((r) => r.title)).toEqual(['存款', '信用贷款', '抵押', '保证金']);
+    expect(rows.map((r) => r.summary)).toEqual(['无存款', '无债务', '无抵押', '无杠杆']);
+    expect(rows.map((r) => r.selected)).toEqual([true, false, false, false]);
+    expect(bankRows(g.state, 'loan').map((r) => r.selected)).toEqual([false, true, false, false]);
 
     const p = g.state.players[0];
     p.deposit = 1240;
     p.loan = { principal: 500, rate: 0.06, due: 9, overdue: 0 };
     p.mortgages = [{ principal: 200, rate: 0.04, due: 7, overdue: 0, index: 3 }];
-    expect(bankRows(g.state).map((r) => r.summary)).toEqual(['￥1240', '欠 ￥500', '1 块锁定']);
+    p.margin = { principal: 300, rate: 0.08 };
+    expect(bankRows(g.state).map((r) => r.summary)).toEqual(['￥1240', '欠 ￥500', '1 块锁定', '欠 ￥300']);
   });
 
-  it('bankDetail：字段行随选中切换 + 按钮可点性与引擎边界一致', () => {
+  it('bankAmountView：存款页示数与确认键可点性（金额 0 / 无现金 / 无存款三边界）', () => {
     const g = atBank();
-    const dep = bankDetail(g.state, 'deposit');
-    expect(dep.title).toBe('存款');
-    expect(dep.primary).toEqual({ label: '存入', enabled: true });        // 现金 3000 > 0
-    expect(dep.secondary).toEqual({ label: '取出', enabled: false });     // 无存款
-    expect(dep.lines[2]).toBe('轮息 +3%（轮末复利）');
+    const zero = bankAmountView(g.state, '');
+    expect(zero.text).toBe('￥0');
+    expect(zero.amount).toBe(0);
+    expect(zero.depositEnabled).toBe(false);      // 金额为 0
+    expect(zero.withdrawEnabled).toBe(false);
+    expect(zero.tiersEnabled).toBe(true);
 
+    const dep = bankAmountView(g.state, '500');
+    expect(dep.text).toBe('￥500');
+    expect(dep.hint).toBe(`现金 ${g.state.players[0].cash} · 存款 0`);
+    expect(dep.depositEnabled).toBe(true);        // 现金 3000 > 0
+    expect(dep.withdrawEnabled).toBe(false);      // 无存款
+
+    g.state.players[0].cash = 0;
+    expect(bankAmountView(g.state, '100').depositEnabled).toBe(false);   // 无现金
+    g.state.players[0].deposit = 400;
+    expect(bankAmountView(g.state, '100').withdrawEnabled).toBe(true);   // 有存款
+    expect(bankAmountView(g.state, '999999').tiersEnabled).toBe(false);  // 已到输入上限
+  });
+
+  it('bankDetail：贷款 / 抵押字段行与按钮可点性与引擎边界一致', () => {
+    const g = atBank();
     const loan = bankDetail(g.state, 'loan');
     expect(loan.title).toBe('信用贷款');
     expect(loan.primary).toEqual({ label: '借款', enabled: true });       // 站 9 号格 + 无贷款 + 额度 > 0
@@ -554,55 +574,83 @@ describe('panels：银行浮层（M20.2 版式 C：左列表右详情）', () =>
     expect(bankDetail(g.state, 'mortgage').primary.enabled).toBe(false);
   });
 
-  it('specs：底板 + 角标 + 左 3 行 + 右 4 详情行 + 两键 + 关闭键，全命中注册表', () => {
+  it('specs：存款页 = 左 4 行 + 示数条 + 12 键 + 3 档 + 2 确认键 + 关闭键，全命中注册表', () => {
     const g = atBank();
     const specs = panelSpecs(g.state, false, null, BANK);
     expect(specs.every((s) => Boolean(REGISTRY[s.id]))).toBe(true);
     expect(specs.find((s) => s.id === 'ui.badge')!.state?.text).toBe('鹿乡银行 · 9 号格');
     const rows = specs.filter((s) => s.id === 'ui.bankRow' && s.state?.variant === 'row');
-    expect(rows.map((s) => s.state?.title)).toEqual(['存款', '信用贷款', '抵押']);
-    expect(rows.map((s) => s.state?.selected)).toEqual([true, false, false]);
-    const lines = specs.filter((s) => s.id === 'ui.bankRow' && s.state?.variant === 'line');
-    expect(lines).toHaveLength(4);
-    expect(lines.every((s) => typeof s.state?.text === 'string')).toBe(true);
-    expect(specs.filter((s) => s.id === 'ui.button.primary')).toHaveLength(1);
-    expect(specs.filter((s) => s.id === 'ui.button.secondary')).toHaveLength(1);
+    expect(rows.map((s) => s.state?.title)).toEqual(['存款', '信用贷款', '抵押', '保证金']);
+    expect(rows.map((s) => s.state?.selected)).toEqual([true, false, false, false]);
+    /* 存款页不出文本详情行，也不出 ui.button（改键盘） */
+    expect(specs.filter((s) => s.id === 'ui.bankRow' && s.state?.variant === 'line')).toHaveLength(0);
+    expect(specs.filter((s) => s.id === 'ui.button.primary')).toHaveLength(0);
+    expect(specs.filter((s) => s.id === 'ui.button.secondary')).toHaveLength(0);
+    expect(specs.filter((s) => s.id === 'ui.amount')).toHaveLength(1);
+    expect(specs.filter((s) => s.id === 'ui.key')).toHaveLength(15);       // 12 数字 + 3 快捷档
+    expect(specs.filter((s) => s.id === 'ui.keyWide')).toHaveLength(2);    // 存入 / 取出
     expect(specs.find((s) => s.id === 'ui.qk')!.state?.label).toBe('关闭');
+
+    /* 贷款页仍为「左 4 行 + 右 4 文本行 + 两键 + 关闭键」 */
+    const loanSpecs = panelSpecs(g.state, false, null, { open: true, sel: 'loan' });
+    expect(loanSpecs.filter((s) => s.id === 'ui.bankRow' && s.state?.variant === 'line')).toHaveLength(4);
+    expect(loanSpecs.filter((s) => s.id === 'ui.button.primary')).toHaveLength(1);
+    expect(loanSpecs.filter((s) => s.id === 'ui.button.secondary')).toHaveLength(1);
+    expect(loanSpecs.filter((s) => s.id === 'ui.key')).toHaveLength(0);
   });
 
-  it('命中区：三行选中 + 两枚操作键（动作随选中切换）+ 关闭键，与可见键逐像素对齐', () => {
+  it('命中区：存款页 22 个（4 行 + 12 键 + 3 档 + 2 确认 + 关闭），与可见键逐像素对齐', () => {
     const g = atBank();
     const hits = panelHitAreas(g.state, false, null, BANK);
     expect(hits.map((h) => h.action)).toEqual([
-      'bank:select', 'bank:select', 'bank:select', 'bank:deposit', 'bank:withdraw', 'bank:close',
+      'bank:select', 'bank:select', 'bank:select', 'bank:select',
+      ...Array(12).fill('bank:key'), ...Array(3).fill('bank:tier'),
+      'bank:deposit', 'bank:withdraw', 'bank:close',
     ]);
-    expect(hits.slice(0, 3).map((h) => h.target)).toEqual(['deposit', 'loan', 'mortgage']);
+    expect(hits.slice(0, 4).map((h) => h.target)).toEqual(['deposit', 'loan', 'mortgage', 'margin']);
 
-    const mg = panelHitAreas(g.state, false, null, { open: true, sel: 'mortgage' });
-    expect(mg.map((h) => h.action)).toEqual([
-      'bank:select', 'bank:select', 'bank:select', 'bank:mortgage', 'bank:redeem', 'bank:close',
-    ]);
-
-    const specs = panelSpecs(g.state, false, null, BANK);
-    const pairs: [string, string][] = [
-      ['ui.button.primary', 'bank:deposit'],
-      ['ui.button.secondary', 'bank:withdraw'],
-      ['ui.qk', 'bank:close'],
-    ];
-    for (const [id, action] of pairs) {
-      const s = specs.find((x) => x.id === id)!;
-      const box = REGISTRY[id].box;
-      const sc = s.fixed?.s ?? 1;
-      const h = hits.find((x) => x.action === action)!;
-      expect({
-        x: s.fixed!.cx - (box.w * sc) / 2, y: s.fixed!.cy - (box.h * sc) / 2, w: box.w * sc, h: box.h * sc,
-      }).toEqual({ x: h.x, y: h.y, w: h.w, h: h.h });
+    /* 浮层内可点元素必须全部收在 HUD 快键行（607..629）之上：y + h ≤ 606 */
+    for (const h of hits.filter((x) => x.action !== 'bank:close')) {
+      expect(h.y + h.h).toBeLessThanOrEqual(606);
     }
     /* 命中区都落在舞台宽度内 */
     for (const h of hits) {
       expect(h.x).toBeGreaterThanOrEqual(0);
       expect(h.x + h.w).toBeLessThanOrEqual(390);
     }
+
+    /* 可见键与命中区逐像素对齐（数字键 / 快捷档 / 两枚确认键）：按「元素 id + 该组命中项」成对比较 */
+    const specs = panelSpecs(g.state, false, null, BANK);
+    const align = (id: string, groupSpecs: typeof specs, groupHits: typeof hits): void => {
+      const boxes = REGISTRY[id].box;
+      expect(groupSpecs).toHaveLength(groupHits.length);
+      groupSpecs.forEach((s, i) => {
+        const h = groupHits[i];
+        const sc = s.fixed?.s ?? 1;
+        expect({
+          x: s.fixed!.cx - (boxes.w * sc) / 2, y: s.fixed!.cy - (boxes.h * sc) / 2,
+          w: boxes.w * sc, h: boxes.h * sc,
+        }).toEqual({ x: h.x, y: h.y, w: h.w, h: h.h });
+      });
+    };
+    const keys = specs.filter((s) => s.id === 'ui.key');
+    align('ui.key', keys.slice(0, 12), hits.filter((h) => h.action === 'bank:key'));
+    align('ui.key', keys.slice(12), hits.filter((h) => h.action === 'bank:tier'));
+    align('ui.keyWide', specs.filter((s) => s.id === 'ui.keyWide'),
+      hits.filter((h) => h.action === 'bank:deposit' || h.action === 'bank:withdraw'));
+
+    /* 保证金页两键 */
+    const mg = panelHitAreas(g.state, false, null, { open: true, sel: 'margin' });
+    expect(mg.map((h) => h.action)).toEqual([
+      'bank:select', 'bank:select', 'bank:select', 'bank:select',
+      'bank:marginCash', 'bank:marginMortgage', 'bank:close',
+    ]);
+    /* 抵押页两键仍走 bank:mortgage / bank:redeem */
+    const mort = panelHitAreas(g.state, false, null, { open: true, sel: 'mortgage' });
+    expect(mort.map((h) => h.action)).toEqual([
+      'bank:select', 'bank:select', 'bank:select', 'bank:select',
+      'bank:mortgage', 'bank:redeem', 'bank:close',
+    ]);
   });
 
   it('bankDebtView：存款/债务/抵押块数/逾期（多笔取最大逾期）', () => {

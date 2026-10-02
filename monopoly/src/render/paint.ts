@@ -46,7 +46,7 @@ export function makeText(req: TextRequest): Text {
       ...(wrap ? { wordWrap: true, wordWrapWidth: req.wrapW, breakWords: true, align: 'center' } : {}),
     },
   });
-  t.anchor.set(req.align === 'left' ? 0 : 0.5, 0.5);
+  t.anchor.set(req.align === 'left' ? 0 : req.align === 'right' ? 1 : 0.5, 0.5);
   t.position.set(req.x, req.y);
   t.rotation = ((req.rotate ?? 0) * Math.PI) / 180;
   return t;

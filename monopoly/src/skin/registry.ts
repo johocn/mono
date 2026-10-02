@@ -1,7 +1,9 @@
 import {
   AUDIO_KEY_SIZE, BUBBLE_H, BUBBLE_W, HUD_BAR_W, HUD_DEBT_H, HUD_DEBT_W, NEWS_TICKER_H, NEWS_TICKER_W,
-  PANEL_BANK_ROW_H,
-  PANEL_BANK_ROW_W, PANEL_BID_H, PANEL_BID_W, PANEL_CANCEL_W,
+  PANEL_BANK_AMOUNT_H, PANEL_BANK_AMOUNT_W, PANEL_BANK_CONFIRM_H, PANEL_BANK_CONFIRM_W,
+  PANEL_BANK_KEY_H, PANEL_BANK_KEY_W,
+  PANEL_BANK_ROW_H, PANEL_BANK_ROW_W,
+  PANEL_BID_H, PANEL_BID_W, PANEL_CANCEL_W,
   PANEL_CLOSE_H, PANEL_CLOSE_W, PANEL_DEBT_H, PANEL_DEBT_W,
   PANEL_HAND_BAR_H, PANEL_HAND_BAR_W,
   PANEL_PREVIEW_H, PANEL_PREVIEW_W, PANEL_SLOT_H, PANEL_SLOT_W,
@@ -244,6 +246,12 @@ reg['ui.bidDebt'] = showcaseEntry('ui.bidDebt', { w: PANEL_DEBT_W, d: 1, h: PANE
    `ui.debtBar` = HUD 常驻债务条（无信贷时整条隐藏） */
 reg['ui.bankRow'] = showcaseEntry('ui.bankRow', { w: PANEL_BANK_ROW_W, d: 1, h: PANEL_BANK_ROW_H });
 reg['ui.debtBar'] = showcaseEntry('ui.debtBar', { w: HUD_DEBT_W, d: 1, h: HUD_DEBT_H });
+/* M20.5 银行「存款」页金额键盘（spec §6.1 D39）：
+   `ui.amount` = 示数条（显示当前输入金额 / 可用上限）；`ui.key` = 数字键 / 清空 / 退格 / 快捷档共用键；
+   `ui.keyWide` = 两枚确认键（「存入 ￥X」/「取出 ￥X」，更扁更宽以便并排收在 606 之上） */
+reg['ui.amount'] = showcaseEntry('ui.amount', { w: PANEL_BANK_AMOUNT_W, d: 1, h: PANEL_BANK_AMOUNT_H });
+reg['ui.key'] = showcaseEntry('ui.key', { w: PANEL_BANK_KEY_W, d: 1, h: PANEL_BANK_KEY_H });
+reg['ui.keyWide'] = showcaseEntry('ui.keyWide', { w: PANEL_BANK_CONFIRM_W, d: 1, h: PANEL_BANK_CONFIRM_H });
 /* M20.3 手牌滑动条（spec §4.2 版式 A）：手牌行上方的 3px 细条，一屏放得下时整条隐藏 */
 reg['ui.handBar'] = showcaseEntry('ui.handBar', { w: PANEL_HAND_BAR_W, d: 1, h: PANEL_HAND_BAR_H });
 /* M20.4 新闻条（spec §6.2）：每轮 1 条（`state.news !== null` 时出），利好金底 / 利空灰底两态；

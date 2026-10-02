@@ -50,6 +50,8 @@ export const PANEL_D = fb({
   /* 角标 */
   badgeR: 8, badgeFill: 'rgba(6,12,10,.85)', badgeEdge: '#f5c451', badgeEdgeW: 1.2,
   badgeFs: 12, badgeTxFill: '#ffe9b0',
+  /* M20.5 角标警示态（spec §6.2 D40）：股票浮层「接近爆仓」时 `state.warn` 为真 → 走警示色 */
+  badgeWarnEdge: '#e0606a', badgeWarnTxFill: '#ffb0b8',
   /* 落地地块卡（spec §7.3）：深底金边 + 首行（金点 + 「停在 <店名> · 你在这里」）+ 次行（等级 / 持有） */
   tileR: 12, tileFill: '#0f1a18', tileEdge: '#f5c451', tileEdgeW: 1.2,
   tilePadX: 18, tileDotR: 3, tileDotGap: 10,
@@ -77,6 +79,12 @@ export const PANEL_D = fb({
   bankRowPadX: 12, bankRowTitleDy: -9, bankRowTitleFs: 13, bankRowTitleFill: '#ffe9b0',
   bankRowSubDy: 10, bankRowSubFs: 11, bankRowSubFill: '#9fb3a8',
   bankLineFs: 12, bankLineFill: '#d8e4dc',
+  /* M20.5 银行「存款」页金额键盘（spec §6.1 D39）：
+     `ui.amount` = 深底金边示数条（居中大字显示当前输入金额）；`ui.key` = 键帽两态（数字键 / 清空 / 退格 / 快捷档） */
+  amountR: 6, amountFill: '#06120a', amountEdge: '#3a4a42', amountEdgeW: 1,
+  amountFs: 15, amountTextFill: '#ffe9b0', amountHintFs: 10, amountHintFill: '#9fb3a8',
+  keyR: 6, keyFill: '#16221e', keyFillOn: '#2f5c3f', keyEdge: '#3a4a42', keyEdgeOn: '#f5c451', keyEdgeW: 1,
+  keyFs: 14, keyTextFill: '#e8e4d8', keyTextOn: '#ffe9b0', keyTextOff: '#5b6b63',
   /* M20.3 手牌滑动条（ui.handBar）：3px 细条 = 半透明轨道 + 金滑块；滑块宽度 = 轨道宽 × ratio，
      位移 = (轨道宽 − 滑块宽) × offset（两者由 UI 层算好传入 `state.ratio / state.offset`） */
   handBarTrack: 'rgba(255,255,255,.10)', handBarThumb: '#f5c451', handBarR: 2,
@@ -265,11 +273,16 @@ export const uiBadge: ProcPreset = (g, ctx) => {
   const { cx, cy, box, params, state, s, text } = ctx;
   const w = box.w * s;
   const h = box.h * s;
+  /* M20.5（spec §6.2）：`state.warn` 为真走警示色（股票浮层「接近爆仓」） */
+  const warn = state.warn === true;
   g.roundRect(cx - w / 2, cy - h / 2, w, h, G(params, 'badgeR'))
     .fill({ color: S(params, 'badgeFill') })
-    .stroke({ color: S(params, 'badgeEdge'), width: G(params, 'badgeEdgeW') });
+    .stroke({ color: warn ? S(params, 'badgeWarnEdge') : S(params, 'badgeEdge'), width: G(params, 'badgeEdgeW') });
   if (!text) return;
-  text({ text: typeof state.text === 'string' ? state.text : '', x: cx, y: cy, size: G(params, 'badgeFs'), fill: S(params, 'badgeTxFill') });
+  text({
+    text: typeof state.text === 'string' ? state.text : '', x: cx, y: cy, size: G(params, 'badgeFs'),
+    fill: warn ? S(params, 'badgeWarnTxFill') : S(params, 'badgeTxFill'),
+  });
 };
 
 /* —— M19-D2 选目标预演条：深底金边 + 三行文字（标题 / 后果 / 受影响方，纵向居中）——
@@ -390,6 +403,49 @@ export const uiBankRow: ProcPreset = (g, ctx) => {
   });
 };
 
+/* —— M20.5 银行「存款」页金额键盘（spec §6.1 D39）——
+   `ui.amount`：深底金边示数条，居中大字显示当前输入金额，右上角小字提示可用上限。
+   文案由 UI 层经 `state.text` / `state.hint` 组装传入（preset 不含业务语义）。 —— */
+export const uiAmount: ProcPreset = (g, ctx) => {
+  const { cx, cy, box, params, state, s, text } = ctx;
+  const w = box.w * s;
+  const h = box.h * s;
+  g.roundRect(cx - w / 2, cy - h / 2, w, h, G(params, 'amountR'))
+    .fill({ color: S(params, 'amountFill') })
+    .stroke({ color: S(params, 'amountEdge'), width: G(params, 'amountEdgeW') });
+  if (!text) return;
+  text({
+    text: typeof state.text === 'string' ? state.text : '', x: cx, y: cy,
+    size: G(params, 'amountFs'), fill: S(params, 'amountTextFill'),
+  });
+  const hint = typeof state.hint === 'string' ? state.hint : '';
+  if (hint) {
+    text({
+      text: hint, x: cx + w / 2 - 8, y: cy - h / 2 + 8,
+      size: G(params, 'amountHintFs'), fill: S(params, 'amountHintFill'), align: 'right',
+    });
+  }
+};
+
+/* —— M20.5 金额键盘键帽（spec §6.1 D39）：数字键 / 清空 / 退格 / 快捷档共用。
+   `state.primary` 为真走金边高亮（快捷档 / 确认键的强调态）；`state.enabled` 为假整键压暗。 —— */
+export const uiKey: ProcPreset = (g, ctx) => {
+  const { cx, cy, box, params, state, s, text } = ctx;
+  const w = box.w * s;
+  const h = box.h * s;
+  const enabled = state.enabled !== false;
+  const primary = state.primary === true;
+  g.roundRect(cx - w / 2, cy - h / 2, w, h, G(params, 'keyR'))
+    .fill({ color: primary ? S(params, 'keyFillOn') : S(params, 'keyFill') })
+    .stroke({ color: primary ? S(params, 'keyEdgeOn') : S(params, 'keyEdge'), width: G(params, 'keyEdgeW') });
+  if (!text) return;
+  text({
+    text: typeof state.label === 'string' ? state.label : '', x: cx, y: cy,
+    size: typeof state.fs === 'number' ? state.fs : G(params, 'keyFs'),
+    fill: primary ? S(params, 'keyTextOn') : (enabled ? S(params, 'keyTextFill') : S(params, 'keyTextOff')),
+  });
+};
+
 /* —— M20.3 手牌滑动条（spec §4.2 版式 A）：半透明轨道铺满 + 金滑块。
    滑块宽 = 轨道宽 × `state.ratio`（下限 `handBarMinW`），左缘 = (轨道宽 − 滑块宽) × `state.offset`；
    槽数 ≤ 6（一屏放得下）时 UI 层不出这条 spec，故此 preset 只在需要滑动时被调用。 —— */
@@ -420,8 +476,10 @@ export const uiNewsTicker: ProcPreset = (g, ctx) => {
     .stroke({ color: good ? S(params, 'newsGoodEdge') : S(params, 'newsBadEdge'), width: G(params, 'newsEdgeW') });
   if (!text) return;
   const mark = good ? S(params, 'newsMarkGood') : S(params, 'newsMarkBad');
+  /* M20.5（spec §6.5 D48）：`state.prefix` 为景气度摘要（如「景气 105%」），有则前置 */
+  const prefix = typeof state.prefix === 'string' && state.prefix ? `${state.prefix} · ` : '';
   text({
-    text: `${mark} · ${typeof state.title === 'string' ? state.title : ''}`,
+    text: `${prefix}${mark} · ${typeof state.title === 'string' ? state.title : ''}`,
     x: cx - w / 2 + G(params, 'newsPadX'), y: cy, size: G(params, 'newsFs'),
     fill: good ? S(params, 'newsTextGoodFill') : S(params, 'newsTextBadFill'), align: 'left',
   });

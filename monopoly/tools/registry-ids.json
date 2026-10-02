@@ -336,6 +336,9 @@
   "ui.bidDebt",
   "ui.bankRow",
   "ui.debtBar",
+  "ui.amount",
+  "ui.key",
+  "ui.keyWide",
   "ui.handBar",
   "ui.newsTicker"
 ]
