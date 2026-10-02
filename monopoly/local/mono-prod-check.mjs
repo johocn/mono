@@ -356,7 +356,9 @@ facts.v1 = {
 };
 gate.v1 = facts.v1.palettes === 5 && facts.v1.keysOk && facts.v1.slotsOk
   && facts.v1.expanded.every((n) => n >= 1)
-  && facts.v1.presets.every((p) => PRESET_WHITELIST.includes(p));
+  && facts.v1.presets.every((p) => PRESET_WHITELIST.includes(p))
+  /* 6 原型全覆盖（原 V12「6 原型全可达」口径迁此：play 版式撤中部橱窗后不再断言） */
+  && new Set(facts.v1.presets).size === PRESET_WHITELIST.length;
 
 /* —— 像素取证：截图 PNG → data URL → 空白页 canvas 解码（不引入 pngjs，沿用 D7 探针口径） —— */
 const pxPage = await browser.newPage();
@@ -473,19 +475,23 @@ attach(vPage);
 await vPage.goto(`${ORIGIN}/mono.html?debug=1&play=1&seed=20260928&humans=4&tour=0`, { waitUntil: 'networkidle' });
 await vPage.waitForFunction(() => Boolean(window.__monoMain?.game), null, { timeout: 20000 });
 
-/* V3：单元素指派生效（精确 binding 压过通配的 paletteBySlot）+ 改 binding 即时变化 + `reset()` 还原 */
-facts.v3 = await vPage.evaluate(() => {
+/* V3：单元素指派生效（精确 binding 压过通配的 paletteBySlot）+ 改 binding 即时变化 + `reset()` 还原
+   —— 候选 = theme.json 里「带精确 `palette` 的地块楼」5 席（`building.s{0,4,6,13,30}.l{2,3}`）；
+   M18 棋盘改形后这 5 席不一定全部在场，故取**当前实际渲染**的第一席（全缺席 ⇒ `before` 为 undefined、gate 失败留证）。 */
+const V3_IDS = ['building.s4.l2', 'building.s6.l2', 'building.s13.l2', 'building.s0.l3', 'building.s30.l3'];
+facts.v3 = await vPage.evaluate((ids) => {
   const m = window.__monoMain;
-  const wallL = () => m.scene.instancesOf().find((i) => i.id === 'building.s4.l2')?.provider?.params?.wallL;
+  const id = ids.find((x) => m.scene.instancesOf().some((i) => i.id === x)) ?? ids[0];
+  const wallL = () => m.scene.instancesOf().find((i) => i.id === id)?.provider?.params?.wallL;
   const before = wallL();
-  m.themeConsole.setPalette('building.s4.l2', 'night-neon');
+  m.themeConsole.setPalette(id, 'night-neon');
   const after = wallL();
   const edits = Object.keys(m.themeConsole.edits()).length;
   m.themeConsole.reset();
-  return { before, after, edits, restored: wallL() };
-});
+  return { id, before, after, edits, restored: wallL() };
+}, V3_IDS);
 {
-  const want = themeJson.palettes[paletteOf('building.s4.l2')].wallL;
+  const want = themeJson.palettes[paletteOf(facts.v3.id)]?.wallL;
   facts.v3.want = want;
   gate.v3 = facts.v3.before === want
     && facts.v3.after === themeJson.palettes['night-neon'].wallL
@@ -526,9 +532,9 @@ facts.v5 = await vPage.evaluate(() => {
   gate.v5 = facts.v5.count > 0
     /* 同楼层内 hue 唯一（若仍由 owner 派生，同层不同 owner 会散开） */
     && Object.values(facts.v5.byLevel).every((v) => v.length === 1)
-    /* 且逐层等于 skin.json 常量 ⇒ 与 owner 无任何关系 */
-    && Object.entries(SKIN_HUE).every(([lv, h]) => facts.v5.byLevel[lv]?.length === 1
-      && Number(facts.v5.byLevel[lv][0]) === h);
+    /* 且每层等于 skin.json 常量（**仅校验当前在场层级**；M18 改形后不再保证三档同时在场） ⇒ 与 owner 无任何关系 */
+    && Object.entries(facts.v5.byLevel).every(([lv, v]) => SKIN_HUE[lv] === undefined
+      || Number(v[0]) === SKIN_HUE[lv]);
 }
 
 /* V7：棋盘放大到「占屏高 ≥ 1/3」且整块落在顶部 HUD 之下、街市带之上（口径见手册 M13/M14）
@@ -621,11 +627,14 @@ facts.v11 = await vPage.evaluate(() => {
   click('hand');
   return { closed, opened, reclosed: slots(), qk, actions };
 });
-gate.v11 = facts.v11.closed === 0 && facts.v11.opened === 5 && facts.v11.reclosed === 0
+/* 手牌槽数 = `HAND_SIZE`（M19 起 5→6：新增「拆迁令」demolish） */
+gate.v11 = facts.v11.closed === 0 && facts.v11.opened === 6 && facts.v11.reclosed === 0
   && facts.v11.qk.includes('收起手牌')
   && !facts.v11.actions.some((a) => /handSlot/i.test(String(a)));
 
-/* V12：素材库完备（6 原型 + 16 道具 + 7 环境层全可达；`scene` ≤ 200；无缺素材） */
+/* V12：素材库完备（play 页 16 道具 + 7 环境层全可达、无缺素材、无未知 preset；`scene` ≤ 200）
+   —— play 版式已撤掉常驻中部橱窗（spec §7.2）⇒ 只断言「在场 preset ⊆ 白名单」；
+      「6 原型全覆盖」由 V1 在 `theme.json` 侧断言（见 `gate.v1` 末条）。 */
 const PROP_IDS = [
   'prop.awning', 'prop.lantern', 'prop.banner', 'prop.rooftopBox', 'prop.signTower', 'prop.antenna',
   'prop.tree', 'prop.lamp', 'prop.flagpole', 'prop.chimney', 'prop.barrel', 'prop.lionStone',
@@ -651,7 +660,8 @@ facts.v12 = await vPage.evaluate(([props, bgs, protos]) => {
   };
 }, [PROP_IDS, BG_IDS, PRESET_WHITELIST]);
 gate.v12 = facts.v12.props.length === 0 && facts.v12.bg.length === 0
-  && PRESET_WHITELIST.every((p) => facts.v12.livePresets.includes(p))
+  /* play 页只要求「无未知 preset」（全覆盖见 V1）；原「6 原型全在 play 页可见」口径随中部橱窗一并废止 */
+  && facts.v12.livePresets.every((p) => PRESET_WHITELIST.includes(p))
   && facts.v12.liveBg === 7 && facts.v12.scene <= 200 && facts.v12.missing === 0;
 await vPage.close();
 

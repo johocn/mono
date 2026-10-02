@@ -384,8 +384,8 @@ URL 参数：`?skin=<id>`（切皮肤）· `?debug=1`（显示元素 ID/包围�
 | V8 | 中部条带 320..508 非纯背景像素 > 20% | `nonDomPct = 80.7%` |
 | V9 | 资产条 4 段连续无缝（由 X0/W/GAP 派生）且与 DOM 命中层零交叠 | 4 段 `96×41 @ x 6/100/195/289`，间距 `94/95/94`，`overlap = []` |
 | V10 | `settled` 时地块卡出现且「升级」可点；`idle` 时不可见 | `idle 0`；`settled` 1（标题 / 副行齐备、升级键 `disabled=false`） |
-| V11 | 牌袋键可开关；**关闭时 `ui.handSlot` 不参与命中** | `closed → opened 5 → reclosed`；`handSlot` 计数随开合 0↔5 |
-| V12 | 6 原型 + 16 道具 + 7 环境 preset 全可达；`scene ≤ 200`；`missingAssets === []` | 缺件 `0/0`；6 原型齐；`liveBg = 7`；`scene 197 / total 211` |
+| V11 | 牌袋键可开关；**关闭时 `ui.handSlot` 不参与命中** | `closed → opened 6 → reclosed`；`handSlot` 计数随开合 0↔6（= `HAND_SIZE`，M19 起 5→6） |
+| V12 | play 页 16 道具 + 7 环境层全可达、无缺素材、**无未知 preset**；`scene ≤ 200`；`missingAssets === []` | 缺件 `0/0`；`livePresets ⊆ 白名单`；`liveBg = 7`；`scene ≤ 200`。「6 原型全覆盖」口径迁至 V1（`theme.json` 侧 `new Set(presets).size === 6`） |
 | V13 | pawn 含 ≥2 眼（含白高光）+ 腮红 + 头发；四 style 覆盖两男两女；`owner` 1..4 且衣服统一米白；三 mood 几何不同 | 四 style `bun/cap/short/twintail`、owner `1..4`、`active=1`；白高光 / 腮红 / 头发由 `test/render/proc-pawn.spec.ts` 断言 |
 | V14 | 气泡四态各产出 1 枚 `ui.bubble`；气泡不在 `hitAreas()`；`idle` 无气泡；`e2e:play` 全绿 | 四态各 `n=1`、`overlapped=false`；`idle n=0` |
 
@@ -844,7 +844,10 @@ npm run check                                    # eslint src tools 0 错；[the
 npm run build                                    # [check-hardcoded] clean → ✓ built in 6.25s
 $env:MONO_ORIGIN='http://127.0.0.1:52301'; node local/mono-e2e-m20-1.mjs     # OK（待拍 pending=[2,3,4]；三档 + 放弃；成交归玩家 2 / 保留 L3 / 原主不破产；出售删键、现金 100 → 430、uiSel 清空）
 $env:MONO_ORIGIN='http://127.0.0.1:52301'; node local/mono-shots-m20-1.mjs   # [m20-1-shots] PASS · 10 项 gate 全 true、errors: []
+npm run check:prod                               # 线上 gate 全 true、errors: []（退出码 0）
 ```
+
+**线上闸门口径同步（本轮顺带清理 M18/M19 遗留债）**：`check:prod` 自 M16 后未再跑，M18 棋盘改形（撤 play 版式中部橱窗，spec §7.2）+ M19 手牌槽 5→6 使 4 项陈旧闸门恒红（v3/v5/v11/v12）。已用 A/B 对照实验确证与 M20.1 无关（把 `monopoly/src|public|mono.html` 切到 M20.1 前的 `4b18641` 重建，重跑同一脚本得到**完全相同的 4 项 false**），并按「保留原意图、只改口径」最小修正 [mono-prod-check.mjs](file:///d:/zhao/monopoly/local/mono-prod-check.mjs)：**v11** 手牌槽 5→6（= `HAND_SIZE`）；**v3** 候选元素由写死的 `building.s4.l2` 改为「theme.json 中带精确 `palette` 的 5 席里当前实际在场的第一席」（现取 `building.s0.l3`）；**v5** 保留「同层 hue 唯一 + 与 skin.json 常量一致」，去掉「L1/L2/L3 三档必须同时在场」；**v12** 由「6 原型全在 play 页可见」改为「在场 preset ⊆ 白名单」，并把「6 原型全覆盖」上移为 **V1** 的 `new Set(presets).size === 6`（`theme.json` 侧，静态可断言）。修正后本地与线上 `check:prod` 均退出码 0。
 
 **截图清单（3 张，均 390×844 @dpr2 手机视口，出 780×1688 PNG，入 `docs/verify/`）**：`mono-m20-1-01-auction`（破产拍卖浮层：角标「破产拍卖 · 第 1/1 块」+ 债务条「待清偿 ￥105」+ 左侧地契卡「长峰特产 / Lv3 · 起拍 ￥330」+ 右侧三档「￥330 / ￥495 / ￥792」+ 放弃）/ `mono-m20-1-02-sell-select`（点 HUD「出售」后悬停候选格的选目标态：自有地块金框 + 预演条「出售 · 长峰特产 / 售价 ￥330（变卖价 100%）/ 售出后地块回归可购买」）/ `mono-m20-1-03-auction-done`（落槌后：3 号地块业主色变为玩家 2、楼层仍 L3）。目视复核要点：①② 同一手机视口下浮层不溢出、三档文案与债务条读数清晰；③ 产权转移（地契卡显示「持有 猪八戒」）而楼体层级不变。
 
