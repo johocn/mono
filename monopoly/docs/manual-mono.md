@@ -853,6 +853,54 @@ npm run check:prod                               # 线上 gate 全 true、errors
 
 **取证脚本**：[local/mono-shots-m20-1.mjs](file:///d:/zhao/monopoly/local/mono-shots-m20-1.mjs)（10 项机器闸门）与 [local/mono-e2e-m20-1.mjs](file:///d:/zhao/monopoly/local/mono-e2e-m20-1.mjs)（真实点击整链路）。关键口径：打 `?play=1&seed=20261002&nofx=1&humans=4&tour=0` 真实对局，全程走 `#mono-hud` / `#mono-panels` / `#mono-pick` 命中层；确定性布置由 `__monoMain` 在进站后完成——布置 `estates` / `cash`、**移除起始手牌中的「免罚」`pardon`**（否则收租被自动抵消而进不了清算），掷骰后读 `state.dice.total` 预校正 `pos`、**「前进」后再把 `pos` 钉到 `RENT_TILE = 13`**（因 `createGame({ abilities: true })` 使当前玩家带技能「筋斗云」`stepBonus=1`、实际前进 = `total + 1`），随后「前进 → 结算」必触发 13 号 shop 格收租破产拍卖。机器闸门 10 项：`auction_overlay` / `auction_badge` / `auction_bid_visual` / `auction_debt_bar` / `auction_card` / `auction_resolved` / `estate_owner2` / `level_preserved` / `sell_sel` / `sell_candidates`。
 
+### M20.2 银行信贷（存款 · 信用贷款 · 抵押贷款 · 逾期罚息 · 两条违约链）2026-10-02
+
+**范围**：对齐 spec `docs/superpowers/specs/2026-10-02-monopoly-m20-2-bank-credit-design.md` 的决策 **M20.2-D1..D14**（路线图诉求 ⑥「银行信贷」+ §4.3「存款 / 抵押 / 逾期处置」）。三条产品线（存款 / 信用贷款 / 抵押贷款）+ 两条违约链（逾期罚息 / 逾期强执），**17 个商家格一个不动**；不改股票 UI（M20.3）、设施入股（M20.4）。
+
+**六项需求与落点**：
+
+| # | 需求（D） | 落点 | 结果 |
+|---|---|---|---|
+| 1 | 数值真源（D2） | [bank.ts](file:///d:/zhao/monopoly/src/data/bank.ts) | 存款 +3%/轮、信用贷 6%/轮 · 8 轮 · 额度 min(￥2000, 净资产×30%)、抵押 4%/轮 · 6 轮 · 变卖价×80%、罚息 +50%、逾期满 3 轮强执、落 9 号格存款红包 5% |
+| 2 | 信贷纯函数（D3） | [bank.ts](file:///d:/zhao/monopoly/src/core/bank.ts) | `loanLimitOf` / `mortgageLimitOf` / `interestOf` / `overdueOf` / `penaltyOf`（零随机、不 import `game` 运行时） |
+| 3 | 六 API + 抵押锁定（D4/D7） | [game.ts](file:///d:/zhao/monopoly/src/core/game.ts) `deposit` / `withdraw` / `takeLoan` / `repayLoan` / `takeMortgage` / `redeemMortgage`；`creditLocked` | 借款 / 抵押须站 9 号格；抵押地块被锁（不可卖、不可升级、不进强执队列） |
+| 4 | 轮末计息与逾期推进（D5/D6） | `game.ts` `settleBooks` / `runOverdueChains` | 存款与债务轮末复利；贷款首轮免息跳 1 次；`round > due` 记逾期 |
+| 5 | 逾期罚息 + 两条违约链（D5/D6） | `game.ts` `chargeOverduePenalty` / `startAuction(trigger)` | 逾期者付租额外 +50%（直冲本金、不给地主）；贷款逾期满 3 轮强执拍未抵押地块（起拍 = 变卖价）；抵押超期拍抵押物（起拍 = 借款额） |
+| 6 | 银行浮层 + 债务条 + AI（D9–D12） | [panels.ts](file:///d:/zhao/monopoly/src/ui/panels.ts) 版式 C / [Hud.ts](file:///d:/zhao/monopoly/src/ui/Hud.ts) 银行键 + 债务条 / [ai.ts](file:///d:/zhao/monopoly/src/core/ai.ts) `pickBank` | 真人站 9 号格结算后自动弹面板；每回合至多 1 步银行决策（还款优先 → 站格抵押 / 借款 → 存余钱） |
+
+**归属通路 / 四级回退**：新增两个可见元素 `ui.debtBar`（顶部 HUD 债务条）与 `ui.bankRow`（银行浮层产品行 / 详情行）走 L2/L3 [skin.json](file:///d:/zhao/monopoly/public/skins/default/skin.json) → `uiDebtBar` / `uiBankRow` preset；几何常数集中在 [layout.ts](file:///d:/zhao/monopoly/src/skin/layout.ts) 的 `PANEL_BANK_*` / `HUD_DEBT_*`，色值走 [proc-panel.ts](file:///d:/zhao/monopoly/src/render/providers/proc-panel.ts) 的 L4 `PANEL_D` 内建兜底；浮层底板 / 角标 / 两枚操作键 / 关闭键全部复用既有元素。
+
+**确定性**：信贷全链路**零随机**（利率、额度、罚息、逾期推进、强执队列均为纯算术；两条违约链顺序固定）——回放与 e2e 可复现。
+
+**已知限制（spec §8）**：
+
+1. **多人分账仍走自动变卖**：进贡 / 抽成等「多收款人」清算路径保持既有 `settleDebtAuto`，未改走拍卖（与 M20.1-D6 同一遗留）。
+2. **额度基数不扣既有债务**：信用贷款额度 = 净资产 × 30%，净资产含现金 + 地产投入 + 持股市值，**不减未结清贷款本金**（spec §3.2 口径）。
+3. **抵押物不进强执队列**：贷款强执只拍**未抵押**自有地块；抵押物由「抵押超期」链单独处置，避免重复拍卖。
+4. **债务条在顶部条中段（有意偏差）**：底坞状态行已被「银行 / 出售 / 手牌」三键占满，债务条改放顶部 HUD 条中段 `HUD_DEBT_X=88, W=234`（避开分享键 8..86 与静音键 324..384）；四段等分（存款 / 债务 / 抵押 / 逾期），逾期段走警示色 `#e8a33d`。
+5. **AI 不主动取款 / 赎回**：`pickBank` 只做「还款 / 抵押 / 借款 / 存款」四类，取款与赎回留给真人（避免 AI 无谓地来回搬运资金）。
+
+**回归口径（本轮实测）**：
+
+```powershell
+npx tsc --noEmit                                 # 退出码 0、无输出
+npm run check                                    # eslint 0 错；[theme] OK / [skin:default] OK / [skin:photo] OK；registry-ids.json: 336 ids；66 文件 / 706 例全绿
+npm run build                                    # [check-hardcoded] clean → ✓ built in 8.10s
+$env:MONO_ORIGIN='http://127.0.0.1:52301'; node local/mono-e2e-m20-2.mjs     # OK（六链：存取款 / 借款还款 / 逾期罚息 / 抵押赎回 / 贷款强执 / 抵押超期）
+$env:MONO_ORIGIN='http://127.0.0.1:52301'; node local/mono-shots-m20-2.mjs   # [m20-2-shots] PASS · 6 项 gate 全 true、errors: []
+```
+
+**截图清单（4 张，均 390×844 @dpr2 手机视口，出 780×1688 PNG，入 `docs/verify/`）**：`mono-m20-2-01-bank-deposit`（银行浮层 · 存款页：版式 C 左三行产品「存款 / 信用贷款 / 抵押」+ 右详情「存款余额 ￥0 · 可用现金 ￥2000 · 轮息 +3% · 落 9 号格领红包 5%」+ 存入 / 取出）/ `mono-m20-2-02-bank-mortgage`（抵押页：抵押块数 1 · 利率 4%/轮 · 期限 6 轮 · 成数 80% 变卖价 · 可抵押 长峰特产（借 ￥264）+ 抵押 / 赎回）/ `mono-m20-2-03-debt-overdue`（顶部债务条「存款 ￥1240 · 债务 ￥600 · 抵押 0 块 · 逾期 2 轮」，逾期段走警示色）/ `mono-m20-2-04-mortgage-auction`（抵押超期拍卖：角标「破产拍卖 · 第 1/1 块」+ 债务条「待清偿 ￥208 / 已筹 ￥0 / 还差 ￥208」+ 地契卡「王氏鹿膏 Lv3 · 起拍 ￥208」+ 三档 ￥208 / ￥312 / ￥499 + 放弃；顶部债务条同步显示「债务 ￥208 · 抵押 1 块 · 逾期 1 轮」）。目视复核要点：①②③④ 同一手机视口下浮层与债务条均不溢出、四段读数清晰；③ 逾期段色与普通段可区分。
+
+**取证脚本**：[local/mono-shots-m20-2.mjs](file:///d:/zhao/monopoly/local/mono-shots-m20-2.mjs)（6 项机器闸门）与 [local/mono-e2e-m20-2.mjs](file:///d:/zhao/monopoly/local/mono-e2e-m20-2.mjs)（真实点击六链）。关键口径：打 `?play=1&seed=20261002&nofx=1&humans=4&tour=0` 真实对局，全程走 `#mono-hud` / `#mono-panels` 命中层；六链确定性布置由 `__monoMain` 在进站后完成——
+
+- **A 存取款**：站 9 号格现金 ￥2000 → 点「存入」→ 存款 ￥2000 / 现金 ￥0 / 债务条入画；点「取出」回 ￥2000、债务条整条隐藏（零回归）。
+- **B 借款还款**：站 9 号格现金 ￥500 + 一块 L1 地产 → 「借款」入账额度（净资产 × 30%）、首轮免息、到期 = round + 8；「还款」全额结清（现金回 ￥500）。
+- **C 逾期罚息**：持逾期贷款落 13 号 L3 商铺收租 → 租金 ￥105 归地主 + 罚息 ￥53（= round(105×50%)）直冲本金（本金 100 → 47、现金 1000 → 842）；**须先移除起始手牌里的「免罚」`pardon`**（否则收租被自动抵消而进不了罚息分支）；「前进」后把 `pos` 钉到 13 并把现金重置为 ￥1000（消除技能「筋斗云」`stepBonus=1` 与过起点红包的不确定）。
+- **D 抵押赎回**：站 9 号格持 L3 地产 → 「抵押」得 ￥264（= 330×80%）并锁定地块；「赎回」付清回 ￥500。
+- **E 贷款强执**：末位玩家（`current=3`）持逾期满 3 轮的贷款 + 一块未抵押 L1 地产 → HUD「结束回合」推一轮 → 触发 `loan-overdue` 拍卖（起拍 = 变卖价 ￥30），成交款冲抵本金至结清（现金 200 → 124、原主不破产）。
+- **F 抵押超期**：末位玩家持 `round > due` 的抵押（index 11）→ HUD「结束回合」推一轮 → 触发 `mortgage-overdue` 拍卖（起拍 = 借款额 ￥208 = 200×1.04），成交后抵押清账、地块转移。
+
 ### 最终验收（对照 spec §11 硬性标准）
 
 | # | spec §11 条目 | 证据 |
