@@ -420,6 +420,54 @@ describe('panels：破产拍卖浮层（M20.1 版式 B）', () => {
   });
 });
 
+describe('panels：涨跌卡浮层（M20.3-B spec §6.2）', () => {
+  it('overlayOf：`bullbearOpen` 低于股票盘、高于抽卡', () => {
+    const open = { bullbearOpen: true };
+    /* 站在股票格（settled）→ 股票盘赢过涨跌卡 */
+    const atStock = createGame({ dice: fixed(1, 1) });
+    stepTo(atStock, 19);
+    expect(overlayOf(atStock.state, open)).toBe('stock');
+
+    /* 抽卡态：不打开 → draw；打开 → 涨跌卡压住抽卡；不打开时默认 false */
+    const atDraw = createGame({ dice: fixed(1, 1) });
+    stepTo(atDraw, firstTileOf('fate'));
+    expect(overlayOf(atDraw.state)).toBe('draw');
+    expect(overlayOf(atDraw.state, open)).toBe('bullbear');
+  });
+
+  it('浮层内容：角标「涨跌卡」+ 方向分段（选中态）+ 4 行标的（无选中）+ 取消键', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    const specs = panelSpecs(g.state, false, null, undefined, 0, undefined, undefined, { open: true, dir: 'down' });
+    expect(specs.find((s) => s.id === 'ui.badge')!.state?.text).toBe('涨跌卡');
+    /* `ui.qk` 三枚：两方向 + 取消；「押跌」选中（借 enabled 表达金底选中态） */
+    const qks = specs.filter((s) => s.id === 'ui.qk');
+    expect(qks.map((s) => s.state?.label)).toEqual(['押涨', '押跌', '取消']);
+    expect(qks.map((s) => s.state?.enabled)).toEqual([false, true, true]);
+    const rows = specs.filter((s) => s.id === 'ui.stockRow');
+    expect(rows.map((s) => s.state?.code)).toEqual(STOCKS.map((s) => s.code));
+    expect(rows.every((s) => s.state?.selected === false)).toBe(true);
+    /* 底板复用 370×300 的 `showcase.panel`（不新增注册项） */
+    expect(specs.map((s) => s.id)).toContain('showcase.panel');
+  });
+
+  it('命中区：方向键 `up`/`down` + 4 行标的 code + 取消，全落在底板 10..380 内', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    const hits = panelHitAreas(g.state, false, null, undefined, 0, undefined, undefined, { open: true, dir: 'up' });
+    expect(hits.map((h) => h.action)).toEqual([
+      'bullbear:dir', 'bullbear:dir',
+      'bullbear:pick', 'bullbear:pick', 'bullbear:pick', 'bullbear:pick',
+      'bullbear:cancel',
+    ]);
+    expect(hits.filter((h) => h.action === 'bullbear:dir').map((h) => h.target)).toEqual(['up', 'down']);
+    expect(hits.filter((h) => h.action === 'bullbear:pick').map((h) => h.target))
+      .toEqual(STOCKS.map((s) => s.code));
+    for (const h of hits) {
+      expect(h.x).toBeGreaterThanOrEqual(10);
+      expect(h.x + h.w).toBeLessThanOrEqual(380);
+    }
+  });
+});
+
 describe('panels：银行浮层（M20.2 版式 C：左列表右详情）', () => {
   /** 站 9 号格（鹿乡银行）且已结算的 state */
   const atBank = (): Game => {

@@ -31,6 +31,8 @@ import {
   PANEL_BANK_ROW_GAP, PANEL_BANK_ROW_H, PANEL_BANK_ROW_W, PANEL_BANK_ROW_X, PANEL_BANK_ROW_Y0,
   PANEL_BID_CARD_CX, PANEL_BID_CARD_CY, PANEL_BID_CARD_S, PANEL_BID_H,
   PANEL_BID_S, PANEL_BID_STEP, PANEL_BID_W, PANEL_BID_X, PANEL_BID_Y0,
+  PANEL_BULLBEAR_CANCEL_X, PANEL_BULLBEAR_CANCEL_Y, PANEL_BULLBEAR_DIR_GAP, PANEL_BULLBEAR_DIR_X0,
+  PANEL_BULLBEAR_DIR_Y, PANEL_BULLBEAR_ROW_Y,
   PANEL_CANCEL_W, PANEL_CANCEL_X,
   PANEL_CARD_CX, PANEL_CARD_CY, PANEL_CARD_S,
   PANEL_CHART_H, PANEL_CHART_W, PANEL_CHART_X, PANEL_CHART_Y, PANEL_CLOSE_H, PANEL_CLOSE_W,
@@ -52,6 +54,8 @@ export type PanelActionId =
   | 'card:bomb' | 'card:barrier' | 'card:teleport' | 'card:doubleRent' | 'card:demolish'
   | 'card:cancel'
   | 'stock:buy' | 'stock:sell' | 'stock:select' | 'stock:lev' | 'card:close' | 'settle:close'
+  /* M20.3-B 涨跌卡浮层（spec §6.2）：方向分段（`target = 'up'|'down'`）+ 逐行选标的（`target = code`）+ 取消 */
+  | 'bullbear:dir' | 'bullbear:pick' | 'bullbear:cancel'
   | 'auction:bid' | 'auction:pass'
   /* M20.2 银行信贷（spec §3.8）：选中产品行 + 六个 API + 关闭 */
   | 'bank:select' | 'bank:deposit' | 'bank:withdraw' | 'bank:borrow' | 'bank:repay'
@@ -87,8 +91,22 @@ export interface StockUiState {
 /** 股票浮层 UI 态缺省值（选中首支标的、不加杠杆）——两处调用点共用，避免字面量漂移 */
 export const STOCK_UI_DEFAULTS: StockUiState = { sel: STOCKS[0].code, lev: 1 };
 
-/** 浮层可见态（优先级：拍卖 > 结算 > 银行 > 商店 > 股票盘 > 抽卡翻牌；无 → null） */
-export type OverlayKind = 'auction' | 'settle' | 'bank' | 'store' | 'stock' | 'draw';
+/** M20.3-B 涨跌卡浮层 UI 态（`main.ts` 持有；`open` = 是否展开，`dir` = 押涨 / 押跌，默认押涨） */
+export interface BullbearUiState {
+  open: boolean;
+  dir: 'up' | 'down';
+}
+
+/** 涨跌卡浮层 UI 态缺省值（收起、押涨） */
+export const BULLBEAR_UI_DEFAULTS: BullbearUiState = { open: false, dir: 'up' };
+
+/** 方向分段（押涨 / 押跌）——可见键与命中区同源一份，避免标签漂移 */
+export function bullbearDirs(): { dir: 'up' | 'down'; label: string }[] {
+  return [{ dir: 'up', label: '押涨' }, { dir: 'down', label: '押跌' }];
+}
+
+/** 浮层可见态（优先级：拍卖 > 结算 > 银行 > 商店 > 股票盘 > 涨跌卡 > 抽卡翻牌；无 → null） */
+export type OverlayKind = 'auction' | 'settle' | 'bank' | 'store' | 'stock' | 'bullbear' | 'draw';
 
 /* —— 目标解析（「可点性」真源） —— */
 
@@ -367,18 +385,21 @@ export function auctionDebtView(a: PendingAuction): { total: number; raised: num
 
 /** 当前应展开的浮层（未结算 / 无触发 → null，即默认收起）；待拍态优先于一切浮层。
  *  M20.2：`opts.bankOpen` 为真且未结束时返回 `'bank'`（银行键在 idle / settled 均可开）
- *  M20.3：`opts.storeOpen` 紧随其后（商店同为常驻 HUD 入口，与银行互斥，只开一个） */
+ *  M20.3：`opts.storeOpen` 紧随其后（商店同为常驻 HUD 入口，与银行互斥，只开一个）
+ *  M20.3-B：`opts.bullbearOpen` 夹在股票盘与抽卡之间（手牌打涨跌卡 → 展开选方向与标的，随时可开） */
 export function overlayOf(
-  state: GameState, opts: { bankOpen?: boolean; storeOpen?: boolean } = {},
+  state: GameState,
+  opts: { bankOpen?: boolean; storeOpen?: boolean; bullbearOpen?: boolean } = {},
 ): OverlayKind | null {
   if (state.auction) return 'auction';
   if (state.over) return 'settle';
   if (opts.bankOpen) return 'bank';
   if (opts.storeOpen) return 'store';
-  if (state.phase !== 'settled') return null;
+  const settled = state.phase === 'settled';
   /* 站在股票交易所（index 19）→ 盘面常开（买卖后仍停留，便于连续操作） */
-  if (currentPlayer(state).pos === STOCK_TILE_INDEX) return 'stock';
-  if (state.lastDraw) return 'draw';
+  if (settled && currentPlayer(state).pos === STOCK_TILE_INDEX) return 'stock';
+  if (opts.bullbearOpen) return 'bullbear';
+  if (settled && state.lastDraw) return 'draw';
   return null;
 }
 
@@ -587,6 +608,7 @@ export function panelSpecs(
   bank: BankUiState = { open: false, sel: 'deposit' }, handScroll = 0,
   store: StoreUiState = { open: false, sel: STORE_CATALOG[0].kind },
   stock: StockUiState = STOCK_UI_DEFAULTS,
+  bullbear: BullbearUiState = BULLBEAR_UI_DEFAULTS,
 ): ElementSpec[] {
   const out: ElementSpec[] = [];
   let r = 0;
@@ -621,7 +643,7 @@ export function panelSpecs(
     }
   }
 
-  const overlay = overlayOf(state, { bankOpen: bank.open, storeOpen: store.open });
+  const overlay = overlayOf(state, { bankOpen: bank.open, storeOpen: store.open, bullbearOpen: bullbear.open });
   if (overlay === 'auction' && state.auction) {
     const a = state.auction;
     const lots = a.results.length + a.queue.length;
@@ -733,6 +755,25 @@ export function panelSpecs(
       push('ui.tradeSell', tierX(i) + PANEL_STOCK_TIER_W / 2, PANEL_STOCK_SELL_Y + PANEL_STOCK_TIER_H / 2,
         { label: t.label, enabled: t.enabled }, PANEL_STOCK_TIER_S);
     });
+  } else if (overlay === 'bullbear') {
+    /* 涨跌卡浮层（spec §6.2）：底板复用 370×300；方向分段（押涨 / 押跌，选中态借 `ui.qk` 的 `enabled`：
+       金底 = 选中）→ 4 行标的（点即落库，故无选中行）→ 取消键。台位与 `panelHitAreas` 一一对应。 */
+    push('showcase.panel', PANEL_X, PANEL_Y);
+    push('ui.badge', PANEL_CX, PANEL_BADGE_Y, { text: '涨跌卡' });
+    bullbearDirs().forEach((d, i) => {
+      push('ui.qk', PANEL_BULLBEAR_DIR_X0 + HUD_QK_W / 2 + i * (HUD_QK_W + PANEL_BULLBEAR_DIR_GAP),
+        PANEL_BULLBEAR_DIR_Y + HUD_QK_H / 2, { label: d.label, enabled: d.dir === bullbear.dir });
+    });
+    stockRows(state).forEach((row, i) => {
+      push('ui.stockRow', PANEL_ROW_X + PANEL_ROW_W / 2,
+        PANEL_BULLBEAR_ROW_Y + PANEL_ROW_H / 2 + i * (PANEL_ROW_H + PANEL_STOCK_ROW_GAP),
+        {
+          code: row.code, name: row.name, price: row.price, change: row.change,
+          shares: row.shares, value: row.value, selected: false,
+        });
+    });
+    push('ui.qk', PANEL_BULLBEAR_CANCEL_X + HUD_QK_W / 2, PANEL_BULLBEAR_CANCEL_Y + HUD_QK_H / 2,
+      { label: '取消', enabled: true });
   } else if (overlay === 'draw') {
     const card = drawCard(state);
     if (card) {
@@ -770,6 +811,7 @@ export function panelHitAreas(
   bank: BankUiState = { open: false, sel: 'deposit' }, handScroll = 0,
   store: StoreUiState = { open: false, sel: STORE_CATALOG[0].kind },
   stock: StockUiState = STOCK_UI_DEFAULTS,
+  bullbear: BullbearUiState = BULLBEAR_UI_DEFAULTS,
 ): PanelHit[] {
   const out: PanelHit[] = [];
   if (sel !== null) {
@@ -779,7 +821,7 @@ export function panelHitAreas(
     });
     return out;
   }
-  const overlay = overlayOf(state, { bankOpen: bank.open, storeOpen: store.open });
+  const overlay = overlayOf(state, { bankOpen: bank.open, storeOpen: store.open, bullbearOpen: bullbear.open });
   if (!overlay) {
     /* 抽屉收起时手牌不可点（画面也没画）；牌袋键由 `Hud.ts` 提供 */
     if (!handOpen) return out;
@@ -904,6 +946,27 @@ export function panelHitAreas(
         action: 'stock:sell', target: enc(t.tier), x: tierX(i), y: PANEL_STOCK_SELL_Y,
         w: PANEL_STOCK_TIER_W, h: PANEL_STOCK_TIER_H, enabled: t.enabled,
       });
+    });
+  } else if (overlay === 'bullbear') {
+    /* 与 `panelSpecs` 同源：方向分段（`target = 'up' | 'down'`）+ 4 行选标的（`target = code`）+ 取消。
+       点行即落库（`{ kind:'card', card:'bullBear', stock:{ code, dir } }`），不设选中态。 */
+    bullbearDirs().forEach((d, i) => {
+      out.push({
+        action: 'bullbear:dir', target: d.dir,
+        x: PANEL_BULLBEAR_DIR_X0 + i * (HUD_QK_W + PANEL_BULLBEAR_DIR_GAP), y: PANEL_BULLBEAR_DIR_Y,
+        w: HUD_QK_W, h: HUD_QK_H, enabled: true,
+      });
+    });
+    stockRows(state).forEach((row, i) => {
+      out.push({
+        action: 'bullbear:pick', target: row.code,
+        x: PANEL_ROW_X, y: PANEL_BULLBEAR_ROW_Y + i * (PANEL_ROW_H + PANEL_STOCK_ROW_GAP),
+        w: PANEL_ROW_W, h: PANEL_ROW_H, enabled: true,
+      });
+    });
+    out.push({
+      action: 'bullbear:cancel', x: PANEL_BULLBEAR_CANCEL_X, y: PANEL_BULLBEAR_CANCEL_Y,
+      w: HUD_QK_W, h: HUD_QK_H, enabled: true,
     });
   }
   return out;

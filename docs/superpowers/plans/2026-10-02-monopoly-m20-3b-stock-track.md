@@ -130,13 +130,13 @@
 
 ## Task 5：涨跌卡浮层纯函数（`ui/panels.ts`）
 
-- [ ] `src/ui/panels.ts`：`OverlayKind` 增 `'bullbear'`；`overlayOf` 的 `opts` 增 `bullbearOpen?: boolean`，
-      优先级链改为 `auction > settle > bank > store > stock > bullbear > draw`。
-- [ ] `src/skin/layout.ts`：新增 `PANEL_BULLBEAR_*`（角标 / 方向分段 / 4 行标的 / 取消键）台位常量。
-- [ ] `src/ui/panels.ts`：`panelSpecs` 增 `bullbear` 分支——`showcase.panel` + `ui.badge`「涨跌卡」+ `ui.qk` ×2（押涨 / 押跌，选中态）+ 4 行 `ui.stockRow` + 取消键（`ui.qk`「取消」）。
-- [ ] `src/ui/panels.ts`：`panelHitAreas` 增 `bullbear` 分支——方向键（`bullbear:dir`，`target='up'|'down'`）+ 4 行（`bullbear:pick`，`target=code`）+ 取消（`bullbear:cancel`）。
-- [ ] `test/ui/panels.spec.ts` 追加：`bullbearOpen` 时 `overlayOf === 'bullbear'`；优先级低于 `stock` 高于 `draw`；命中区 `bullbear:pick` 的 `target` 为 4 个 code。
-- [ ] 跑 `npx tsc --noEmit` 与 `npx vitest run test/ui/panels.spec.ts`。
+- [x] `src/ui/panels.ts`：`OverlayKind` 增 `'bullbear'`；`overlayOf` 的 `opts` 增 `bullbearOpen?: boolean`，
+      优先级链改为 `auction > settle > bank > store > stock > bullbear > draw`（把 `phase === 'settled'` 从早退改为分别守护 `stock` / `draw`，使涨跌卡随时可开、同时仍被股票盘压住）。
+- [x] `src/skin/layout.ts`：新增 `PANEL_BULLBEAR_*`（方向分段 / 4 行标的 / 取消键）台位常量（角标复用 `PANEL_BADGE_Y`，底板复用 370×300 的 `showcase.panel`）。
+- [x] `src/ui/panels.ts`：`panelSpecs` 增 `bullbear` 分支——`showcase.panel` + `ui.badge`「涨跌卡」+ `ui.qk` ×2（押涨 / 押跌，选中态）+ 4 行 `ui.stockRow` + 取消键（`ui.qk`「取消」）；签名末位增 `bullbear: BullbearUiState`。
+- [x] `src/ui/panels.ts`：`panelHitAreas` 增 `bullbear` 分支——方向键（`bullbear:dir`，`target='up'|'down'`）+ 4 行（`bullbear:pick`，`target=code`）+ 取消（`bullbear:cancel`）。
+- [x] `test/ui/panels.spec.ts` 追加：`bullbearOpen` 时 `overlayOf === 'bullbear'`；优先级低于 `stock` 高于 `draw`；命中区 `bullbear:pick` 的 `target` 为 4 个 code。
+- [x] 跑 `npx tsc --noEmit` 与 `npx vitest run test/ui/panels.spec.ts`（34 绿）。
 - [ ] 提交：`git -C d:\zhao add monopoly/src/ui/panels.ts monopoly/src/skin/layout.ts monopoly/test/ui/panels.spec.ts` → `-m 'M20.3-B Task5: 涨跌卡浮层纯函数与命中区'`。
 
 ## Task 6：`main.ts` 接线（三档 / 杠杆 / 涨跌卡）

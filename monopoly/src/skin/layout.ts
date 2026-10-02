@@ -190,6 +190,16 @@ export const PANEL_STOCK_TIER_GAP = 8;
 export const PANEL_STOCK_SELL_Y = PANEL_STOCK_BUY_Y + PANEL_STOCK_TIER_H + 3;  // 卖三档顶
 export const PANEL_STOCK_TIER_X0 = 29.5;         // 居中：(390 − 331) / 2
 
+/* —— M20.3-B 涨跌卡浮层（spec §6.2）：底板复用 `showcase.panel`（370×300 @ 10,300）——
+   内容比股票盘轻（段控 + 4 行 + 取消），300 高足够，不新增注册项。
+   自上而下：角标 318 → 方向分段 344..366 → 4 行标的 376..490 → 取消键 502..524。 */
+export const PANEL_BULLBEAR_DIR_Y = 344;         // 方向分段顶（`ui.qk` 72×22）
+export const PANEL_BULLBEAR_DIR_GAP = 8;
+export const PANEL_BULLBEAR_DIR_X0 = (STAGE_W - (HUD_QK_W * 2 + 8)) / 2;   // = 119（二段居中）
+export const PANEL_BULLBEAR_ROW_Y = 376;         // 4 行标的首行顶（行高 34 / 行距 4）
+export const PANEL_BULLBEAR_CANCEL_Y = 502;      // 取消键顶（`ui.qk` 72×22）
+export const PANEL_BULLBEAR_CANCEL_X = (STAGE_W - HUD_QK_W) / 2;           // = 159（居中）
+
 /* 抽卡翻牌（事件卡 ×2）：卡面 66×88 × 3.2 = 211×282，370×300 的老底板装不下，
    故改用新增注册项 `showcase.panelTall`（370×480），底板从 150 铺到 630（不压底坞资产条 632）。
    自上而下：角标 → 卡面 → 关闭键 → 手牌行（PANEL_HAND_Y 不变，恰好落在面板之内）。 */
