@@ -9,6 +9,7 @@ import { buyPrice, canUpgrade, nextLevel } from '../data/economy';
 import { BANK_TILE_INDEX } from '../data/bank';
 import { loanLimitOf } from './bank';
 import type { ItemCardKind } from '../data/cards';
+import { STORE_CATALOG } from '../data/item-shop';
 import { RING_SIZE } from '../data/board';
 import { STOCK_TILE_INDEX, STOCKS } from '../data/stocks';
 import { SPEC_LEADER_MIN_ROUND, personaParams, type AiParams, type Persona } from '../data/ai';
@@ -18,6 +19,15 @@ export type { AiParams, Persona, Seat } from '../data/ai';
 
 /** 路障铺在领先者前方第 N 格（≤ BARRIER_RANGE = 6 内，确定性，不引入随机源） */
 const BARRIER_LEAD = 3;
+
+/* M20.3 商店采购阈值（spec §5.6，确定性规则，不引入随机源） */
+/** 保命线①：持有卡数 ≥ 该值且现金 < STORE_PANIC_CASH 时不采购 */
+const STORE_PANIC_HAND = 5;
+const STORE_PANIC_CASH = 500;
+/** 免罚卡溢价倍数：现金 ≥ 该倍数 × 最便宜未持有道具售价 才买 */
+const STORE_PARDON_MULT = 3;
+/** 炸弹溢价倍数：现金 ≥ 该倍数 × 炸弹售价 才买 */
+const STORE_BOMB_MULT = 2;
 
 /** M20.2 银行信贷动作（与 `Game` 六个 API 一一对应） */
 export type BankAction = 'deposit' | 'withdraw' | 'borrow' | 'repay' | 'mortgage' | 'redeem';
@@ -32,6 +42,8 @@ export type AiStep =
   | { kind: 'sell'; index: number }          /* M20.1 自由出售自有地块 */
   | { kind: 'auctionBid'; amount: number }   /* M20.1 拍卖出价（0 = 放弃） */
   | { kind: 'bank'; action: BankAction; amount?: number; index?: number }   /* M20.2 银行信贷 */
+  | { kind: 'buyItem'; card: ItemCardKind }    /* M20.3 商店买入 */
+  | { kind: 'sellItem'; card: ItemCardKind }   /* M20.3 商店卖出 */
   | { kind: 'close' } | { kind: 'end' };
 
 /** `AiStep` → `Game` API 的唯一纯映射（绝不抛错；合法性由 decideTurn 前置保证） */
@@ -55,6 +67,8 @@ export function applyStep(g: Game, step: AiStep): unknown {
       if (step.action === 'mortgage') return g.takeMortgage(step.index ?? -1);
       return g.redeemMortgage(step.index ?? -1);
     }
+    case 'buyItem': return g.buyItem(step.card);
+    case 'sellItem': return g.sellItem(step.card);
     case 'close': return g.clearEvent();
     case 'end': return g.endTurn();
   }
@@ -180,6 +194,42 @@ export function pickBank(state: GameState, P: AiParams): AiStep[] {
   return [];
 }
 
+/**
+ * 道具商店采购策略（M20.3 spec §5.6，纯函数 / 零随机）：每回合至多产 **1 步**、**只买不卖**。
+ *
+ * 口径（决定论，与 `pickBank` 同构）：
+ * 1. 保命优先：持牌 ≥ `STORE_PANIC_HAND` 且现金 < `STORE_PANIC_CASH` → 不买；
+ * 2. 现金 ≥ `STORE_PARDON_MULT` × 最便宜未持有道具售价，且缺 `pardon` → 买免罚；
+ * 3. 现金 ≥ `STORE_BOMB_MULT` × 炸弹售价，且缺 `bomb` → 买炸弹；
+ * 4. 否则不动。
+ *
+ * 真人席位不会产出（`decideTurn` 只对 persona 调用）。
+ */
+export function pickStore(state: GameState, P: AiParams): AiStep[] {
+  const me = currentPlayer(state);
+  if (me.bankrupt) return [];
+  const hand = state.hands[me.id - 1] ?? [];
+
+  /* ① 保命优先：持牌多且现金薄 → 不采购 */
+  if (hand.length >= STORE_PANIC_HAND && me.cash < STORE_PANIC_CASH) return [];
+
+  const missing = STORE_CATALOG.filter((p) => !hand.includes(p.kind));
+  if (missing.length === 0) return [];
+  const cheapest = missing.reduce((min, p) => (p.price < min ? p.price : min), Number.POSITIVE_INFINITY);
+
+  /* ② 缺免罚且现金充裕 → 首选保命牌 */
+  if (!hand.includes('pardon') && me.cash >= STORE_PARDON_MULT * cheapest) {
+    return [{ kind: 'buyItem', card: 'pardon' }];
+  }
+
+  /* ③ 缺炸弹且现金 ≥ 2 × 炸弹售价 → 补进攻牌 */
+  const bomb = missing.find((p) => p.kind === 'bomb');
+  if (bomb && me.cash >= STORE_BOMB_MULT * bomb.price) {
+    return [{ kind: 'buyItem', card: 'bomb' }];
+  }
+  return [];
+}
+
 /* —— 各阶段的分支 —— */
 
 function idlePlan(state: GameState, persona: Persona, P: AiParams): AiStep[] {
@@ -245,16 +295,22 @@ function settledPlan(state: GameState, persona: Persona, P: AiParams): AiStep[] 
     if (code) post.push({ kind: 'trade', code, shares: 1 });
   }
 
-  /* ④ 银行信贷（M20.2）：`pickBank` 一步；**与同回合消费步骤（买地/升级/股票）互斥** ——
+  /* ④ 银行信贷（M20.2）：`pickBank` 一步；**与同回合消费步骤（买地/升级/股票/买道具）互斥** ——
      存款金额按「当前现金」算，若整段 plan 里既有消费又有存款，顺序执行到存款时现金已变、金额失真。
      驱动器每步前会重算 plan，消费步跑完后下一步即补上存款，故不损失行为。 */
   const bank = pickBank(state, P);
-  const spending = post.some((s) => s.kind === 'buy' || s.kind === 'upgrade' || s.kind === 'trade');
+  /* ⑤ 道具商店（M20.3）：`pickStore` 一步（至多 1 步、只买不卖）；与银行步同列为常驻采购，
+     且计入 `spending` 判据，使同回合有采购时不再排入存款步。 */
+  const store = pickStore(state, P);
+  const spending = [...post, ...store].some(
+    (s) => s.kind === 'buy' || s.kind === 'upgrade' || s.kind === 'trade' || s.kind === 'buyItem',
+  );
   if (bank.length > 0 && !(spending && bank[0].kind === 'bank' && bank[0].action === 'deposit')) {
     post.push(...bank);
   }
+  post.push(...store);
 
-  /* ⑤ 投机专项：租金翻倍（持牌 + 本回合未用 + 现金门 + 已有 >=2 级地块） */
+  /* ⑥ 投机专项：租金翻倍（持牌 + 本回合未用 + 现金门 + 已有 >=2 级地块） */
   if (persona === 'speculative' && (state.hands[me.id - 1] ?? []).includes('doubleRent')
     && !state.doubleRent[me.id - 1] && me.cash >= P.reserve && ownedFrom(state, me.id, 2).length > 0) {
     post.push({ kind: 'card', card: 'doubleRent' });
