@@ -1,5 +1,5 @@
 /**
- * 卡牌数据唯一真源（spec §5.3）：5 种常驻手牌道具 + 命运牌堆 20 张 + 机会牌堆 20 张。
+ * 卡牌数据唯一真源（spec §5.3）：8 种常驻手牌道具 + 命运牌堆 20 张 + 机会牌堆 20 张。
  *
  * 牌堆张数与棋盘格数**解耦**（M5 全局契约 ②）：棋盘上只有 5 个 `fate` 格与 5 个 `chance` 格
  * （见 `board.ts`），但牌堆各 20 张；落到任意一个 `fate`/`chance` 格都从对应牌堆里抽 1 张，
@@ -9,13 +9,19 @@
  * （`FateKind` / `ChanceKind`），同种机制用不同金额/步数复现多张，保证「一局内抽到的牌不重样」。
  */
 
-export type ItemCardKind = 'bomb' | 'barrier' | 'pardon' | 'teleport' | 'doubleRent' | 'demolish';
+export type ItemCardKind =
+  | 'bomb' | 'barrier' | 'pardon' | 'teleport' | 'doubleRent' | 'demolish'
+  /* —— M20.3-B 股票轨新增两种（spec §4.1）—— */
+  | 'bullBear' | 'dividend';
+
+/** 用牌目标类：`stock` = 需指定一支股票（M20.3-B 涨跌卡；`main.ts` 走专属浮层，不进棋盘选目标态） */
+export type ItemTarget = 'none' | 'tile' | 'foe' | 'self' | 'stock';
 
 export interface ItemCardDef {
   kind: ItemCardKind;
   name: string;
   desc: string;
-  target: 'none' | 'tile' | 'foe' | 'self';
+  target: ItemTarget;
   /**
    * 常用度排序键（spec §4.1，M20.3 新增）：数值小 = 更常用，手牌行按它升序。
    * 口径「被动保命 > 即时收益 > 位置干预 > 破坏 > 长线」；
@@ -31,6 +37,9 @@ export const ITEM_CARDS: ItemCardDef[] = [
   { kind: 'teleport', name: '迁点', desc: '本回合以迁点取代移动，落到任意指定格', target: 'tile', priority: 50 },
   { kind: 'doubleRent', name: '租金翻倍', desc: '本人下一次收租翻倍，收完消耗', target: 'self', priority: 20 },
   { kind: 'demolish', name: '拆迁令', desc: '一次夷平对手目标地块全部楼体（归无主）', target: 'foe', priority: 60 },
+  /* —— M20.3-B 股票轨（spec §4.1）：数组序仍作第三键兜底，故新卡一律追加在表尾 —— */
+  { kind: 'bullBear', name: '涨跌卡', desc: '指定一支股票，下轮必涨或必跌', target: 'stock', priority: 70 },
+  { kind: 'dividend', name: '红利卡', desc: '按持仓每股领 ￥20；无持仓折现 ￥100', target: 'none', priority: 80 },
 ];
 
 /**

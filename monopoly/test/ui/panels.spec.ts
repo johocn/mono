@@ -27,16 +27,16 @@ const stepTo = (g: Game, index: number): void => {
   g.settleCurrent();
 };
 
-describe('panels：手牌 6 槽（纯函数）', () => {
-  it('恒 6 槽、开局全持有；顺序 = 常用度 priority 升序（M20.3 三键排序）', () => {
+describe('panels：手牌 8 槽（纯函数）', () => {
+  it('恒 8 槽、开局全持有；顺序 = 常用度 priority 升序（M20.3 三键排序）', () => {
     const g = createGame({ dice: fixed(1, 1) });
     const slots = handSlots(g.state);
-    expect(slots).toHaveLength(6);
+    expect(slots).toHaveLength(8);
     /* 全持有 ⇒ 第 ① 键（held）全同，退化为 ② priority 升序 */
     expect(slots.map((s) => s.kind)).toEqual(
-      ['pardon', 'doubleRent', 'bomb', 'barrier', 'teleport', 'demolish'],
+      ['pardon', 'doubleRent', 'bomb', 'barrier', 'teleport', 'demolish', 'bullBear', 'dividend'],
     );
-    expect(slots.map((s) => s.priority)).toEqual([10, 20, 30, 40, 50, 60]);
+    expect(slots.map((s) => s.priority)).toEqual([10, 20, 30, 40, 50, 60, 70, 80]);
     /* 槽集合 = 全部道具种类（排序只换位置、不丢卡） */
     expect([...slots.map((s) => s.kind)].sort()).toEqual([...ITEM_CARDS.map((c) => c.kind)].sort());
     expect(slots.every((s) => s.held)).toBe(true);
@@ -62,7 +62,7 @@ describe('panels：手牌 6 槽（纯函数）', () => {
     const bomb = handSlots(g.state).find((s) => s.kind === 'bomb')!;
     expect(bomb.held).toBe(false);
     expect(bomb.enabled).toBe(false);
-    expect(handSlots(g.state)).toHaveLength(6);
+    expect(handSlots(g.state)).toHaveLength(8);
   });
 });
 
@@ -122,14 +122,17 @@ describe('panels：结算面板', () => {
 });
 
 describe('panels：spec 组装（pass 4 / fixed / 注册表命中）', () => {
-  it('全部 pass 4 + fixed，ID 全部命中注册表，r 递增；手牌展开时恒 6 槽、收起时 0 槽', () => {
+  it('全部 pass 4 + fixed，ID 全部命中注册表，r 递增；手牌展开时恒 8 槽、收起时 0 槽', () => {
     const g = createGame({ dice: fixed(1, 1) });
     const specs = panelSpecs(g.state, true);
     expect(specs.every((s) => s.pass === 4)).toBe(true);
     expect(specs.every((s) => Boolean(s.fixed))).toBe(true);
     expect(specs.every((s) => s.c === 0)).toBe(true);
     expect(specs.every((s) => Boolean(REGISTRY[s.id]))).toBe(true);
-    expect(specs.filter((s) => s.id === 'ui.handSlot')).toHaveLength(6);
+    /* M20.3-B：8 槽铺开内容宽 482 > 舞台 390 ⇒ 只画与舞台有交集的槽；scroll = 0 时下标 0..6 可见（7 槽），
+       末尾的「红利卡」需横滑才入画（滑动条 `ui.handBar` 另有 1 个元素） */
+    expect(specs.filter((s) => s.id === 'ui.handSlot')).toHaveLength(7);
+    expect(specs.filter((s) => s.id === 'ui.handBar')).toHaveLength(1);
     const rs = specs.map((s) => s.r);
     expect([...rs].sort((a, b) => a - b)).toEqual(rs);
     expect(overlayOf(g.state)).toBeNull();
@@ -183,19 +186,21 @@ describe('panels：DOM 命中层矩形', () => {
     expect(panelHitAreas(g.state, false)).toEqual([]);
   });
 
-  it('抽屉展开：6 个手牌键（按 priority 升序），全部落在舞台内', () => {
+  it('抽屉展开：可见的 7 个手牌键（按 priority 升序，末尾「红利卡」需横滑），全部落在舞台内', () => {
     const g = createGame({ dice: fixed(1, 1) });
     g.state.estates[3] = { index: 3, owner: 2, level: 1, processing: false };
     const hits = panelHitAreas(g.state, true);
     expect(hits.map((h) => h.action)).toEqual([
       'card:pardon', 'card:doubleRent', 'card:bomb', 'card:barrier', 'card:teleport', 'card:demolish',
+      'card:bullBear',
     ]);
     /* M19：手牌键不再由 UI 自动挑目标（改由「选目标态」棋盘点选） */
     for (const h of hits) expect(h.target).toBeUndefined();
     expect(hits[0].enabled).toBe(false);      // pardon 被动卡
+    /* M20.3-B：8 槽溢出舞台，末尾槽可半露（命中区照常产出，由画布裁掉溢出）⇒ 只要求与舞台有交集 */
     for (const h of hits) {
-      expect(h.x).toBeGreaterThanOrEqual(0);
-      expect(h.x + h.w).toBeLessThanOrEqual(390);
+      expect(h.x).toBeLessThan(390);
+      expect(h.x + h.w).toBeGreaterThan(0);
     }
   });
 

@@ -20,11 +20,11 @@ const fateOf = (id: string) => FATE_DECK.find((c) => c.id === id)!;
 const chanceOf = (id: string) => CHANCE_DECK.find((c) => c.id === id)!;
 
 describe('game-cards 手牌开局（spec §5.3）', () => {
-  it('4 名玩家开局各持 6 张道具卡（6 种齐全）', () => {
+  it('4 名玩家开局各持 8 张道具卡（8 种齐全）', () => {
     const g = createGame({ dice: fixed(1, 1) });
     for (const h of g.state.hands) {
-      expect(h).toHaveLength(6);
-      expect(new Set(h).size).toBe(6);
+      expect(h).toHaveLength(8);
+      expect(new Set(h).size).toBe(8);
       for (const c of ITEM_CARDS) expect(handIndexOf(h, c.kind)).toBeGreaterThanOrEqual(0);
     }
   });
@@ -39,7 +39,7 @@ describe('game-cards 炸弹（spec §5.3）', () => {
     expect(g.state.estates[4].level).toBe(1);
     expect(g.state.estates[4].owner).toBe(2);
     expect(has(g.state.hands[0], 'bomb')).toBe(false);
-    expect(g.state.hands[0]).toHaveLength(5);
+    expect(g.state.hands[0]).toHaveLength(7);
   });
 
   it('炸 L1 对手地块 → 炸回无主（删键）', () => {

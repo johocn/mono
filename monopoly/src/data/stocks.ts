@@ -21,5 +21,24 @@ export const STOCKS: StockDef[] = [
 export const STOCK_FEE_RATIO = 0;
 /** 最小交易单位（整股） */
 export const SHARE_LOT = 1;
-/** 股票交易所地块（`board.ts` TILE_TYPES[19] = 'stock'） */
+/** 股票交易所地块（`board.ts` TILE_TYPES[19] = 'stock'`） */
 export const STOCK_TILE_INDEX = 19;
+
+/* —— M20.3-B 股票轨：数量档 / 杠杆 / 分红（spec §4.2）—— */
+
+/** 底部「买 / 卖」前两档的手数（第三档为「全仓」`'all'`，按可用资金或持股数推导） */
+export const LOT_TIERS = [1, SHARE_LOT * 5] as const;
+/** 数量档：具体股数（正整数）或 `'all'`（全仓，按买入用现金 / 卖出用持股推导） */
+export type LotTier = number | 'all';
+/** 杠杆档位：仅 `round >= MARGIN_UNLOCK_ROUND` 时可选，且只作用于新买入（B-D4） */
+export const LEVERAGES = [2, 3] as const;
+/** 杠杆解锁轮次（客户口径「第 8 轮起」，B-D9） */
+export const MARGIN_UNLOCK_ROUND = 8;
+/** 保证金借入每轮复利利率（沿用信用贷款 6%，B-D8） */
+export const MARGIN_RATE = 0.06;
+/** 爆仓线：持仓市值 < 借入本金 × 该系数 → 强制平仓还债（D31） */
+export const LIQUIDATION_RATIO = 1.2;
+/** 红利卡：每股分红（B-D7） */
+export const DIVIDEND_PER_SHARE = 20;
+/** 红利卡：无持仓时的折现额（B-D7） */
+export const DIVIDEND_REFUND = 100;

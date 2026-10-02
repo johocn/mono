@@ -4,23 +4,25 @@ import {
 } from '../../src/data/cards';
 
 describe('cards 数据（spec §5.3）', () => {
-  it('道具 6 种、手牌 6 槽、命运 / 机会牌堆各 20 张', () => {
+  it('道具 8 种、手牌 8 槽、命运 / 机会牌堆各 20 张', () => {
     expect(ITEM_CARDS.map((c) => c.kind)).toEqual(
-      ['bomb', 'barrier', 'pardon', 'teleport', 'doubleRent', 'demolish'],
+      ['bomb', 'barrier', 'pardon', 'teleport', 'doubleRent', 'demolish', 'bullBear', 'dividend'],
     );
-    expect(ITEM_CARDS).toHaveLength(6);
+    expect(ITEM_CARDS).toHaveLength(8);
     /* 槽数由种类数派生（M20.3）：M20.3-B 追加两种卡后自动变 8，无需改版式 */
     expect(HAND_SIZE).toBe(ITEM_CARDS.length);
+    expect(HAND_SIZE).toBe(8);
     expect(DECK_SIZE).toBe(20);
     expect(FATE_DECK).toHaveLength(20);
     expect(CHANCE_DECK).toHaveLength(20);
   });
 
-  it('道具：炸弹/路障/迁点/拆迁令需选目标，免罚/翻倍不需', () => {
+  it('道具：炸弹/路障/迁点/拆迁令需棋盘选目标，涨跌卡需选股票，免罚/翻倍不需', () => {
     const targetOf = (k: ItemCardKind): string => ITEM_CARDS.find((c) => c.kind === k)!.target;
     expect([targetOf('bomb'), targetOf('barrier'), targetOf('teleport'), targetOf('demolish')])
       .toEqual(['foe', 'tile', 'tile', 'foe']);
     expect([targetOf('pardon'), targetOf('doubleRent')]).toEqual(['none', 'self']);
+    expect([targetOf('bullBear'), targetOf('dividend')]).toEqual(['stock', 'none']);
   });
 
   it('常用度 priority（M20.3 spec §4.1）：取值固定且两两不等（全序、零随机）', () => {
@@ -28,7 +30,8 @@ describe('cards 数据（spec §5.3）', () => {
     expect([
       priorityOf('pardon'), priorityOf('doubleRent'), priorityOf('bomb'),
       priorityOf('barrier'), priorityOf('teleport'), priorityOf('demolish'),
-    ]).toEqual([10, 20, 30, 40, 50, 60]);
+      priorityOf('bullBear'), priorityOf('dividend'),
+    ]).toEqual([10, 20, 30, 40, 50, 60, 70, 80]);
     const all = ITEM_CARDS.map((c) => c.priority);
     expect(new Set(all).size).toBe(all.length);
   });
