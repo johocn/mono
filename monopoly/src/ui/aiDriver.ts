@@ -22,6 +22,8 @@ export interface AiDriverDeps {
   onFlush?: () => void;
   /** 「跳过本次」收尾：相机直接归位（spec §6 P1 第 13 项）；缺省不动 */
   onSkip?: () => void;
+  /** 额外挂起条件（M20.2 银行浮层展开时暂停，与 `state.auction` 同语义）；缺省不挂起 */
+  paused?: () => boolean;
   now?: () => number;
 }
 
@@ -53,6 +55,7 @@ export function createAiDriver(deps: AiDriverDeps): AiDriver {
     const state = deps.game.state;
     if (state.over) return;
     if (state.auction) return;              // M20.1 待真人出价：拍卖挂起，AI 不推进
+    if (deps.paused?.()) return;            // M20.2 银行浮层展开：一并挂起（同拍卖语义）
     if (!persona()) return;                 // 真人席位 —— 让位，等玩家点击
     if (deps.isBusy()) return;              // 动画未播完，等下一帧
     /* 未 start() 时（单测直接调 tick）以「相对基准」起步：首次可步进时刻 = 0 + stepMs() */

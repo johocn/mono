@@ -21,7 +21,7 @@ import { candidatesFor, canTarget, type PickKind } from './core/targeting';
 import { bboxOf, choreography, frameFor, landingPose, type CamPose, type Cell, type ChoreographyOpts, type View } from './core/framing';
 import { createCamera } from './render/camera';
 import { hudSpecs, mountHud, type HudActionId, type HudHandle } from './ui/Hud';
-import { mountPanels, overlayOf, panelSpecs, type PanelActionId, type PanelHandle, type TargetingView } from './ui/panels';
+import { mountPanels, overlayOf, panelSpecs, type BankProductKind, type PanelActionId, type PanelHandle, type TargetingView } from './ui/panels';
 import { createAiDriver, type AiDriver } from './ui/aiDriver';
 import { createAudioEngine } from './ui/audio';
 import { mountSetup, readPlan, resolveSeats, type SeatPlan } from './ui/setup';
@@ -36,6 +36,7 @@ import { SHARE_VERSION } from './data/share';
 import { FATE_DECK, type ItemCardKind } from './data/cards';
 import { DEMO_OWNER, PLAYER_NAME, type BuildLevel } from './data/board';
 import { STOCK_TILE_INDEX } from './data/stocks';
+import { BANK_TILE_INDEX } from './data/bank';
 import { BUILDING_SCALE, BUILDING_Y_OFFSET, BUBBLE_HOLD_MS, BUBBLE_MOVE_HOLD_MS, CAM_AI_SCALE, CAM_BACK_MS, CAM_FALLBACK_MAX_ZOOM, CAM_FOLLOW_ZOOM, CAM_IDLE_ZOOM, CAM_MAX_ZOOM, CAM_MIN_ZOOM, CAM_PUSH_MS, CAM_SETTLE_MS, CAM_TILE_PAD, CAM_VIEW_CX, CAM_VIEW_CY, CAM_VIEW_H, CAM_VIEW_W, DEFAULT_GEO, FX_FRAMES, FX_LAND_BACK_MS, FX_LAND_PUNCH_MS, FX_LAND_PUSH_MS, FX_LEVELS, FX_NOFX_SPEED, LABEL_GROUND, STAGE_H, STAGE_W, TILE_PICK_TOL, UI_BREAK_W } from './skin/layout';
 import { SHOP_DEFAULTS, parseShopConfig, type ShopConfig } from './skin/shop-config';
 import { allElementIds } from './skin/registry';
@@ -375,7 +376,7 @@ export async function boot(): Promise<void> {
   const camPlanOf = (step: AiStep, result: unknown): CamPlan | null => {
     const st = game?.state;
     if (!st || !camOn) return null;
-    const open = overlayOf(st) !== null;
+    const open = overlayOf(st, { bankOpen }) !== null;
     const ai = (seats[st.current] ?? null) !== null;
     const ms = (v: number): number => (ai ? v * CAM_AI_SCALE : v);
     /** 推近（禁区时跳过） */
@@ -466,12 +467,16 @@ export async function boot(): Promise<void> {
   let handOpen = false;
   /* —— M19-D2 选目标态：等待玩家在棋盘上点选候选格（`null` = 未在选目标） —— */
   let uiSel: TargetingView | null = null;
+  /* —— M20.2 银行浮层 UI 态（spec §3.8）：`open` 由 HUD「银行」键与「落 9 号格自动弹出」两处驱动；
+     `sel` = 左侧三行里被选中的产品（详见 `panels.BankUiState`） —— */
+  let bankOpen = false;
+  let bankSel: BankProductKind = 'deposit';
   /** 抽屉展开态：教程期间强制展开（第 3 步要亮 5 个槽）；AI 回合自动收起（该区位被「加速 / 跳过」占用） */
   const handOpenEff = (): boolean =>
     (handOpen || tutorial !== null) && !(seats[game?.state.current ?? 0] ?? null);
   /** 地块卡：仅「真人回合 + 停在格结算态 + 无浮层 + 抽屉收起」滑入（非常驻；互斥于抽屉，两者台位重叠） */
   const tileCardOn = (g: Game): boolean =>
-    g.state.phase === 'settled' && overlayOf(g.state) === null
+    g.state.phase === 'settled' && overlayOf(g.state, { bankOpen }) === null
     && !handOpenEff() && !(seats[g.state.current] ?? null);
 
   /**
@@ -538,9 +543,10 @@ export async function boot(): Promise<void> {
       /* spec §7.2：play 版式不再常驻中部橱窗（`?show=b|c` 演示版式完整保留），
          中部条带交给环境层近景街市带；落地时由地块卡（`ui.tileCard`）滑入 */
       ...hudSpecs(g.state, fxPending || fx.busy(), seats, driver?.isFast() ?? false, audio.prefs(),
-        { tileCard: tileCardOn(g), handOpen: handOpenEff(), callout }),
-      /* M5 浮层：手牌抽屉（默认收起）+ 抽卡翻牌 / 股票盘 / 结算面板（未触发时为空） */
-      ...panelSpecs(g.state, handOpenEff(), uiSel),
+        { tileCard: tileCardOn(g), handOpen: handOpenEff(), callout, bankOpen }),
+      /* M5 浮层：手牌抽屉（默认收起）+ 抽卡翻牌 / 股票盘 / 结算面板（未触发时为空）；
+         M20.2 银行浮层（版式 C）由 `{ open, sel }` 驱动，可见性仍由 `overlayOf` 统一仲裁 */
+      ...panelSpecs(g.state, handOpenEff(), uiSel, { open: bankOpen, sel: bankSel }),
     ];
   };
 
@@ -578,7 +584,7 @@ export async function boot(): Promise<void> {
     slots?.update(calloutOf(game));
     /* 遮挡修复：`#mono-slots`（右上轮播 + 左下战报）是 DOM，恒在画布之上 ⇒ 任何浮层展开时
        整块隐藏，否则必然压住事件卡（canvas 的 `ui.card`）左下角。无浮层时 `false` = 逐像素回现状。 */
-    slots?.setHidden(game !== null && overlayOf(game.state) !== null);
+    slots?.setHidden(game !== null && overlayOf(game.state, { bankOpen }) !== null);
     /* 选目标命中层仅在选目标态吃事件（否则 pointer-events:none 穿透到画布 / 其它覆盖层） */
     pickLayer.style.pointerEvents = uiSel ? 'auto' : 'none';
   };
@@ -701,10 +707,23 @@ export async function boot(): Promise<void> {
     }
   };
 
+  /** `settled` 且真人当前玩家站在 9 号格（银行）→ 自动弹银行浮层（spec §3.8）；
+   *  AI 席位不弹（否则面板会一直挡着驱动器推进的走位） */
+  const autoBankOf = (g: Game): void => {
+    if (bankOpen || g.state.over || g.state.phase !== 'settled') return;
+    if ((seats[g.state.current] ?? null) !== null) return;
+    if (currentPlayer(g.state).pos !== BANK_TILE_INDEX) return;
+    bankOpen = true;
+    paint();
+  };
+
   /** 唯一动作入口：真人 HUD / 浮层点击与 AI 决策层都归一到 AiStep 后走这里 */
   const dispatch = (step: AiStep, withFx = true): void => {
     const g = game;
     if (!g) return;
+    /* M20.2 银行浮层是「动作前收起」的非模态面板：任何推进状态的动作（掷骰 / 前进 / 结束回合…）
+       都先收起，落 9 号格的结算随后由 `autoBankOf` 自动重开——否则面板会一直挡着后续走位。 */
+    bankOpen = false;
     /* M19-D5：破坏类卡（bomb / demolish）须在 `applyStep` 改 state **之前**捕捉目标格旧层级，
        以便 `ctxOfStep` 用旧楼元素（building.s{s}.l{oldLv}）播「下沉 + 碎屑」，而非已降级/已删的 estate。
        `ctxOf(result)` 在 runAction 内于 `applyStep` 之后才被调用，故此处捕捉后由闭包透传。 */
@@ -730,11 +749,13 @@ export async function boot(): Promise<void> {
       ),
       (r: unknown) => camPlanOf(step, r),
     );
+    /* 落 9 号格自动弹银行浮层（spec §3.8）：只在结算动作之后判定（真人席位 + `settled` + 站 9 号格） */
+    if (step.kind === 'settle') autoBankOf(g);
   };
 
-  /** HUD 点击 → AiStep（`hand` / `sell` / `ai:fast` / `ai:skip` / `audio:*` 已在回调里拦截，不会传到这里） */
+  /** HUD 点击 → AiStep（`hand` / `sell` / `bank` / `ai:fast` / `ai:skip` / `audio:*` 已在回调里拦截，不会传到这里） */
   const stepOfHud = (
-    a: Exclude<HudActionId, 'hand' | 'sell' | 'ai:fast' | 'ai:skip' | 'audio:sfx' | 'audio:bgm'>,
+    a: Exclude<HudActionId, 'hand' | 'sell' | 'bank' | 'ai:fast' | 'ai:skip' | 'audio:sfx' | 'audio:bgm'>,
   ): AiStep =>
     a === 'buy' ? { kind: 'buy' } : a === 'upgrade' ? { kind: 'upgrade' } : { kind: a };
 
@@ -789,6 +810,24 @@ export async function boot(): Promise<void> {
   const stepOfPanel = (a: PanelActionId, target?: number | string): AiStep | null => {
     if (a === 'card:cancel') { uiSel = null; paint(); return null; }
     if (a === 'card:close' || a === 'settle:close') return { kind: 'close' };
+    /* M20.2 银行浮层（spec §3.8）：`bank:select` 只切 UI 选中态，其余六个动作**直接落库**到 `Game` 信贷 API
+       （不经 `AiStep`——它们不推进回合、无动效与气泡）；金额口径见 `panels.panelHitAreas` 的注释。 */
+    if (a === 'bank:select') { bankSel = target as BankProductKind; paint(); return null; }
+    if (a === 'bank:close') { bankOpen = false; paint(); return null; }
+    if (a.startsWith('bank:')) {
+      const g = game;
+      if (g) {
+        const p = currentPlayer(g.state);
+        if (a === 'bank:deposit') g.deposit(p.cash);              // 存入 = 全部现金（金额不随 `data-target` 传）
+        else if (a === 'bank:withdraw') g.withdraw(p.deposit);    // 取出 = 全部存款
+        else if (a === 'bank:borrow') g.takeLoan();               // 借款额由引擎按额度算
+        else if (a === 'bank:repay') g.repayLoan();               // 还款 = 全额（现金不足则由引擎截断）
+        else if (a === 'bank:mortgage' && typeof target === 'number') g.takeMortgage(target);
+        else if (a === 'bank:redeem' && typeof target === 'number') g.redeemMortgage(target);
+        paint();
+      }
+      return null;
+    }
     if (a === 'stock:buy') return { kind: 'trade', code: String(target), shares: 1 };
     if (a === 'stock:sell') return { kind: 'trade', code: String(target), shares: -1 };
     /* M20.1 破产拍卖：`data-target` 带出出价金额；「放弃」= amount 0（落槌给其余报价） */
@@ -826,17 +865,19 @@ export async function boot(): Promise<void> {
       if (a === 'hand') { handOpen = !handOpen; paint(); return; }
       /* 自由出售入口（spec §3.5）：进入 M19 选目标态，等待棋盘点选自有地块 */
       if (a === 'sell') { uiSel = { kind: 'sell', hovered: null }; paint(); return; }
+      /* 银行浮层开合（M20.2 spec §3.8）：只改 UI 态、不推进状态，故不走 `dispatch`（也就不吃动效与气泡） */
+      if (a === 'bank') { bankOpen = !bankOpen; paint(); return; }
       if (fx.busy()) fx.skip();   // 点屏加速：状态早已落库，跳过只影响观感时长
       if (a === 'ai:fast') { if (driver) driver.setFast(!driver.isFast()); paint(); return; }
       if (a === 'ai:skip') { driver?.skipRest(); return; }
       dispatch(stepOfHud(a));
-    }, () => ({ seats, fast: driver?.isFast() ?? false, ui: { tileCard: tileCardOn(g), handOpen: handOpenEff() } }));
-    /* 浮层动作：关浮层 / 股票买卖 / 打手牌（目标由命中区 `data-target` 带出） */
+    }, () => ({ seats, fast: driver?.isFast() ?? false, ui: { tileCard: tileCardOn(g), handOpen: handOpenEff(), bankOpen } }));
+    /* 浮层动作：关浮层 / 股票买卖 / 打手牌 / 银行信贷（目标由命中区 `data-target` 带出） */
     panels = mountPanels(fitRoot, g, (a: PanelActionId, target?: number | string) => {
       if (fx.busy()) fx.skip();
       const step = stepOfPanel(a, target);
       if (step) dispatch(step);
-    }, () => ({ handOpen: handOpenEff(), sel: uiSel }));
+    }, () => ({ handOpen: handOpenEff(), sel: uiSel, bank: { open: bankOpen, sel: bankSel } }));
     /* 三角内容位（spec §6 版式 A 补全）：右上轮播 + 左下事件战报；与浮层同层、随舞台缩放 */
     slots = mountSlots(fitRoot, slotCfg);
     driver = createAiDriver({
@@ -846,6 +887,8 @@ export async function boot(): Promise<void> {
       onFlush: () => fx.play({ kind: 'end' }, () => paint()),
       /* 「跳过本次」= 整席位一次落库，中间几步的取景没有观感价值（spec §6 P1 第 13 项）⇒ 直接归位 */
       onSkip: () => { if (camOn) camera.reset(0); },
+      /* 银行浮层展开时与拍卖同语义挂起（M20.2 spec §3.8）：面板在场时不推进 AI 走位 */
+      paused: () => bankOpen,
     });
     driver.start();
     /* BGM 起播（spec §6.2）：未解锁时只记「想要」，首次手势 `unlock()` 时随解锁一起起播 */
@@ -987,6 +1030,13 @@ export async function boot(): Promise<void> {
     cellXY, uiSel: () => uiSel,
     /* 破产拍卖（M20.1）：`auction()` 读待拍态（null = 无拍卖），供 e2e / 取证脚本取证 */
     auction: () => game?.state.auction ?? null,
+    /* 银行信贷（M20.2）：`bank()` 读 UI 态；`setBank(open, sel?)` 供 e2e / 取证脚本直接开面板取景 */
+    bank: () => ({ open: bankOpen, sel: bankSel }),
+    setBank: (open: boolean, sel?: BankProductKind) => {
+      bankOpen = open;
+      if (sel) bankSel = sel;
+      paint();
+    },
     /* 相机（spec §8 V19/V20）：`camera.current()` 读位姿、`camPreview` 直接切态；
        `camMax` 是可变对象，供 V20 断言降级后的倍率上限 */
     camera, camMax, camPreview,
