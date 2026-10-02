@@ -226,6 +226,17 @@ export const PANEL_BANK_BTN_H = 46;              // = 注册表两枚操作键�
 export const PANEL_BANK_CLOSE_X = 300;           // 右上「关闭」键左缘（复用 72×22 的 ui.qk）
 export const PANEL_BANK_CLOSE_Y = 307;           // 关闭键顶边（中心 y 与 PANEL_BADGE_Y 同线）
 
+/* —— M20.3 道具商店浮层（版式 100% 复用银行 C 的左右分栏、元素与键位，仅纵向排版更紧）——
+   银行左列只有 3 行（高 40 / 间距 8），而商店目录有 6 项（M20.3-B 追加两种后为 8 项）；
+   沿用 40/8 会把第 6 行推到 624，越出 300..600 的底板，故商店单列一套更紧的行距。
+   两列的 x / 宽、右列详情中心、两枚操作键与关闭键台位**全部复用 `PANEL_BANK_*`**。
+   M20.3-B 扩到 8 项时把行高收到 28 / 间距 4（342 + 8×28 + 7×4 = 594）即可，版式不动。 */
+export const PANEL_STORE_ROW_H = 34;             // 商品行高（6 行 → 342..576）
+export const PANEL_STORE_ROW_GAP = 6;
+export const PANEL_STORE_ROW_Y0 = 342;           // 首行顶边
+export const PANEL_STORE_LINE_W = 186;           // 右列折行宽（= 右列净宽 370−184）
+export const PANEL_STORE_DESC_DY = 46;           // 用途描述占两行，故其下移量大于常规行距 22
+
 /* 浮层关闭键（抽卡翻牌用）：卡面放大后移到卡面正下方、水平居中（卡底 476.8 → 键 488..524） */
 export const PANEL_CLOSE_W = 140;
 export const PANEL_CLOSE_H = 36;

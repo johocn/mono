@@ -352,9 +352,10 @@ export const uiBankRow: ProcPreset = (g, ctx) => {
   const { cx, cy, box, params, state, s, text } = ctx;
   if (state.variant === 'line') {
     if (!text) return;
+    const wrapW = typeof state.wrapW === 'number' ? state.wrapW : undefined;
     text({
       text: typeof state.text === 'string' ? state.text : '',
-      x: cx, y: cy, size: G(params, 'bankLineFs'), fill: S(params, 'bankLineFill'),
+      x: cx, y: cy, size: G(params, 'bankLineFs'), fill: S(params, 'bankLineFill'), wrapW,
     });
     return;
   }
