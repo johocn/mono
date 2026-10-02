@@ -142,14 +142,32 @@ export const VERIFY_ORDER_PERMISSION = 'VerifyOrder' as Permission;
 
 ## 8. 生效范围与边界
 
-### 8.1 上线前置动作（否则收口不生效）
+### 8.1 角色模板改动（只影响新建角色，不回填既有角色）
 
-`VerifyOrder` 是新增判据，**既有角色的权限清单不会自动变化**：部署后 `sales` 角色仍只有 `UpdateOrder`，销售员维持「本租户全量」。需：
+模板改动共 **2 处，缺一不可**：
 
-1. 店主/平台在**角色管理**给销售角色勾上 `VerifyOrder`；
+| 文件 | 位置 | 改动 | 不改的后果 |
+|---|---|---|---|
+| `role-templates.ts` | `OFFICIAL_ROLE_TEMPLATES` 的 `sales` | `permissions` 追加 `'VerifyOrder'` | 新租户销售员仍不受限（看本租户全量） |
+| `tenant-member.service.ts` | `PERMISSION_CATALOG` 的 `order` 分组 | `VerifyOrder` 由 `tenant` 分组移入 `order` 分组，label「核销·预留」→「核销·按配送档案」 | 该权限本已在白名单内，此项仅为角色管理页可发现性 |
+
+`BUSINESS_PERMISSIONS` 由 `PERMISSION_CATALOG` 扁平派生，移动分组后 `VerifyOrder` 仍在白名单内，`assertBusinessPermissions` 不会拒绝。
+
+**差异（仅针对新建租户/新建角色）**
+
+| 角色 | 改动前 | 改动后 |
+|---|---|---|
+| 销售（`sales`） | 仅 `UpdateOrder` → 不受限，可看/核销本租户全量 | 增加 `VerifyOrder` → **受限核销员**；白名单为空 = 看不到任何单据，店主配置后才放行 |
+| 租户管理员（`tenant-admin`） | 含 `ManageOwnShop` | **不变**：不是受限核销员，仍看本租户全量（店主层） |
+| 收银员（`cashier`） | 含 `ManageOwnShop` | **不变**：到店收银按整租户口径，不按配送档案划片 |
+| 库存（`stock`） | 无 `UpdateOrder` / `ManageOwnShop` | **不变**：本无核销入口 |
+
+**不回填既有角色**：`createTenantRoleDirect` / `createTenantRoleRecord` 仅在角色不存在时创建，`importDefaultRoles` 已初始化即返回空数组。因此生产既有租户的销售角色**不会**凭空获得 `VerifyOrder`，需店主手工勾选——刻意避免既有销售员在未配白名单时突然失明。这与 `ensurePOSRolesForChannel` 主动给 `tenant-admin` 补 `ManageOwnShop` 的做法不同：补角色安全，补权限会失明。
+
+**既有租户的上线步骤**：
+
+1. 店主/平台在**角色管理**给销售角色勾上「核销·按配送档案」；
 2. 在**人员管理**为该成员勾选可核销配送档案。
-
-同时给 `role-templates.ts` 的 `sales` 模板补 `VerifyOrder`，使**新建租户**默认进入收口口径（新租户的销售员在店主配置前看不到任何单据——与「默认拒绝」一致）。
 
 ### 8.2 已知边界
 
