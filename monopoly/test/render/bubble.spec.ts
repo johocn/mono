@@ -108,6 +108,32 @@ describe('停留事件气泡 · 台位与分遍', () => {
     const spec = bubbleSpecs(pawns, { title: '监狱', amount: '停留 1 回合', tone: 'jail' }, GEO, PLACEMENT)[0];
     expect(spec.r).toBeGreaterThan(top);
   });
+
+  /* M20.4 回归闸门（V14 `buy.overlapped` 翻 true 的根因）：`createGame` 默认态里
+     地块卡 / 卡上两键 / 债务条都不在场，最大行号只有快键行，**照不出真实碰撞**。
+     本用例构造「最坏态」——站在自有 L1 商格（地块卡 + 升级键在场）+ 有存款（债务条在场）
+     + 银行浮层展开，取 pass 4 全部元素的最大行号，断言气泡严格压过它。
+     F-D15 新增第 5 枚快键后 HUD 行号整体 +1（19/20/21/22 → 20/21/22/23），BUBBLE_DEPTH 必须跟着抬。 */
+  it('最坏态（地块卡 + 卡上键 + 债务条 + 浮层同时在场的最大行号）下仍严格压过', () => {
+    const g = createGame({ seed: 20260928 });
+    const me = g.state.players[g.state.current];
+    const shop = 13 as number;
+    g.state.phase = 'settled';
+    g.state.players[0].pos = shop;
+    g.state.estates[shop] = { index: shop, owner: me.id, level: 1, processing: false };
+    me.deposit = 1000;                                     // 债务条整条入画（r=23）
+    /* 地块卡由 `HudUiOpts.tileCard` 入参驱动（非 state 派生），必须显式传入才产出卡与卡上两键 */
+    const mine = hudSpecs(g.state, false, [], false, undefined, { tileCard: true });
+    const at = (id: string) => mine.filter((s) => s.id === id);
+    expect(at('ui.tileCard')).toHaveLength(1);              // 地块卡（r=20）
+    expect(at('ui.button.secondary')).toHaveLength(1);      // 「升级」（r=22）
+    expect(at('ui.debtBar')).toHaveLength(1);               // 债务条（r=23）
+    const others = [...mine, ...panelSpecs(g.state, true)].filter((s) => s.pass === 4);
+    const top = Math.max(...others.map((s) => s.r));
+    expect(top).toBe(23);
+    expect(bubbleSpecs(pawns, { title: '监狱', amount: '停留 1 回合', tone: 'jail' }, GEO, PLACEMENT)[0].r)
+      .toBeGreaterThan(top);
+  });
 });
 
 describe('停留事件气泡 · preset', () => {

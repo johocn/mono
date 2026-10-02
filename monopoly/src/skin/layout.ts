@@ -116,9 +116,13 @@ export const BUBBLE_GAP = 8;
 /** 气泡横向内缩量：11×7 盘最左/最右格心 x≈44.5，半宽 50 会把气泡推出舞台左右边缘被裁，
    故 `bubbleSpecs` 把中心夹到 [w/2+pad, STAGE_W−w/2−pad]（与 `LABEL_EDGE_PAD` 同口径） */
 export const BUBBLE_EDGE_PAD = 4;
-/* 气泡在 pass 4 内的行号：必须大于 HUD（0..21，末段为 M20.2 债务条）与浮层（0..12）的最大行号，
-   否则棋盘下缘的棋子头顶会被底坞 / 浮层盖住（下缘几格正好落在浮层覆盖区） */
-export const BUBBLE_DEPTH = 22;
+/* 气泡在 pass 4 内的行号：必须**严格大于** HUD（现 0..23，末段为 M20.2 债务条 23）与浮层（0..12）
+   的最大行号，否则棋盘下缘的棋子头顶会被底坞 / 浮层盖住（下缘几格正好落在浮层覆盖区）。
+   ⚠️ M20.4 踩过的坑：F-D15 新增第 5 枚快键（r=17）使后续 HUD 行号整体 +1（地块卡 19→20、
+   卡上两键 20/21→21/22、债务条 22→23），而本常量仍是 22 ⇒ 「升级」键（r=22）与气泡**同深度**，
+   稳定排序下后插入者压前者 ⇒ 气泡被键盖住、`mono-prod-check.mjs` V14 的 `buy.overlapped` 翻 true。
+   HUD 每新增一枚带 `r` 的元素都要回来复算本值（`test/ui/hud.spec.ts` 有自动闸门）。 */
+export const BUBBLE_DEPTH = 24;
 /** 无动效的停留事件（如进监狱）没有 `fx` 结束回调可用，气泡靠这个时长自动收起 */
 export const BUBBLE_HOLD_MS = 1100;
 /** 前进播报（「谁前进几步」）改成定时器收起：hop 动效仅 FX_HOP_MS(320ms)，
