@@ -2117,6 +2117,29 @@ git commit -m "docs(coupon): plan2 execution log and checklist"
 4. ~~**加价购券的整单退款回收未订阅 `RefundStateTransitionEvent → Settled`**~~ → **已补齐并验证**：`plugin.ts` 的 `RefundStateTransitionEvent → Settled` 订阅内已调 `refundSurchargeOrdersForOrder`，e2e ⑤ 断言整单退款 Settled 后加价购单 `REFUNDED` 且券 `INVALID`。
 5. 事务分层：`paySaleOrderWithBalance` / `refundSaleOrder` 等带 `@Transaction()` 的入口内部再调 `startTransaction`/`commitOpenTransaction`（Vendure 的 `startTransaction` 已做「已激活则跳过」保护，内部 commit 会提前提交外层事务）。此为镜像 recharge-card 既有范式的取舍；其具体后果已由本页缺陷 1 修复（发券置于扣款之前）。
 
+### 部署验证发现并修复：微信支付不得走全局 env 门禁（2026-10-02）
+
+**现象**：生产 `packages/dev-server/.env` 无 `WECHATPAY_NOTIFY_URL`，而 `dev-config.ts` 以 `WECHATPAY_NOTIFY_URL || DEV_BYPASS_WECHATPAY==='true'` 条件加载 `WechatpayPlugin` → 生产**整个插件未装载**：`WechatpaySettlementRegistry` 取不到（warn 被 catch 吞掉，历史累计 1308 次），`CouponSaleService` 网关引用为 null → `CS-` 微信售券回调无法结算发券（余额支付不受影响）。同期 `wechatpay.controller` 验签/解密恒用**默认渠道**凭证，多租户下必错。
+
+**纠正（用户定调）**：支付一律**按租户配置**，不得全局配置微信支付；回调地址属于租户支付配置字段。
+
+| 改动 | 文件 |
+|---|---|
+| `WechatpayCredentials` 新增 `notifyUrl`（渠道 `payConfig.wechatpayJson`，加密存储） | `cjk-plugin/src/payment/payment-config.types.ts` |
+| 导出 `findChannelByDomain/resolveChannelByDomain`（供他插件复用，避开跨插件 DI） | `cjk-plugin/src/tenant/domain-resolver.service.ts` |
+| `createBarePayment(input, ctx?)` / `buildWechatpay(ctx?)`：按 ctx 所属租户取商户凭证 + `notifyUrl`；`notify_url` 优先级 = 租户配置 → 全局 env 兜底 | `wechatpay-plugin/src/wechatpay.service.ts`、`wechatpay-handler.ts` |
+| 回调 controller 按**请求域名**解析租户渠道，用该租户凭证验签/解密/结算（解析失败回退默认渠道） | `wechatpay-plugin/src/wechatpay.controller.ts` |
+| `CS-`/`RC-` 代付单与 `wechatpayCreatePayment` 传入自身 ctx（原恒用默认渠道凭证） | `coupon-sale.service.ts`、`recharge-card.service.ts`、`wechatpay-shop.resolver.ts` |
+| 租户设置中心「支付设置」新增微信支付**回调地址**字段 | `dashboard/.../_tenant-settings/sections/payment.tsx` |
+| 去掉 env 条件加载，`WechatpayPlugin` 无条件装载（env 仅剩 `DEV_BYPASS_WECHATPAY` 与 `notifyUrl` 兜底） | `dev-server/dev-config.ts` |
+
+**回归**：cjk-plugin 295/295、wechatpay e2e 2/2、coupon-plugin 149/150（唯一失败仍为既有「属店权限隔离」红灯）。
+**部署验证**：新 boot 日志由 `Wechatpay settlement registry unavailable` 变为 `[CouponPlugin] CouponSaleOrder ~CS- settlement registered (wechatpay gateway)` + `WechatpayController {/wechatpay}` 路由注册，`/health` 200。
+
+**遗留**：
+- 各租户需在「租户设置中心 → 支付设置 → 微信支付 → 回调地址」逐个填写自己的回调 URL（如 `https://<租户域名>/wechatpay/notify`），否则微信下单因 `notify_url` 为空被拒；env 仅作兜底。
+- 支付宝仍是 `ALIPAY_NOTIFY_URL` 条件加载（同源缺陷，未在本次范围内），需另开单。
+
 ### e2e 环境注意（复用他处）
 
 - `testConfig()` 使用 `TestingEntityIdStrategy`：GraphQL 层 ID 形如 `T_1`，而 Service 层 `order.id` 是 DB 自增主键、`out_trade_no` 由 `CS-${order.id}` 拼成 `CS-1`。测试中构造/断言需 `decodeId()` 归一，否则会出现 `CS-T_1` 不匹配 `/^CS-(\d+)$/` 或 `Number('T_1') === NaN`。
