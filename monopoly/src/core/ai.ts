@@ -12,6 +12,8 @@ import type { ItemCardKind } from '../data/cards';
 import { STORE_CATALOG } from '../data/item-shop';
 import { RING_SIZE } from '../data/board';
 import { STOCK_TILE_INDEX, STOCKS, type StockPlay } from '../data/stocks';
+import { FACILITIES, type FacilityId } from '../data/facilities';
+import { canSubscribe } from './facility';
 import { SPEC_LEADER_MIN_ROUND, personaParams, type AiParams, type Persona } from '../data/ai';
 
 export { personaParams } from '../data/ai';
@@ -29,6 +31,9 @@ const STORE_PARDON_MULT = 3;
 /** 炸弹溢价倍数：现金 ≥ 该倍数 × 炸弹售价 才买 */
 const STORE_BOMB_MULT = 2;
 
+/** M20.4 设施认购保留现金：低于此数不认购（避免把现金买空后无力付租破产） */
+const FACILITY_RESERVE = 500;
+
 /** M20.2 银行信贷动作（与 `Game` 六个 API 一一对应） */
 export type BankAction = 'deposit' | 'withdraw' | 'borrow' | 'repay' | 'mortgage' | 'redeem';
 
@@ -45,6 +50,7 @@ export type AiStep =
   | { kind: 'bank'; action: BankAction; amount?: number; index?: number }   /* M20.2 银行信贷 */
   | { kind: 'buyItem'; card: ItemCardKind }    /* M20.3 商店买入 */
   | { kind: 'sellItem'; card: ItemCardKind }   /* M20.3 商店卖出 */
+  | { kind: 'facility'; facility: FacilityId; shares: number }   /* M20.4 设施认购 */
   | { kind: 'close' } | { kind: 'end' };
 
 /** `AiStep` → `Game` API 的唯一纯映射（绝不抛错；合法性由 decideTurn 前置保证） */
@@ -70,6 +76,7 @@ export function applyStep(g: Game, step: AiStep): unknown {
     }
     case 'buyItem': return g.buyItem(step.card);
     case 'sellItem': return g.sellItem(step.card);
+    case 'facility': return g.buyFacility(step.facility, step.shares);
     case 'close': return g.clearEvent();
     case 'end': return g.endTurn();
   }
@@ -248,6 +255,29 @@ export function pickStore(state: GameState, P: AiParams): AiStep[] {
   return [];
 }
 
+/**
+ * 公共设施认购策略（M20.4 spec §7，纯函数 / 零随机）：每回合至多产 **1 步**、只认购不退出（F-D14）。
+ *
+ * 口径（决定论，与 `pickBank` / `pickStore` 同构）：
+ * 1. 保命线：现金 < `FACILITY_RESERVE`（￥500）不认购，避免把现金买空后无力付租破产；
+ * 2. 按 `FACILITIES` 表序（银行 → 交易所 → 医院 → 乐透 → 福利）取第一处
+ *    「未售罄 且 现金 ≥ 认购价 × 2」的设施，认购 **1 股**（无风险 5% 底仓）；
+ * 3. 自己已满仓（该处 20 股全归己）/ 全部不可买 → 不动。
+ *
+ * 真人席位不会产出（`decideTurn` 只对 persona 调用）。
+ */
+export function pickFacility(state: GameState): AiStep[] {
+  const me = currentPlayer(state);
+  if (me.bankrupt) return [];
+  if (me.cash < FACILITY_RESERVE) return [];
+  for (const def of FACILITIES) {                       // 恒按表序遍历 ⇒ 并列时保序取首个，零随机
+    if (me.cash < def.price * 2) continue;
+    if (!canSubscribe(state.players, def.id, 1, me.cash).ok) continue;
+    return [{ kind: 'facility', facility: def.id, shares: 1 }];
+  }
+  return [];
+}
+
 /* —— 各阶段的分支 —— */
 
 function idlePlan(state: GameState, persona: Persona, P: AiParams): AiStep[] {
@@ -317,28 +347,33 @@ function settledPlan(state: GameState, persona: Persona, P: AiParams): AiStep[] 
     if (code) post.push({ kind: 'trade', code, shares: 1 });
   }
 
-  /* ④ 银行信贷（M20.2）：`pickBank` 一步；**与同回合消费步骤（买地/升级/股票/买道具）互斥** ——
+  /* ④ 设施认购（M20.4 spec §7）：`pickFacility` 一步；排在股票之后 ——
+     股票有杠杆 / 波动、收益弹性更高，设施是「无风险 5% 底仓」。
+     同样计入 `spending`，避免与存款步同段（认购会改现金，令按当前现金算的存款金额失真）。 */
+  post.push(...pickFacility(state));
+
+  /* ⑤ 银行信贷（M20.2）：`pickBank` 一步；**与同回合消费步骤（买地/升级/股票/设施/买道具）互斥** ——
      存款金额按「当前现金」算，若整段 plan 里既有消费又有存款，顺序执行到存款时现金已变、金额失真。
      驱动器每步前会重算 plan，消费步跑完后下一步即补上存款，故不损失行为。 */
   const bank = pickBank(state, P);
-  /* ⑤ 道具商店（M20.3）：`pickStore` 一步（至多 1 步、只买不卖）；与银行步同列为常驻采购，
+  /* ⑥ 道具商店（M20.3）：`pickStore` 一步（至多 1 步、只买不卖）；与银行步同列为常驻采购，
      且计入 `spending` 判据，使同回合有采购时不再排入存款步。 */
   const store = pickStore(state, P);
   const spending = [...post, ...store].some(
-    (s) => s.kind === 'buy' || s.kind === 'upgrade' || s.kind === 'trade' || s.kind === 'buyItem',
+    (s) => s.kind === 'buy' || s.kind === 'upgrade' || s.kind === 'trade' || s.kind === 'buyItem' || s.kind === 'facility',
   );
   if (bank.length > 0 && !(spending && bank[0].kind === 'bank' && bank[0].action === 'deposit')) {
     post.push(...bank);
   }
   post.push(...store);
 
-  /* ⑥ 投机专项：租金翻倍（持牌 + 本回合未用 + 现金门 + 已有 >=2 级地块） */
+  /* ⑦ 投机专项：租金翻倍（持牌 + 本回合未用 + 现金门 + 已有 >=2 级地块） */
   if (persona === 'speculative' && (state.hands[me.id - 1] ?? []).includes('doubleRent')
     && !state.doubleRent[me.id - 1] && me.cash >= P.reserve && ownedFrom(state, me.id, 2).length > 0) {
     post.push({ kind: 'card', card: 'doubleRent' });
   }
 
-  /* ⑦ 股票卡（M20.3-B spec §7）：**有持仓才打**，避免白扔手牌 ——
+  /* ⑧ 股票卡（M20.3-B spec §7）：**有持仓才打**，避免白扔手牌 ——
      红利卡按持仓每股定额（无持仓仅折现 ￥100，对 AI 属低价值）；涨跌卡押**自己持仓最重**那支为「涨」
      （并列取 `STOCKS` 表序小者，`heaviestHolding` 纯确定），押跌等于打自己。 */
   const hand = state.hands[me.id - 1] ?? [];

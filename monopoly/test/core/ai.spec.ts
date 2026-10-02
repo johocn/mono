@@ -4,7 +4,7 @@ import {
   isPersona, parsePersonaList, personaParams,
 } from '../../src/data/ai';
 import { createGame, currentPlayer } from '../../src/core/game';
-import { applyStep, decideTurn, heaviestHolding, heldShares, pickBank, type AiStep } from '../../src/core/ai';
+import { applyStep, decideTurn, heaviestHolding, heldShares, pickBank, pickFacility, type AiStep } from '../../src/core/ai';
 import { BANK_TILE_INDEX } from '../../src/data/bank';
 import { DIVIDEND_PER_SHARE } from '../../src/data/stocks';
 
@@ -269,8 +269,11 @@ describe('ai pickBank 银行信贷策略（M20.2-D12）', () => {
     const plan = decideTurn(g.state, 'conservative');
     expect(plan.some((s) => s.kind === 'buy')).toBe(true);
     expect(plan.some((s) => s.kind === 'bank')).toBe(false);
-    /* 买完地（钱已花掉）后再决策：此时才补上金额正确的存款步 */
+    /* 买完地（钱已花掉）后再决策：消费步仍有设施认购（M20.4 ④），存款继续顺延 */
     applyStep(g, { kind: 'buy' });
+    expect(decideTurn(g.state, 'conservative')[0]).toEqual({ kind: 'facility', facility: 'bank', shares: 1 });
+    /* 消费步全部跑完（这里令五处设施均售罄）→ 才补上金额正确的存款步 */
+    for (const p of g.state.players) p.facilities = { bank: 20, exchange: 20, hospital: 20, lottery: 20, welfare: 20 };
     expect(decideTurn(g.state, 'conservative')[0]).toEqual({ kind: 'bank', action: 'deposit', amount: 1540 });
   });
 
@@ -368,6 +371,79 @@ describe('ai 股票卡策略（M20.3-B spec §7）', () => {
     const r = applyStep(g, { kind: 'card', card: 'dividend' }) as { ok: boolean };
     expect(r.ok).toBe(true);
     expect(me.cash).toBe(before + 3 * DIVIDEND_PER_SHARE);
+  });
+});
+
+describe('ai 设施认购策略（M20.4 spec §7）', () => {
+  const setup = (cash = 3000) => {
+    const g = createGame({ seed: 3 });
+    const me = currentPlayer(g.state);
+    me.pos = 5;
+    me.cash = cash;
+    g.state.phase = 'settled';
+    return { g, me };
+  };
+
+  it('保命线：现金 < ￥500 不认购', () => {
+    const { g } = setup(499);
+    expect(pickFacility(g.state)).toEqual([]);
+  });
+
+  it('按 FACILITIES 表序取第一处可买设施，认购 1 股（银行 → 交易所 → 医院 …）', () => {
+    const { g } = setup(3000);
+    expect(pickFacility(g.state)).toEqual([{ kind: 'facility', facility: 'bank', shares: 1 }]);
+
+    g.state.players[1].facilities = { bank: 20 };        // 银行售罄 → 顺延到交易所
+    expect(pickFacility(g.state)).toEqual([{ kind: 'facility', facility: 'exchange', shares: 1 }]);
+
+    g.state.players[1].facilities = { bank: 20, exchange: 20, hospital: 20 };
+    expect(pickFacility(g.state)).toEqual([{ kind: 'facility', facility: 'lottery', shares: 1 }]);
+  });
+
+  it('自己已满仓该设施 → 跳过，顺延到下一处', () => {
+    const { g, me } = setup(3000);
+    me.facilities = { bank: 20 };
+    expect(pickFacility(g.state)).toEqual([{ kind: 'facility', facility: 'exchange', shares: 1 }]);
+  });
+
+  it('全部售罄 → 不产出', () => {
+    const { g } = setup(3000);
+    for (const p of g.state.players) p.facilities = { bank: 20, exchange: 20, hospital: 20, lottery: 20, welfare: 20 };
+    expect(pickFacility(g.state)).toEqual([]);
+  });
+
+  it('决定论：同 state 连调两次结果深度相等', () => {
+    const { g } = setup(3000);
+    expect(pickFacility(g.state)).toEqual(pickFacility(g.state));
+  });
+
+  it('applyStep 透传：落库持股、扣现金并记 lastEvent', () => {
+    const { g, me } = setup(3000);
+    const r = applyStep(g, { kind: 'facility', facility: 'bank', shares: 1 }) as { ok: boolean };
+    expect(r.ok).toBe(true);
+    expect(me.cash).toBe(2800);
+    expect(me.facilities.bank).toBe(1);
+    expect(g.state.lastEvent).toEqual({ kind: 'facility', facility: 'bank', shares: 1, cost: 200 });
+  });
+
+  it('settled 计划顺序：买地 ① → 设施 ④ → 银行 ⑤（设施在存款步之前）', () => {
+    const { g, me } = setup(3000);
+    me.pos = 3;                                          // 商家空地 → 可买
+    const plan = decideTurn(g.state, 'aggressive');
+    const iBuy = plan.findIndex((s) => s.kind === 'buy');
+    const iFac = plan.findIndex((s) => s.kind === 'facility');
+    expect(iBuy).toBeGreaterThanOrEqual(0);
+    expect(iFac).toBeGreaterThan(iBuy);
+    expect(plan[plan.length - 1]).toEqual({ kind: 'end' });
+  });
+
+  it('站银行格 + 贷款到期：设施步排在还款步之前（消费与银行步可顺序执行）', () => {
+    const { g, me } = setup(3000);
+    me.pos = BANK_TILE_INDEX;
+    me.loan = { principal: 600, rate: 0.06, due: g.state.round + 2, overdue: 0 };
+    const plan = decideTurn(g.state, 'conservative');
+    expect(plan[0]).toEqual({ kind: 'facility', facility: 'bank', shares: 1 });
+    expect(plan[1]).toEqual({ kind: 'bank', action: 'repay' });
   });
 });
 
