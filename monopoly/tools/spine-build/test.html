@@ -4,9 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>悟空骨骼测试</title>
-<style>html,body{margin:0;background:#1a2b2a}canvas{display:block}</style>
+<style>html,body{margin:0;background:#1a2b2a}canvas{display:block}
+#bar{position:fixed;bottom:10px;left:0;right:0;display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+#bar button{padding:9px 14px;font-size:13px;border:1px solid #caa24a;border-radius:18px;background:rgba(16,28,26,.85);color:#e8d5a0}
+#bar button.on{background:#caa24a;color:#1a2b2a;font-weight:700}
+</style>
 </head>
 <body>
+<div id="bar"></div>
 <script type="importmap">
 { "imports": { "pixi.js": "https://cdn.jsdelivr.net/npm/pixi.js@__PIXI_VER__/dist/pixi.min.mjs" } }
 </script>
@@ -73,6 +78,20 @@ if (qs.get('debug') === 'tex') {
   skel.state.addListener({
     error: (e, msg) => { document.title = 'ERR:' + msg; console.error(msg); },
   });
+  // 底部动画切换按钮条（?only= 调试模式不显示）
+  if (!only) {
+    const bar = document.getElementById('bar');
+    for (const a of ['idle_calm', 'idle_happy', 'idle_sad', 'walk', 'spin', 'throw_dice']) {
+      const b = document.createElement('button');
+      b.textContent = a;
+      if (a === anim) b.classList.add('on');
+      b.onclick = () => {
+        skel.state.setAnimation(0, a, a !== 'throw_dice');
+        bar.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      };
+      bar.appendChild(b);
+    }
+  }
 }
 window.__ready = true;
 
