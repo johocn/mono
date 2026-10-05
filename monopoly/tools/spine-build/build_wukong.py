@@ -272,6 +272,7 @@ def build_animations(anims):
 
     # --- idle_calm：呼吸 + 头微摆（2s loop）---
     rot("idle_calm", "head", [(0, 0), (1.0, 2.4), (2.0, 0)])
+    tra("idle_calm", "head", [(0, 0, -5), (2.0, 0, -5)])   # 用户校准：该动画头下移 5
     tra("idle_calm", "chest", [(0, 0, 0), (1.0, 0, 2.2), (2.0, 0, 0)])
     sca_key = [{"time": 0, "x": 1, "y": 1},
                {"time": 1.0, "x": 1.02, "y": 0.985},
@@ -295,6 +296,7 @@ def build_animations(anims):
 
     # --- idle_sad：低头塌肩下沉 + 委屈脸（2s loop）---
     rot("idle_sad", "head", [(0, 14), (1.0, 17), (2.0, 14)])
+    tra("idle_sad", "head", [(0, -5, 0), (2.0, -5, 0)])   # 用户校准：该动画头左移 5
     rot("idle_sad", "arm_l", [(0, 14), (1.0, 18), (2.0, 14)])
     rot("idle_sad", "arm_r", [(0, -14), (1.0, -18), (2.0, -14)])
     tra("idle_sad", "chest", [(0, 0, 0), (1.0, 0, -6), (2.0, 0, 0)])
@@ -314,6 +316,7 @@ def build_animations(anims):
     rot("spin", "weapon", [(0, 0), (0.2, 0), (0.95, 720), (1.1, 720), (1.5, 0)])
     att("spin", "weapon", [(0, "staff"), (0.2, "staff_spin"), (1.0, "staff")])
     rot("spin", "head", [(0, 0), (0.6, 5), (1.5, 0)])
+    tra("spin", "head", [(0, 0, -5), (1.5, 0, -5)])   # 用户校准：该动画头下移 5
     tra("spin", "chest", [(0, 0, 0), (0.6, 0, 3), (1.5, 0, 0)])
 
     # --- throw_dice：举骰→甩出→骰子飞出（1.2s once）---
@@ -322,6 +325,7 @@ def build_animations(anims):
     rot("throw_dice", "arm_l", [(0, -10), (0.35, -24), (0.5, -24), (1.2, -6)])
     rot("throw_dice", "chest", [(0, 0), (0.5, -8), (0.72, 10), (1.2, 4)])
     rot("throw_dice", "head", [(0, 0), (0.5, -6), (0.75, 6), (1.2, 0)])
+    tra("throw_dice", "head", [(0, 0, -5), (1.2, 0, -5)])   # 用户校准：该动画头下移 5
     att("throw_dice", "prop", [(0, None), (0.05, "dice"), (0.55, None)])
     att("throw_dice", "fx", [(0, None), (0.55, "dice_swish"), (0.78, "burst"), (1.0, None)])
     # 注意：4.2 读取器会丢弃 attachment 时间轴的「首个 null 帧」，故先显式 staff 再 null 隐藏
