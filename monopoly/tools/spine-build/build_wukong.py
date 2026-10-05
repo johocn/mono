@@ -55,11 +55,11 @@ SEM_OF.update({v: k for k, v in FACES.items()})
 # 用于整腿/表情/旋转棒等「图中心即锚点」的部件；offset 相对骨骼原点（y 向上）
 # face_sulk 是叠脸槽：中心对准原头图的脸区（头图中心在 head 骨 y-18，脸区再往下 ~25）
 CENTER_PLACEMENT = {
-    "legs_walk_a":  ("hips", 0, -130),
-    "legs_walk_b":  ("hips", 0, -130),
-    "legs_tiptoe":  ("hips", 0, -138),
-    "legs_tiptoe2": ("hips", 0, -146),
-    "legs_run":     ("hips", 0, -138),
+    "legs_walk_a":  ("leg_fx", 0, -124),
+    "legs_walk_b":  ("leg_fx", 0, -124),
+    "legs_tiptoe":  ("leg_fx", 0, -132),
+    "legs_tiptoe2": ("leg_fx", 0, -140),
+    "legs_run":     ("leg_fx", 0, -132),
     "face_sulk":    ("head", 0, 68),
     "staff_spin":   ("weapon", 0, 0),
 }
@@ -117,6 +117,7 @@ SCALE = 0.42   # 图素 → 骨架单位
 BONES = [  # (name, parent, x, y, extra)
     ("root",    None,    0,   0, {}),
     ("hips",    "root",  0, 262, {}),
+    ("leg_fx",  "hips",   0,  -6, {}),   # 整腿图专用：步伐钟摆/起伏驱动
     ("leg_l",   "hips",  -46, 10, {}),
     ("leg_r",   "hips",   46, 10, {"scaleX": -1}),   # 镜像腿
     ("skirt_b", "hips",   0,  36, {}),
@@ -276,7 +277,7 @@ def build_animations(anims):
     T = 1.2
     rot("idle_happy", "arm_l", [(0, -160), (T/2, -190), (T, -160)])
     rot("idle_happy", "arm_r", [(0, 160), (T/2, 190), (T, 160)])
-    rot("idle_happy", "head", [(0, -6), (T/2, 6), (T, -6)])
+    rot("idle_happy", "head", [(0, -2), (T/2, 2), (T, -2)])
     tra("idle_happy", "hips", [(0, 0, 0), (T/4, 0, 46), (T/2, 0, 0),
                                (3*T/4, 0, 46), (T, 0, 0)])
     # 蹦跳换踮脚整腿（隐藏单腿，落地姿态交给整腿图）
@@ -301,6 +302,8 @@ def build_animations(anims):
     att("walk", "leg_r", [(0, None)])
     rot("walk", "arm_l", [(0, -26), (T/4, 0), (T/2, 26), (3*T/4, 0), (T, -26)])
     rot("walk", "arm_r", [(0, 26), (T/4, 0), (T/2, -26), (3*T/4, 0), (T, 26)])
+    # 整腿钟摆：与步伐同频（0.4s/步）前后摆，消除「贴图切换」的僵硬感
+    rot("walk", "leg_fx", [(0, 0), (T/4, 6), (T/2, 0), (3*T/4, -6), (T, 0)])
     tra("walk", "hips", [(0, 0, 0), (T/4, 0, 12), (T/2, 0, 0), (3*T/4, 0, 12), (T, 0, 0)])
 
     # --- spin：耍棒花（1.5s loop）---
