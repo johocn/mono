@@ -60,7 +60,7 @@ CENTER_PLACEMENT = {
     "legs_tiptoe":  ("leg_fx", 0, -132),
     "legs_tiptoe2": ("leg_fx", 0, -140),
     "legs_run":     ("leg_fx", 0, -132),
-    "face_sulk":    ("head", 0, 57),
+    "face_sulk":    ("head", -10, 57),
     "staff_spin":   ("weapon", 0, 0),
 }
 
@@ -128,7 +128,7 @@ BONES = [  # (name, parent, x, y, extra)
     ("chest",   "spine",  0,  96, {}),
     ("neck",    "chest",  0, 118, {}),
     ("head",    "neck",   0,  46, {}),
-    ("band_b",  "head",   0, 129, {}),   # 用户校准：金箍上移 10
+    ("band_b",  "head", -10, 129, {}),   # 用户校准：金箍左移 10（相对头图）
     ("arm_l",   "chest", -88, 96, {}),   # 弯臂形态恢复原样（弯向身体）
     ("arm_r",   "chest",  88, 96, {"scaleX": -1}),
     ("hand_l",  "arm_l", -172, -8, {}),
@@ -296,7 +296,6 @@ def build_animations(anims):
 
     # --- idle_sad：低头塌肩下沉 + 委屈脸（2s loop）---
     rot("idle_sad", "head", [(0, 14), (1.0, 17), (2.0, 14)])
-    tra("idle_sad", "head", [(0, -10, 0), (2.0, -10, 0)])   # 用户校准：该动画头左移 10
     rot("idle_sad", "arm_l", [(0, 14), (1.0, 18), (2.0, 14)])
     rot("idle_sad", "arm_r", [(0, -14), (1.0, -18), (2.0, -14)])
     tra("idle_sad", "chest", [(0, 0, 0), (1.0, 0, -6), (2.0, 0, 0)])
