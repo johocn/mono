@@ -60,7 +60,7 @@ CENTER_PLACEMENT = {
     "legs_tiptoe":  ("leg_fx", 0, -132),
     "legs_tiptoe2": ("leg_fx", 0, -140),
     "legs_run":     ("leg_fx", 0, -132),
-    "face_sulk":    ("head", -10, 57),
+    "face_sulk":    ("head", -15, 57),
     "staff_spin":   ("weapon", 0, 0),
 }
 
@@ -128,7 +128,7 @@ BONES = [  # (name, parent, x, y, extra)
     ("chest",   "spine",  0,  96, {}),
     ("neck",    "chest",  0, 118, {}),
     ("head",    "neck",   0,  46, {}),
-    ("band_b",  "head", -10, 129, {}),   # 用户校准：金箍左移 10（相对头图）
+    ("band_b",  "head", -15, 129, {}),   # 用户校准：金箍累计左移 15
     ("arm_l",   "chest", -88, 96, {}),   # 弯臂形态恢复原样（弯向身体）
     ("arm_r",   "chest",  88, 96, {"scaleX": -1}),
     ("hand_l",  "arm_l", -172, -8, {}),
