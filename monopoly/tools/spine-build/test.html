@@ -58,8 +58,8 @@ if (qs.get('debug') === 'tex') {
   }
 } else {
   const skel = new Spine({ skeletonData });
-  skel.position.set(195, 620);
-  skel.scale.set(0.9);
+  skel.position.set(195, 730);   // v4 角色高 ~900 单位，下移锚点防头顶出画
+  skel.scale.set(0.78);
   const entry = skel.state.setAnimation(0, anim, anim !== 'throw_dice'); // 除掷骰外全部循环
   entry.trackTime = anim === 'throw_dice' ? 0.5 : 0.3; // 截取动作中段
   app.stage.addChild(skel);
