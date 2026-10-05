@@ -33,13 +33,27 @@ burst
   bounds: 1150, 271, 269, 215
 tassel
   bounds: 1421, 271, 239, 269
+face_sulk
+  bounds: 1662, 271, 269, 216
+staff_spin
+  bounds: 0, 542, 269, 118
+legs_walk_a
+  bounds: 271, 542, 269, 247
+legs_walk_b
+  bounds: 542, 542, 236, 269
+legs_tiptoe
+  bounds: 780, 542, 260, 269
+legs_tiptoe2
+  bounds: 1042, 542, 244, 269
+legs_run
+  bounds: 1288, 542, 228, 269
 face_calm
-  bounds: 1662, 271, 269, 207
+  bounds: 1518, 542, 269, 207
 face_happy
-  bounds: 0, 542, 269, 208
+  bounds: 0, 813, 269, 208
 face_annoyed
-  bounds: 271, 542, 269, 218
+  bounds: 271, 813, 269, 218
 face_surprised
-  bounds: 542, 542, 269, 247
+  bounds: 542, 813, 269, 247
 face_angry
-  bounds: 813, 542, 269, 247
+  bounds: 813, 813, 269, 247

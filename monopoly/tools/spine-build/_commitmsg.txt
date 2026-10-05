@@ -1,6 +1,9 @@
-feat(mono-spine): 悟空 Spine 4.2 骨骼动画一键构建工具
+feat(mono-spine): 悟空骨骼 v3 升级——红裤腿/踮脚/耍棒/委屈脸
 
-- AI 部件图 → 语义选型 → 2048 atlas 打包（含金箍色键去白底）
-- 手写骨架 17 骨/14 槽（镜像臂腿 scaleX=-1）+ 5 动画（idle×3/walk/throw_dice）
-- 关键点：Spine 4.2 JSON 单值时间轴帧字段为 value（4.1 为 angle）
-- pixi 8.6.6 + @pixi/spine 2.1.1 测试页 + Playwright 手机视口截图验证通过
+- 新部件入库 (39)~(45)：委屈脸、透视耍棒帧、红裤腿 5 帧（行走/迈步/踮脚x2/高抬腿）
+- 新增 face 叠加槽：face_sulk 独立 attachment 盖在 head 之上、金箍之下，
+  修复替换 head 槽导致的毛发丢失/金箍漂移；idle_sad 低头+委屈脸
+- walk 改红裤腿帧循环（walk_a/run/walk_b/run），idle_happy 蹦跳换踮脚腿
+- 新增 spin 耍棒动画：weapon 720° 旋转 + staff_spin 透视帧切换
+- process_parts HOLE_FIX 扩展红裤腿系围空清理；shoot_frames 参数化连拍
+- 6 动画截图全通过（手机视口 390x844 dpr2）

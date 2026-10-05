@@ -32,6 +32,14 @@ PICK = {
     "生成骨架动画与游戏人物设计开发 (36)": "dice_swish",
     "生成骨架动画与游戏人物设计开发 (35)": "burst",
     "生成骨架动画与游戏人物设计开发 (12)": "tassel",
+    # —— 第二批补充（v3）——
+    "生成骨架动画与游戏人物设计开发 (39)": "face_sulk",   # 委屈脸（独立叠加槽）
+    "生成骨架动画与游戏人物设计开发 (40)": "staff_spin",  # 耍棒旋转透视帧
+    "生成骨架动画与游戏人物设计开发 (41)": "legs_walk_a", # 红裤腿·行走
+    "生成骨架动画与游戏人物设计开发 (42)": "legs_walk_b", # 红裤腿·迈步交叉
+    "生成骨架动画与游戏人物设计开发 (43)": "legs_tiptoe", # 红裤腿·踮脚
+    "生成骨架动画与游戏人物设计开发 (44)": "legs_tiptoe2",# 红裤腿·踮脚高
+    "生成骨架动画与游戏人物设计开发 (45)": "legs_run",    # 红裤腿·高抬腿
 }
 FACES = {  # 备用表情（head slot 内切换；默认不显示）
     "生成骨架动画与游戏人物设计开发 (21)": "face_calm",
@@ -41,6 +49,20 @@ FACES = {  # 备用表情（head slot 内切换；默认不显示）
     "生成骨架动画与游戏人物设计开发 (25)": "face_angry",
 }
 SEM_OF = {v: k for k, v in PICK.items()}  # 语义名 → stem
+SEM_OF.update({v: k for k, v in FACES.items()})
+
+# bbox 中心定位部件：语义名 → (bone, off_x, off_y)
+# 用于整腿/表情/旋转棒等「图中心即锚点」的部件；offset 相对骨骼原点（y 向上）
+# face_sulk 是叠脸槽：中心对准原头图的脸区（头图中心在 head 骨 y-18，脸区再往下 ~25）
+CENTER_PLACEMENT = {
+    "legs_walk_a":  ("hips", 0, -130),
+    "legs_walk_b":  ("hips", 0, -130),
+    "legs_tiptoe":  ("hips", 0, -138),
+    "legs_tiptoe2": ("hips", 0, -146),
+    "legs_run":     ("hips", 0, -138),
+    "face_sulk":    ("head", 0, 68),
+    "staff_spin":   ("weapon", 0, 0),
+}
 
 # ---------------- 1. Atlas 打包 ----------------
 def pack_atlas():
@@ -130,10 +152,14 @@ PLACEMENT = {
     "burst":     ("fx",      320, 320, 0, 0),
 }
 # 附件额外缩放（region 自动拉伸映射，骰子/特效不应与躯干同大）
-SIZE_SCALE = {"dice": 0.42, "burst": 0.8, "dice_swish": 0.8, "headband": 0.85}
+SIZE_SCALE = {"dice": 0.42, "burst": 0.8, "dice_swish": 0.8, "headband": 0.85,
+              "staff_spin": 0.8, "face_sulk": 0.6,
+              "legs_walk_a": 0.75, "legs_walk_b": 0.75, "legs_tiptoe": 0.75,
+              "legs_tiptoe2": 0.75, "legs_run": 0.75}
 # slot: (bone, [attachment 语义名...], default_attachment 或 None)
 SLOTS = [
     ("fx",       ["burst", "dice_swish"],        None),
+    ("legs",     ["legs_walk_a", "legs_walk_b", "legs_tiptoe", "legs_tiptoe2", "legs_run"], None),
     ("leg_l",    ["leg"],                        "leg"),
     ("leg_r",    ["leg"],                        "leg"),
     ("skirt",    ["skirt"],                      "skirt"),
@@ -143,14 +169,27 @@ SLOTS = [
     ("hand_l",   ["hand_fist", "hand_open"],     None),   # arm 图自带手，变体留给动画切换
     ("arm_r",    ["arm"],                        "arm"),
     ("hand_r",   ["hand_fist", "hand_grip", "hand_dice"], None),
-    ("weapon",   ["staff"],                      "staff"),
+    ("weapon",   ["staff", "staff_spin"],        "staff"),
     ("head",     ["head"] + list(FACES.values()), "head"),
+    ("face",     ["face_sulk"],                  None),   # 叠脸槽：盖在头上、金箍之下
     ("headband", ["headband"],                   "headband"),
     ("prop",     ["dice"],                       None),
 ]
 
 
 def make_attachment(sem, extra=(0, 0)):
+    if sem in CENTER_PLACEMENT:
+        bone, ox, oy = CENTER_PLACEMENT[sem]
+        img = Image.open(PARTS / f"{SEM_OF[sem]}.png")
+        s = SIZE_SCALE.get(sem, 1)
+        w, h = img.size[0] * SCALE * s, img.size[1] * SCALE * s
+        # bbox 中心即锚点：图中心贴骨坐标 (ox, oy)（y 向上）
+        return {
+            "x": round(ox, 2),
+            "y": round(oy, 2),
+            "width": round(w, 2),
+            "height": round(h, 2),
+        }
     bone, pu, pv, ox, oy = PLACEMENT[sem]
     img = Image.open(PARTS / f"{SEM_OF[sem]}.png")
     s = SIZE_SCALE.get(sem, 1)
@@ -176,25 +215,30 @@ def build_skeleton():
         b.update(extra)
         bones.append(b)
 
+    def bone_of(sem):
+        if sem in CENTER_PLACEMENT:
+            return CENTER_PLACEMENT[sem][0]
+        return PLACEMENT[sem][0]
+
     slots, skin = [], {}
     SLOT_BONES = {"leg_r": "leg_r", "arm_r": "arm_r", "hand_r": "hand_r"}  # 镜像槽位显式指定
     for slot_name, atts, default in SLOTS:
-        bone = SLOT_BONES.get(slot_name) or PLACEMENT[default or atts[0]][0]
+        bone = SLOT_BONES.get(slot_name) or bone_of(default or atts[0])
         slots.append({"name": slot_name, "bone": bone, "attachment": default})
         entries = {}
         for sem in atts:
             if slot_name == "head" and sem in FACES.values():
-                continue  # 表情占位稍后复用 head 几何
+                continue  # 表情走下方统一复用 head 几何
             a = make_attachment(sem)
             if sem != atts[0]:
                 a["path"] = sem  # 多附件 slot：attachment 名=语义名，region 复用同 path
             entries[sem] = a
-        if slot_name == "head":  # 备用表情：占位复用 head 几何，仅运行时切换用
+        if slot_name == "head":  # 备用表情：同构图复用 head 几何，region 换 path
             for fname in FACES.values():
                 entries[fname] = dict(entries["head"], path=fname)
         skin[slot_name] = entries
     return {
-        "skeleton": {"spine": "4.2.43", "hash": "zhao-wukong-2",
+        "skeleton": {"spine": "4.2.43", "hash": "zhao-wukong-3",
                      "x": -430, "y": -50, "width": 860, "height": 800},
         "bones": bones,
         "slots": slots,
@@ -228,28 +272,43 @@ def build_animations(anims):
     rot("idle_calm", "arm_l", [(0, 0), (1.0, 1.6), (2.0, 0)])
     rot("idle_calm", "arm_r", [(0, 0), (1.0, -1.6), (2.0, 0)])
 
-    # --- idle_happy：双臂高举挥舞 + 蹦跳（1.2s loop）---
+    # --- idle_happy：双臂高举挥舞 + 踮脚蹦跳（1.2s loop）---
     T = 1.2
     rot("idle_happy", "arm_l", [(0, -160), (T/2, -190), (T, -160)])
     rot("idle_happy", "arm_r", [(0, 160), (T/2, 190), (T, 160)])
     rot("idle_happy", "head", [(0, -6), (T/2, 6), (T, -6)])
     tra("idle_happy", "hips", [(0, 0, 0), (T/4, 0, 46), (T/2, 0, 0),
                                (3*T/4, 0, 46), (T, 0, 0)])
+    # 蹦跳换踮脚整腿（隐藏单腿，落地姿态交给整腿图）
+    att("idle_happy", "legs", [(0, "legs_tiptoe"), (T/4, "legs_tiptoe2"),
+                               (T/2, "legs_tiptoe"), (3*T/4, "legs_tiptoe2"), (T, "legs_tiptoe")])
+    att("idle_happy", "leg_l", [(0, None)])
+    att("idle_happy", "leg_r", [(0, None)])
 
-    # --- idle_sad：低头塌肩下沉（2s loop）---
+    # --- idle_sad：低头塌肩下沉 + 委屈脸（2s loop）---
     rot("idle_sad", "head", [(0, 14), (1.0, 17), (2.0, 14)])
     rot("idle_sad", "arm_l", [(0, 14), (1.0, 18), (2.0, 14)])
     rot("idle_sad", "arm_r", [(0, -14), (1.0, -18), (2.0, -14)])
     tra("idle_sad", "chest", [(0, 0, 0), (1.0, 0, -6), (2.0, 0, 0)])
     tra("idle_sad", "hips", [(0, 0, 0), (1.0, 0, -8), (2.0, 0, 0)])
+    att("idle_sad", "face", [(0, "face_sulk")])
 
-    # --- walk：腿摆臂反摆 + 起伏（0.8s loop）---
+    # --- walk：整腿帧循环 + 摆臂起伏（0.8s loop，红裤黑靴腿系）---
     T = 0.8
-    rot("walk", "leg_l", [(0, 24), (T/4, 0), (T/2, -24), (3*T/4, 0), (T, 24)])
-    rot("walk", "leg_r", [(0, -24), (T/4, 0), (T/2, 24), (3*T/4, 0), (T, -24)])
+    att("walk", "legs", [(0, "legs_walk_a"), (T/4, "legs_run"),
+                         (T/2, "legs_walk_b"), (3*T/4, "legs_run"), (T, "legs_walk_a")])
+    att("walk", "leg_l", [(0, None)])
+    att("walk", "leg_r", [(0, None)])
     rot("walk", "arm_l", [(0, -26), (T/4, 0), (T/2, 26), (3*T/4, 0), (T, -26)])
     rot("walk", "arm_r", [(0, 26), (T/4, 0), (T/2, -26), (3*T/4, 0), (T, 26)])
     tra("walk", "hips", [(0, 0, 0), (T/4, 0, 12), (T/2, 0, 0), (3*T/4, 0, 12), (T, 0, 0)])
+
+    # --- spin：耍棒花（1.5s loop）---
+    rot("spin", "weapon", [(0, 0), (0.2, 0), (0.95, 720), (1.1, 720), (1.5, 0)])
+    att("spin", "weapon", [(0, "staff"), (0.2, "staff_spin"), (1.0, "staff")])
+    rot("spin", "arm_r", [(0, 0), (0.2, -20), (0.6, -35), (1.0, -10), (1.5, 0)])
+    rot("spin", "head", [(0, 0), (0.6, 5), (1.5, 0)])
+    tra("spin", "chest", [(0, 0, 0), (0.6, 0, 3), (1.5, 0, 0)])
 
     # --- throw_dice：举骰→甩出→骰子飞出（1.2s once）---
     rot("throw_dice", "arm_r", [(0, 30), (0.35, 150), (0.5, 150), (0.72, -40), (1.2, -40)])

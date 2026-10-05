@@ -26,7 +26,7 @@ const server = createServer(async (req, res) => {
 });
 await new Promise((r) => server.listen(52666, r));
 
-const anims = ["idle_calm", "idle_happy", "idle_sad", "walk", "throw_dice"];
+const anims = ["idle_calm", "idle_happy", "idle_sad", "walk", "spin", "throw_dice"];
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
 page.on("console", (m) => console.log("[console]", m.type(), m.text()));

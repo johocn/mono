@@ -55,7 +55,7 @@ if (qs.get('debug') === 'tex') {
   const skel = new Spine({ skeletonData });
   skel.position.set(195, 620);
   skel.scale.set(0.9);
-  const entry = skel.state.setAnimation(0, anim, anim.startsWith('idle') || anim === 'walk');
+  const entry = skel.state.setAnimation(0, anim, anim !== 'throw_dice'); // 除掷骰外全部循环
   entry.trackTime = anim === 'throw_dice' ? 0.5 : 0.3; // 截取动作中段
   app.stage.addChild(skel);
   window.__skel = skel;
