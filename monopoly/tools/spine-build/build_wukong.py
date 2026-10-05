@@ -60,7 +60,7 @@ CENTER_PLACEMENT = {
     "legs_tiptoe":  ("leg_fx", 0, -132),
     "legs_tiptoe2": ("leg_fx", 0, -140),
     "legs_run":     ("leg_fx", 0, -132),
-    "face_sulk":    ("head", 0, 107),
+    "face_sulk":    ("head", 0, 47),
     "staff_spin":   ("weapon", 0, 0),
 }
 
@@ -128,7 +128,7 @@ BONES = [  # (name, parent, x, y, extra)
     ("chest",   "spine",  0,  96, {}),
     ("neck",    "chest",  0, 118, {}),
     ("head",    "neck",   0,  46, {}),
-    ("band_b",  "head",   0, 199, {}),   # 金箍=v2 对齐位(143)+头下沉补偿(56)
+    ("band_b",  "head",   0, 139, {}),   # 用户校准：金箍下移 60
     ("arm_l",   "chest", -88, 96, {}),   # 弯臂形态恢复原样（弯向身体）
     ("arm_r",   "chest",  88, 96, {"scaleX": -1}),
     ("hand_l",  "arm_l", -172, -8, {}),
@@ -148,7 +148,7 @@ PLACEMENT = {
     "hand_open": ("hand_l",  298, 566, 0, 0),
     "hand_grip": ("hand_r",  308, 560, 0, 0),
     "hand_dice": ("hand_r",  362, 560, 0, 0),
-    "head":      ("head",    312, 638, 0, -56),  # off_y 下沉压住领口（分离约 42 单位，一次到位）
+    "head":      ("head",    312, 638, 0, -26),  # 用户校准：头上移 30
     "headband":  ("band_b",  320, 132, 0, 0),
     "staff":     ("weapon",  320, 270, 0, 0),
     "dice":      ("prop",    320, 320, 0, 0),
