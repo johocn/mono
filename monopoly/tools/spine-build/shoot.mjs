@@ -24,7 +24,7 @@ const server = createServer(async (req, res) => {
     res.writeHead(404); res.end("nf");
   }
 });
-await new Promise((r) => server.listen(52666, r));
+await new Promise((r) => server.listen(52680, r)); // 52666 留给常驻 serve.mjs
 
 const anims = ["idle_calm", "idle_happy", "idle_sad", "walk", "spin", "throw_dice"];
 const browser = await chromium.launch();
@@ -33,7 +33,7 @@ page.on("console", (m) => console.log("[console]", m.type(), m.text()));
 page.on("pageerror", (e) => console.log("[pageerror]", e.message, "\n", e.stack ?? ""));
 
 for (const anim of anims) {
-  await page.goto(`http://localhost:52666/?anim=${anim}`, { waitUntil: "load" });
+  await page.goto(`http://localhost:52680/?anim=${anim}`, { waitUntil: "load" });
   try {
     await page.waitForFunction("window.__ready === true", { timeout: 15000 });
     await page.evaluate(() => { window.__skel.state.tracks[0].timeScale = 0; }); // 定格，防 400ms 漂移

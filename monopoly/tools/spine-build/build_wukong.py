@@ -60,7 +60,7 @@ CENTER_PLACEMENT = {
     "legs_tiptoe":  ("leg_fx", 0, -132),
     "legs_tiptoe2": ("leg_fx", 0, -140),
     "legs_run":     ("leg_fx", 0, -132),
-    "face_sulk":    ("head", 0, 51),
+    "face_sulk":    ("head", 0, -30),
     "staff_spin":   ("weapon", 0, 0),
 }
 
@@ -128,13 +128,13 @@ BONES = [  # (name, parent, x, y, extra)
     ("chest",   "spine",  0,  96, {}),
     ("neck",    "chest",  0, 118, {}),
     ("head",    "neck",   0,  46, {}),
-    ("band_b",  "head",   0, 143, {}),   # 金箍随头下移贴合（头附件 y 已下调）
-    ("arm_l",   "chest", -88, 96, {}),
-    ("arm_r",   "chest",  88, 96, {"scaleX": -1}),   # 镜像臂
-    ("hand_l",  "arm_l", -172, -8, {}),
+    ("band_b",  "head",   0, 62, {}),    # 金箍随头下移贴合
+    ("arm_l",   "chest",  88, 96, {"scaleX": -1}),   # 镜像臂（用户指定双手互换）
+    ("arm_r",   "chest", -88, 96, {}),
+    ("hand_l",  "arm_l", 172, -8, {}),
     ("hand_r",  "arm_r", 172, -8, {}),
-    ("weapon",  "chest", 106, -91, {"rotation": 45}),  # 对准右手心（镜像臂的图内手位）；棒图斜 45° 转正竖握
-    ("prop",    "chest", 106, -91, {}),   # 骰子同在右手心
+    ("weapon",  "chest", -106, -91, {"rotation": 45}),  # 对准右手心（互换后为画面左侧）
+    ("prop",    "chest", -106, -91, {}),   # 骰子同在右手心
     ("fx",      "root",   0, 420, {}),
 ]
 # 部件: 语义名 → (bone, pivot_u, pivot_v, off_x, off_y)  pivot=图内锚点(px, 左上原点)
@@ -148,7 +148,7 @@ PLACEMENT = {
     "hand_open": ("hand_l",  298, 566, 0, 0),
     "hand_grip": ("hand_r",  308, 560, 0, 0),
     "hand_dice": ("hand_r",  362, 560, 0, 0),
-    "head":      ("head",    312, 638, 0, 0),   # pv 下调：头图底缘贴住领口，消除头身分离
+    "head":      ("head",    312, 638, 0, -56),  # off_y 下沉压住领口（分离约 42 单位，一次到位）
     "headband":  ("band_b",  320, 132, 0, 0),
     "staff":     ("weapon",  320, 270, 0, 0),
     "dice":      ("prop",    320, 320, 0, 0),
@@ -317,7 +317,8 @@ def build_animations(anims):
     tra("spin", "chest", [(0, 0, 0), (0.6, 0, 3), (1.5, 0, 0)])
 
     # --- throw_dice：举骰→甩出→骰子飞出（1.2s once）---
-    rot("throw_dice", "arm_r", [(0, 30), (0.35, 150), (0.5, 150), (0.72, -40), (1.2, -40)])
+    # 掷骰手（互换后画面左侧）：抬臂平托胸前→掷出→放手收势
+    rot("throw_dice", "arm_r", [(0, 30), (0.25, 75), (0.5, 80), (0.72, -20), (1.2, 0)])
     rot("throw_dice", "arm_l", [(0, -10), (0.35, -24), (0.5, -24), (1.2, -6)])
     rot("throw_dice", "chest", [(0, 0), (0.5, -8), (0.72, 10), (1.2, 4)])
     rot("throw_dice", "head", [(0, 0), (0.5, -6), (0.75, 6), (1.2, 0)])
@@ -327,8 +328,8 @@ def build_animations(anims):
     att("throw_dice", "weapon", [(0, "staff"), (0.05, None), (0.9, "staff")])
     # 骰子：起点=右手心；举臂阶段近似跟手（手举过头），甩出后抛物线飞出画面
     tra("throw_dice", "prop", [
-        (0, 0, 0), (0.35, 20, 170), (0.5, 35, 230),
-        (0.72, 120, 300), (1.0, 260, 200), (1.2, 330, 100)])
+        (0, 0, 0), (0.3, 10, 70), (0.5, 20, 90),
+        (0.72, 90, 320), (1.0, 240, 200), (1.2, 330, 90)])
     anims["throw_dice"]["bones"]["prop"]["scale"] = [
         {"time": 0, "x": 1, "y": 1}, {"time": 0.5, "x": 1, "y": 1},
         {"time": 1.0, "x": 0.5, "y": 0.5}, {"time": 1.2, "x": 0.2, "y": 0.2}]
