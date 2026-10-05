@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>悟空骨骼测试</title>
+<style>html,body{margin:0;background:#1a2b2a}canvas{display:block}</style>
+</head>
+<body>
+<script type="importmap">
+{ "imports": { "pixi.js": "https://cdn.jsdelivr.net/npm/pixi.js@__PIXI_VER__/dist/pixi.min.mjs" } }
+</script>
+<script type="module">
+import * as PIXI from 'pixi.js';  // jsdelivr 自包含单文件，规避 esm.sh 8.22 chunk 分裂 bug
+import { Spine } from 'https://esm.sh/@pixi/spine-pixi@2.1.1?external=pixi.js&target=es2022';
+import { SkeletonJson, AtlasAttachmentLoader, Physics } from 'https://esm.sh/@esotericsoftware/spine-core@~4.2.45?target=es2022';
+
+const qs = new URLSearchParams(location.search);
+const anim = qs.get('anim') || 'idle_calm';
+
+const app = new PIXI.Application();
+await app.init({ width: 390, height: 844, background: '#1a2b2a' });
+document.body.appendChild(app.canvas);
+window.__app = app;
+
+const atlas = await PIXI.Assets.load({ alias: 'wukongAtlas', src: './out/wukong.atlas' });
+// spine-pixi 1.0.4 的 skeleton loader 只认 .skel，.json 需手动经 SkeletonJson 解析入缓存
+const raw = await (await fetch('./out/wukong.json')).text();
+const skeletonData = new SkeletonJson(new AtlasAttachmentLoader(atlas)).readSkeletonData(raw);
+console.log('bones=', skeletonData.bones.length, 'slots=', skeletonData.slots.length,
+            'anims=', Object.keys(skeletonData.animations).join(','));
+console.log('atlas page tex:', !!atlas.pages[0].texture, 'srcW=', atlas.pages[0].texture?.width);
+
+// spine-pixi 1.0.4 constructor 只接受 SkeletonData（字符串形式是 Spine.from 的职责），atlas 已绑在 attachment region 上无需传
+if (qs.get('debug') === 'tex') {
+  // 最小渲染验证：左=canvas 纯色纹理，中=标准 pixi 加载原图，右=spine atlas 包装纹理
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'); g.fillStyle = '#ff2200'; g.fillRect(0, 0, 64, 64);
+  const s0 = new PIXI.Sprite(PIXI.Texture.from(c));
+  s0.position.set(5, 5); app.stage.addChild(s0);
+  const stdTex = await PIXI.Assets.load('./out/wukong.png');
+  console.log('stdTex:', stdTex.constructor.name, 'w=', stdTex.width, 'valid=', stdTex.source?.valid);
+  const s1 = new PIXI.Sprite(stdTex);
+  s1.scale.set(180 / s1.texture.width); s1.position.set(80, 5);
+  app.stage.addChild(s1);
+  const wrapped = atlas.pages[0].texture;
+  console.log('wrapped keys:', Object.keys(wrapped).join(','), '| has .texture:', !!wrapped.texture,
+              '| inner:', wrapped.texture?.constructor?.name, 'w=', wrapped.texture?.width);
+  if (wrapped.texture) {
+    const s2 = new PIXI.Sprite(wrapped.texture);
+    s2.scale.set(180 / s2.texture.width); s2.position.set(200, 5);
+    app.stage.addChild(s2);
+  }
+} else {
+  const skel = new Spine({ skeletonData });
+  skel.position.set(195, 620);
+  skel.scale.set(0.9);
+  const entry = skel.state.setAnimation(0, anim, anim.startsWith('idle') || anim === 'walk');
+  entry.trackTime = anim === 'throw_dice' ? 0.5 : 0.3; // 截取动作中段
+  app.stage.addChild(skel);
+  window.__skel = skel;
+  // 逐 slot 排查：?only=leg 只显示指定 slot；?only=__all__ 全显
+  const only = qs.get('only');
+  if (only && only !== '__all__') {
+    skel.state.clearTrack(0);
+    skel.skeleton.setToSetupPose();
+    // 必须在 setToSetupPose 之后清 attachment，否则会被 setup 名重置
+    for (const sl of skel.skeleton.slots) {
+      if (sl.data.name !== only) sl.setAttachment(null);
+    }
+    skel.skeleton.updateWorldTransform(Physics.none);
+  }
+  skel.state.addListener({
+    error: (e, msg) => { document.title = 'ERR:' + msg; console.error(msg); },
+  });
+}
+window.__ready = true;
+
+// —— 诊断：atlas 纹理 / attachment / 骨骼世界坐标 ——
+if (window.__skel) {
+  const skel = window.__skel;
+  const missing = [];
+  for (const slot of skel.skeleton.slots) {
+    const a = slot.getAttachment?.() || slot.attachment;
+    if (!a) missing.push(slot.data.name);
+    else if (a.region && !a.region.texture) missing.push(slot.data.name + ':noTex');
+  }
+  console.log('missing attachments:', missing.join(',') || '(none)');
+  console.log('bounds:', JSON.stringify(skel.getLocalBounds?.() || skel.getBounds()));
+}
+</script>
+</body>
+</html>

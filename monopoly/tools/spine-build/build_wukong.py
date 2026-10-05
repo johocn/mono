@@ -1,0 +1,280 @@
+# -*- coding: utf-8 -*-
+"""大富翁·悟空 Spine 骨骼一键构建 v2
+1) 部件语义化选型 → shelf 打包 2048 atlas + Spine .atlas 坐标
+2) Spine 4.1 JSON 骨架：镜像用骨骼 scaleX=-1（贴图零翻转）
+3) 动画时间轴格式: rotate={time,angle} translate/scale={time,x,y} attachment={time,name}
+输出: out/wukong.json + out/wukong.png + out/wukong.atlas
+"""
+import json
+from pathlib import Path
+
+from PIL import Image
+
+ROOT = Path(__file__).parent
+PARTS = ROOT / "parts"
+OUT = ROOT / "out"
+OUT.mkdir(exist_ok=True)
+
+# ---------------- 部件选型（联络表编号 → 语义名） ----------------
+PICK = {
+    "生成骨架动画与游戏人物设计开发": "head",        # 完整猴头（含笑）
+    "生成骨架动画与游戏人物设计开发 (1)_clean": "headband",  # 金箍（色键去白底，见 clean_headband.py）
+    "生成骨架动画与游戏人物设计开发 (3)": "torso",     # 红黄短打+深蓝披带
+    "生成骨架动画与游戏人物设计开发 (5)": "skirt",     # 虎皮裙·深蓝腰带
+    "生成骨架动画与游戏人物设计开发 (6)": "arm",       # 黄袖弯臂
+    "生成骨架动画与游戏人物设计开发 (14)": "hand_fist",
+    "生成骨架动画与游戏人物设计开发 (13)": "hand_open",
+    "生成骨架动画与游戏人物设计开发 (15)": "hand_grip",
+    "生成骨架动画与游戏人物设计开发 (16)": "hand_dice",
+    "生成骨架动画与游戏人物设计开发 (8)": "leg",       # 猴毛腿·直
+    "生成骨架动画与游戏人物设计开发 (10)": "staff",    # 金箍棒
+    "生成骨架动画与游戏人物设计开发 (34)": "dice",
+    "生成骨架动画与游戏人物设计开发 (36)": "dice_swish",
+    "生成骨架动画与游戏人物设计开发 (35)": "burst",
+    "生成骨架动画与游戏人物设计开发 (12)": "tassel",
+}
+FACES = {  # 备用表情（head slot 内切换；默认不显示）
+    "生成骨架动画与游戏人物设计开发 (21)": "face_calm",
+    "生成骨架动画与游戏人物设计开发 (22)": "face_happy",
+    "生成骨架动画与游戏人物设计开发 (23)": "face_annoyed",
+    "生成骨架动画与游戏人物设计开发 (24)": "face_surprised",
+    "生成骨架动画与游戏人物设计开发 (25)": "face_angry",
+}
+SEM_OF = {v: k for k, v in PICK.items()}  # 语义名 → stem
+
+# ---------------- 1. Atlas 打包 ----------------
+def pack_atlas():
+    names = list(PICK.values()) + list(FACES.values())
+    regions = []
+    for name in names:
+        stem = SEM_OF[name] if name in SEM_OF else stem_of_face(name)
+        img = Image.open(PARTS / f"{stem}.png").convert("RGBA")
+        # 关键：按骨架单位缩放，保证 region 尺寸与 attachment width/height 一致，
+        # 否则 20 张 640 级原图撑爆 2048 页面导致 region y 越界、UV 采出白块
+        img = img.resize(
+            (max(1, round(img.width * SCALE)), max(1, round(img.height * SCALE))),
+            Image.LANCZOS,
+        )
+        regions.append((name, img))
+    regions.sort(key=lambda r: -max(r[1].size))
+
+    PAGE = 2048
+    page = Image.new("RGBA", (PAGE, PAGE), (0, 0, 0, 0))
+    rects = {}
+    x = y = row_h = 0
+    PAD = 2
+    for name, img in regions:
+        w, h = img.size
+        if x + w + PAD > PAGE:
+            x = 0
+            y += row_h + PAD
+            row_h = 0
+        page.paste(img, (x, y))
+        rects[name] = (x, y, w, h)
+        x += w + PAD
+        row_h = max(row_h, h)
+    page.save(OUT / "wukong.png")
+
+    lines = ["wukong.png", "size: 2048,2048", "format: RGBA8888",
+             "filter: Linear,Linear", "repeat: none"]
+    for name, (rx, ry, rw, rh) in rects.items():
+        lines += [name, f"  bounds: {rx}, {ry}, {rw}, {rh}"]
+    (OUT / "wukong.atlas").write_text("\n".join(lines), encoding="utf-8")
+    return rects
+
+
+def stem_of_face(name):
+    for stem, n in FACES.items():
+        if n == name:
+            return stem
+    raise KeyError(name)
+
+
+# ---------------- 2. 骨架 ----------------
+SCALE = 0.42   # 图素 → 骨架单位
+BONES = [  # (name, parent, x, y, extra)
+    ("root",    None,    0,   0, {}),
+    ("hips",    "root",  0, 262, {}),
+    ("leg_l",   "hips",  -46, 10, {}),
+    ("leg_r",   "hips",   46, 10, {"scaleX": -1}),   # 镜像腿
+    ("skirt_b", "hips",   0,  36, {}),
+    ("spine",   "hips",   0,  34, {}),
+    ("chest",   "spine",  0,  96, {}),
+    ("neck",    "chest",  0, 118, {}),
+    ("head",    "neck",   0,  46, {}),
+    ("band_b",  "head",   0, 160, {}),
+    ("arm_l",   "chest", -88, 96, {}),
+    ("arm_r",   "chest",  88, 96, {"scaleX": -1}),   # 镜像臂
+    ("hand_l",  "arm_l", -172, -8, {}),
+    ("hand_r",  "arm_r", 172, -8, {}),
+    ("weapon",  "chest", 108, -20, {"rotation": 45}),  # 棒图斜 45°，转正竖握；挂 chest 避开镜像链
+    ("prop",    "chest", 108, -20, {}),
+    ("fx",      "root",   0, 420, {}),
+]
+# 部件: 语义名 → (bone, pivot_u, pivot_v, off_x, off_y)  pivot=图内锚点(px, 左上原点)
+PLACEMENT = {
+    "leg":       ("leg_l",  134,  64, 0, 0),
+    "skirt":     ("skirt_b", 320,  58, 0, 0),
+    "tassel":    ("skirt_b", 285,  64, 0, -14),
+    "torso":     ("spine",   320, 560, 0, 0),
+    "arm":       ("arm_l",   152,  96, 0, 0),
+    "hand_fist": ("hand_l",  320, 520, 0, 0),
+    "hand_open": ("hand_l",  298, 566, 0, 0),
+    "hand_grip": ("hand_r",  308, 560, 0, 0),
+    "hand_dice": ("hand_r",  362, 560, 0, 0),
+    "head":      ("head",    312, 598, 0, 0),
+    "headband":  ("band_b",  320, 132, 0, 0),
+    "staff":     ("weapon",  320, 270, 0, 0),
+    "dice":      ("prop",    320, 320, 0, 0),
+    "dice_swish":("fx",      320, 320, 0, 0),
+    "burst":     ("fx",      320, 320, 0, 0),
+}
+# 附件额外缩放（region 自动拉伸映射，骰子/特效不应与躯干同大）
+SIZE_SCALE = {"dice": 0.42, "burst": 0.8, "dice_swish": 0.8, "headband": 0.85}
+# slot: (bone, [attachment 语义名...], default_attachment 或 None)
+SLOTS = [
+    ("fx",       ["burst", "dice_swish"],        None),
+    ("leg_l",    ["leg"],                        "leg"),
+    ("leg_r",    ["leg"],                        "leg"),
+    ("skirt",    ["skirt"],                      "skirt"),
+    ("tassel",   ["tassel"],                     "tassel"),
+    ("torso",    ["torso"],                      "torso"),
+    ("arm_l",    ["arm"],                        "arm"),
+    ("hand_l",   ["hand_fist", "hand_open"],     None),   # arm 图自带手，变体留给动画切换
+    ("arm_r",    ["arm"],                        "arm"),
+    ("hand_r",   ["hand_fist", "hand_grip", "hand_dice"], None),
+    ("weapon",   ["staff"],                      "staff"),
+    ("head",     ["head"] + list(FACES.values()), "head"),
+    ("headband", ["headband"],                   "headband"),
+    ("prop",     ["dice"],                       None),
+]
+
+
+def make_attachment(sem, extra=(0, 0)):
+    bone, pu, pv, ox, oy = PLACEMENT[sem]
+    img = Image.open(PARTS / f"{SEM_OF[sem]}.png")
+    s = SIZE_SCALE.get(sem, 1)
+    w, h = img.size[0] * SCALE * s, img.size[1] * SCALE * s
+    pu, pv = pu * SCALE, pv * SCALE
+    # region attachment x/y = 图中心相对 bone 的偏移（y 向上）
+    return {
+        "x": round((w / 2 - pu) + ox, 2),
+        "y": round((pv - h / 2) + oy, 2),
+        "width": round(w, 2),
+        "height": round(h, 2),
+    }
+
+
+def build_skeleton():
+    bones = []
+    for name, parent, x, y, extra in BONES:
+        b = {"name": name}
+        if parent:
+            b["parent"] = parent
+        if x or y:
+            b["x"], b["y"] = x, y
+        b.update(extra)
+        bones.append(b)
+
+    slots, skin = [], {}
+    SLOT_BONES = {"leg_r": "leg_r", "arm_r": "arm_r", "hand_r": "hand_r"}  # 镜像槽位显式指定
+    for slot_name, atts, default in SLOTS:
+        bone = SLOT_BONES.get(slot_name) or PLACEMENT[default or atts[0]][0]
+        slots.append({"name": slot_name, "bone": bone, "attachment": default})
+        entries = {}
+        for sem in atts:
+            if slot_name == "head" and sem in FACES.values():
+                continue  # 表情占位稍后复用 head 几何
+            a = make_attachment(sem)
+            if sem != atts[0]:
+                a["path"] = sem  # 多附件 slot：attachment 名=语义名，region 复用同 path
+            entries[sem] = a
+        if slot_name == "head":  # 备用表情：占位复用 head 几何，仅运行时切换用
+            for fname in FACES.values():
+                entries[fname] = dict(entries["head"], path=fname)
+        skin[slot_name] = entries
+    return {
+        "skeleton": {"spine": "4.2.43", "hash": "zhao-wukong-2",
+                     "x": -430, "y": -50, "width": 860, "height": 800},
+        "bones": bones,
+        "slots": slots,
+        "skins": [{"name": "default", "attachments": skin}],
+        "animations": {},
+    }
+
+
+# ---------------- 3. 动画 ----------------
+def build_animations(anims):
+    def rot(name, bone, keys):
+        # Spine 4.2 JSON 格式：单值时间轴（rotate/translatex/scalex…）帧字段为 "value"（4.1 及以前是 "angle"）
+        anims.setdefault(name, {}).setdefault("bones", {}).setdefault(bone, {})["rotate"] = [
+            {"time": round(t, 4), "value": round(a, 2)} for t, a in keys]
+
+    def tra(name, bone, keys):
+        anims.setdefault(name, {}).setdefault("bones", {}).setdefault(bone, {})["translate"] = [
+            {"time": round(t, 4), "x": round(x, 2), "y": round(y, 2)} for t, x, y in keys]
+
+    def att(name, slot, keys):
+        anims.setdefault(name, {}).setdefault("slots", {})[slot] = {"attachment": [
+            {"time": round(t, 4), "name": n} for t, n in keys]}
+
+    # --- idle_calm：呼吸 + 头微摆（2s loop）---
+    rot("idle_calm", "head", [(0, 0), (1.0, 2.4), (2.0, 0)])
+    tra("idle_calm", "chest", [(0, 0, 0), (1.0, 0, 2.2), (2.0, 0, 0)])
+    sca_key = [{"time": 0, "x": 1, "y": 1},
+               {"time": 1.0, "x": 1.02, "y": 0.985},
+               {"time": 2.0, "x": 1, "y": 1}]
+    anims["idle_calm"]["bones"]["spine"] = {"scale": sca_key}
+    rot("idle_calm", "arm_l", [(0, 0), (1.0, 1.6), (2.0, 0)])
+    rot("idle_calm", "arm_r", [(0, 0), (1.0, -1.6), (2.0, 0)])
+
+    # --- idle_happy：双臂高举挥舞 + 蹦跳（1.2s loop）---
+    T = 1.2
+    rot("idle_happy", "arm_l", [(0, -160), (T/2, -190), (T, -160)])
+    rot("idle_happy", "arm_r", [(0, 160), (T/2, 190), (T, 160)])
+    rot("idle_happy", "head", [(0, -6), (T/2, 6), (T, -6)])
+    tra("idle_happy", "hips", [(0, 0, 0), (T/4, 0, 46), (T/2, 0, 0),
+                               (3*T/4, 0, 46), (T, 0, 0)])
+
+    # --- idle_sad：低头塌肩下沉（2s loop）---
+    rot("idle_sad", "head", [(0, 14), (1.0, 17), (2.0, 14)])
+    rot("idle_sad", "arm_l", [(0, 14), (1.0, 18), (2.0, 14)])
+    rot("idle_sad", "arm_r", [(0, -14), (1.0, -18), (2.0, -14)])
+    tra("idle_sad", "chest", [(0, 0, 0), (1.0, 0, -6), (2.0, 0, 0)])
+    tra("idle_sad", "hips", [(0, 0, 0), (1.0, 0, -8), (2.0, 0, 0)])
+
+    # --- walk：腿摆臂反摆 + 起伏（0.8s loop）---
+    T = 0.8
+    rot("walk", "leg_l", [(0, 24), (T/4, 0), (T/2, -24), (3*T/4, 0), (T, 24)])
+    rot("walk", "leg_r", [(0, -24), (T/4, 0), (T/2, 24), (3*T/4, 0), (T, -24)])
+    rot("walk", "arm_l", [(0, -26), (T/4, 0), (T/2, 26), (3*T/4, 0), (T, -26)])
+    rot("walk", "arm_r", [(0, 26), (T/4, 0), (T/2, -26), (3*T/4, 0), (T, 26)])
+    tra("walk", "hips", [(0, 0, 0), (T/4, 0, 12), (T/2, 0, 0), (3*T/4, 0, 12), (T, 0, 0)])
+
+    # --- throw_dice：举骰→甩出→骰子飞出（1.2s once）---
+    rot("throw_dice", "arm_r", [(0, 30), (0.35, 150), (0.5, 150), (0.72, -40), (1.2, -40)])
+    rot("throw_dice", "arm_l", [(0, -10), (0.35, -24), (0.5, -24), (1.2, -6)])
+    rot("throw_dice", "chest", [(0, 0), (0.5, -8), (0.72, 10), (1.2, 4)])
+    rot("throw_dice", "head", [(0, 0), (0.5, -6), (0.75, 6), (1.2, 0)])
+    att("throw_dice", "prop", [(0, None), (0.05, "dice"), (0.55, None)])
+    att("throw_dice", "fx", [(0, None), (0.55, "dice_swish"), (0.78, "burst"), (1.0, None)])
+    att("throw_dice", "weapon", [(0, None), (0.9, "staff")])  # 举骰/甩出时收棒，避免遮挡右臂
+    tra("throw_dice", "prop", [
+        (0, 150, -13), (0.5, 150, -13),
+        (0.72, 260, 160), (1.0, 380, 60), (1.2, 430, -20)])
+    anims["throw_dice"]["bones"]["prop"]["scale"] = [
+        {"time": 0, "x": 1, "y": 1}, {"time": 0.5, "x": 1, "y": 1},
+        {"time": 1.0, "x": 0.5, "y": 0.5}, {"time": 1.2, "x": 0.2, "y": 0.2}]
+
+
+def main():
+    pack_atlas()
+    skeleton = build_skeleton()
+    build_animations(skeleton["animations"])
+    (OUT / "wukong.json").write_text(json.dumps(skeleton, ensure_ascii=False), encoding="utf-8")
+    print(f"ok: {len(skeleton['slots'])} slots, {len(skeleton['animations'])} animations"
+          f" -> out/wukong.(json|png|atlas)")
+
+
+if __name__ == "__main__":
+    main()

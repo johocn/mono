@@ -2,3 +2,4 @@ node_modules/
 release/
 test-results/
 *.local
+tools/spine-build/src_parts/
