@@ -60,7 +60,7 @@ CENTER_PLACEMENT = {
     "legs_tiptoe":  ("leg_fx", 0, -132),
     "legs_tiptoe2": ("leg_fx", 0, -140),
     "legs_run":     ("leg_fx", 0, -132),
-    "face_sulk":    ("head", 0, -30),
+    "face_sulk":    ("head", 0, 107),
     "staff_spin":   ("weapon", 0, 0),
 }
 
@@ -128,13 +128,13 @@ BONES = [  # (name, parent, x, y, extra)
     ("chest",   "spine",  0,  96, {}),
     ("neck",    "chest",  0, 118, {}),
     ("head",    "neck",   0,  46, {}),
-    ("band_b",  "head",   0, 62, {}),    # 金箍随头下移贴合
-    ("arm_l",   "chest",  88, 96, {"scaleX": -1}),   # 镜像臂（用户指定双手互换）
-    ("arm_r",   "chest", -88, 96, {}),
-    ("hand_l",  "arm_l", 172, -8, {}),
+    ("band_b",  "head",   0, 199, {}),   # 金箍=v2 对齐位(143)+头下沉补偿(56)
+    ("arm_l",   "chest", -88, 96, {}),   # 弯臂形态恢复原样（弯向身体）
+    ("arm_r",   "chest",  88, 96, {"scaleX": -1}),
+    ("hand_l",  "arm_l", -172, -8, {}),
     ("hand_r",  "arm_r", 172, -8, {}),
-    ("weapon",  "chest", -106, -91, {"rotation": 45}),  # 对准右手心（互换后为画面左侧）
-    ("prop",    "chest", -106, -91, {}),   # 骰子同在右手心
+    ("weapon",  "chest", -60, -91, {"rotation": 45}),  # 棒贴画面左拳（互换后保持左侧）
+    ("prop",    "chest", -60, -91, {}),   # 骰子同在左手心
     ("fx",      "root",   0, 420, {}),
 ]
 # 部件: 语义名 → (bone, pivot_u, pivot_v, off_x, off_y)  pivot=图内锚点(px, 左上原点)
