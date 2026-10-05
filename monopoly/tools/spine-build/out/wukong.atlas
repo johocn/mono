@@ -57,3 +57,5 @@ face_surprised
   bounds: 542, 813, 269, 247
 face_angry
   bounds: 813, 813, 269, 247
+blank
+  bounds: 1084, 813, 2, 2

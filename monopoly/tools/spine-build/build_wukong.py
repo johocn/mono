@@ -60,15 +60,18 @@ CENTER_PLACEMENT = {
     "legs_tiptoe":  ("leg_fx", 0, -132),
     "legs_tiptoe2": ("leg_fx", 0, -140),
     "legs_run":     ("leg_fx", 0, -132),
-    "face_sulk":    ("head", 0, 68),
+    "face_sulk":    ("head", 0, 51),
     "staff_spin":   ("weapon", 0, 0),
 }
 
 # ---------------- 1. Atlas 打包 ----------------
 def pack_atlas():
-    names = list(PICK.values()) + list(FACES.values())
+    names = list(PICK.values()) + list(FACES.values()) + ["blank"]
     regions = []
     for name in names:
+        if name == "blank":  # 2×2 全透明：替代 null 附件做「隐藏」（4.2 读取器会丢 null 帧）
+            regions.append((name, Image.new("RGBA", (2, 2), (0, 0, 0, 0))))
+            continue
         stem = SEM_OF[name] if name in SEM_OF else stem_of_face(name)
         img = Image.open(PARTS / f"{stem}.png").convert("RGBA")
         # 关键：按骨架单位缩放，保证 region 尺寸与 attachment width/height 一致，
@@ -125,13 +128,13 @@ BONES = [  # (name, parent, x, y, extra)
     ("chest",   "spine",  0,  96, {}),
     ("neck",    "chest",  0, 118, {}),
     ("head",    "neck",   0,  46, {}),
-    ("band_b",  "head",   0, 160, {}),
+    ("band_b",  "head",   0, 143, {}),   # 金箍随头下移贴合（头附件 y 已下调）
     ("arm_l",   "chest", -88, 96, {}),
     ("arm_r",   "chest",  88, 96, {"scaleX": -1}),   # 镜像臂
     ("hand_l",  "arm_l", -172, -8, {}),
     ("hand_r",  "arm_r", 172, -8, {}),
-    ("weapon",  "chest", 108, -20, {"rotation": 45}),  # 棒图斜 45°，转正竖握；挂 chest 避开镜像链
-    ("prop",    "chest", 108, -20, {}),
+    ("weapon",  "chest", 106, -91, {"rotation": 45}),  # 对准右手心（镜像臂的图内手位）；棒图斜 45° 转正竖握
+    ("prop",    "chest", 106, -91, {}),   # 骰子同在右手心
     ("fx",      "root",   0, 420, {}),
 ]
 # 部件: 语义名 → (bone, pivot_u, pivot_v, off_x, off_y)  pivot=图内锚点(px, 左上原点)
@@ -145,7 +148,7 @@ PLACEMENT = {
     "hand_open": ("hand_l",  298, 566, 0, 0),
     "hand_grip": ("hand_r",  308, 560, 0, 0),
     "hand_dice": ("hand_r",  362, 560, 0, 0),
-    "head":      ("head",    312, 598, 0, 0),
+    "head":      ("head",    312, 638, 0, 0),   # pv 下调：头图底缘贴住领口，消除头身分离
     "headband":  ("band_b",  320, 132, 0, 0),
     "staff":     ("weapon",  320, 270, 0, 0),
     "dice":      ("prop",    320, 320, 0, 0),
@@ -154,15 +157,15 @@ PLACEMENT = {
 }
 # 附件额外缩放（region 自动拉伸映射，骰子/特效不应与躯干同大）
 SIZE_SCALE = {"dice": 0.42, "burst": 0.8, "dice_swish": 0.8, "headband": 0.85,
-              "staff_spin": 0.8, "face_sulk": 0.6,
+              "staff_spin": 0.8, "face_sulk": 0.8,
               "legs_walk_a": 0.75, "legs_walk_b": 0.75, "legs_tiptoe": 0.75,
               "legs_tiptoe2": 0.75, "legs_run": 0.75}
 # slot: (bone, [attachment 语义名...], default_attachment 或 None)
 SLOTS = [
-    ("fx",       ["burst", "dice_swish"],        None),
-    ("legs",     ["legs_walk_a", "legs_walk_b", "legs_tiptoe", "legs_tiptoe2", "legs_run"], None),
-    ("leg_l",    ["leg"],                        "leg"),
-    ("leg_r",    ["leg"],                        "leg"),
+    ("fx",       ["burst", "dice_swish", "blank"], None),
+    ("legs",     ["legs_walk_a", "legs_walk_b", "legs_tiptoe", "legs_tiptoe2", "legs_run", "blank"], None),
+    ("leg_l",    ["leg", "blank"],               "leg"),
+    ("leg_r",    ["leg", "blank"],               "leg"),
     ("skirt",    ["skirt"],                      "skirt"),
     ("tassel",   ["tassel"],                     "tassel"),
     ("torso",    ["torso"],                      "torso"),
@@ -170,11 +173,11 @@ SLOTS = [
     ("hand_l",   ["hand_fist", "hand_open"],     None),   # arm 图自带手，变体留给动画切换
     ("arm_r",    ["arm"],                        "arm"),
     ("hand_r",   ["hand_fist", "hand_grip", "hand_dice"], None),
-    ("weapon",   ["staff", "staff_spin"],        "staff"),
+    ("weapon",   ["staff", "staff_spin", "blank"], "staff"),
     ("head",     ["head"] + list(FACES.values()), "head"),
     ("face",     ["face_sulk"],                  None),   # 叠脸槽：盖在头上、金箍之下
     ("headband", ["headband"],                   "headband"),
-    ("prop",     ["dice"],                       None),
+    ("prop",     ["dice", "blank"],              None),
 ]
 
 
@@ -228,6 +231,9 @@ def build_skeleton():
         slots.append({"name": slot_name, "bone": bone, "attachment": default})
         entries = {}
         for sem in atts:
+            if sem == "blank":  # 透明附件：2×2 贴骨原点，不可见
+                entries[sem] = {"x": 0, "y": 0, "width": 2, "height": 2}
+                continue
             if slot_name == "head" and sem in FACES.values():
                 continue  # 表情走下方统一复用 head 几何
             a = make_attachment(sem)
@@ -260,8 +266,9 @@ def build_animations(anims):
             {"time": round(t, 4), "x": round(x, 2), "y": round(y, 2)} for t, x, y in keys]
 
     def att(name, slot, keys):
+        # None → "blank"（透明附件）：4.2 读取器会丢弃 null 附件帧，用 blank 才能真正隐藏
         anims.setdefault(name, {}).setdefault("slots", {})[slot] = {"attachment": [
-            {"time": round(t, 4), "name": n} for t, n in keys]}
+            {"time": round(t, 4), "name": n if n else "blank"} for t, n in keys]}
 
     # --- idle_calm：呼吸 + 头微摆（2s loop）---
     rot("idle_calm", "head", [(0, 0), (1.0, 2.4), (2.0, 0)])
@@ -275,8 +282,8 @@ def build_animations(anims):
 
     # --- idle_happy：双臂高举挥舞 + 踮脚蹦跳（1.2s loop）---
     T = 1.2
-    rot("idle_happy", "arm_l", [(0, -160), (T/2, -190), (T, -160)])
-    rot("idle_happy", "arm_r", [(0, 160), (T/2, 190), (T, 160)])
+    rot("idle_happy", "arm_l", [(0, -135), (T/2, -165), (T, -135)])
+    rot("idle_happy", "arm_r", [(0, 135), (T/2, 165), (T, 135)])
     rot("idle_happy", "head", [(0, -2), (T/2, 2), (T, -2)])
     tra("idle_happy", "hips", [(0, 0, 0), (T/4, 0, 46), (T/2, 0, 0),
                                (3*T/4, 0, 46), (T, 0, 0)])
@@ -294,22 +301,18 @@ def build_animations(anims):
     tra("idle_sad", "hips", [(0, 0, 0), (1.0, 0, -8), (2.0, 0, 0)])
     att("idle_sad", "face", [(0, "face_sulk")])
 
-    # --- walk：整腿帧循环 + 摆臂起伏（0.8s loop，红裤黑靴腿系）---
+    # --- walk：正面双腿交替 + 摆臂起伏（0.8s loop）---
     T = 0.8
-    att("walk", "legs", [(0, "legs_walk_a"), (T/4, "legs_run"),
-                         (T/2, "legs_walk_b"), (3*T/4, "legs_run"), (T, "legs_walk_a")])
-    att("walk", "leg_l", [(0, None)])
-    att("walk", "leg_r", [(0, None)])
-    rot("walk", "arm_l", [(0, -26), (T/4, 0), (T/2, 26), (3*T/4, 0), (T, -26)])
-    rot("walk", "arm_r", [(0, 26), (T/4, 0), (T/2, -26), (3*T/4, 0), (T, 26)])
-    # 整腿钟摆：与步伐同频（0.4s/步）前后摆，消除「贴图切换」的僵硬感
-    rot("walk", "leg_fx", [(0, 0), (T/4, 6), (T/2, 0), (3*T/4, -6), (T, 0)])
+    att("walk", "legs", [(0, None)])   # 侧视红裤腿与正面躯干视角冲突，弃用
+    rot("walk", "leg_l", [(0, 8), (T/2, -8), (T, 8)])     # 正面左右迈步
+    rot("walk", "leg_r", [(0, -8), (T/2, 8), (T, -8)])
+    rot("walk", "arm_l", [(0, 26), (T/4, 0), (T/2, -26), (3*T/4, 0), (T, 26)])
+    rot("walk", "arm_r", [(0, -26), (T/4, 0), (T/2, 26), (3*T/4, 0), (T, -26)])
     tra("walk", "hips", [(0, 0, 0), (T/4, 0, 12), (T/2, 0, 0), (3*T/4, 0, 12), (T, 0, 0)])
 
-    # --- spin：耍棒花（1.5s loop）---
+    # --- spin：耍棒花（1.5s loop）棒挂手骨，旋转绕手心；手臂保持稳定 ---
     rot("spin", "weapon", [(0, 0), (0.2, 0), (0.95, 720), (1.1, 720), (1.5, 0)])
     att("spin", "weapon", [(0, "staff"), (0.2, "staff_spin"), (1.0, "staff")])
-    rot("spin", "arm_r", [(0, 0), (0.2, -20), (0.6, -35), (1.0, -10), (1.5, 0)])
     rot("spin", "head", [(0, 0), (0.6, 5), (1.5, 0)])
     tra("spin", "chest", [(0, 0, 0), (0.6, 0, 3), (1.5, 0, 0)])
 
@@ -320,10 +323,12 @@ def build_animations(anims):
     rot("throw_dice", "head", [(0, 0), (0.5, -6), (0.75, 6), (1.2, 0)])
     att("throw_dice", "prop", [(0, None), (0.05, "dice"), (0.55, None)])
     att("throw_dice", "fx", [(0, None), (0.55, "dice_swish"), (0.78, "burst"), (1.0, None)])
-    att("throw_dice", "weapon", [(0, None), (0.9, "staff")])  # 举骰/甩出时收棒，避免遮挡右臂
+    # 注意：4.2 读取器会丢弃 attachment 时间轴的「首个 null 帧」，故先显式 staff 再 null 隐藏
+    att("throw_dice", "weapon", [(0, "staff"), (0.05, None), (0.9, "staff")])
+    # 骰子：起点=右手心；举臂阶段近似跟手（手举过头），甩出后抛物线飞出画面
     tra("throw_dice", "prop", [
-        (0, 150, -13), (0.5, 150, -13),
-        (0.72, 260, 160), (1.0, 380, 60), (1.2, 430, -20)])
+        (0, 0, 0), (0.35, 20, 170), (0.5, 35, 230),
+        (0.72, 120, 300), (1.0, 260, 200), (1.2, 330, 100)])
     anims["throw_dice"]["bones"]["prop"]["scale"] = [
         {"time": 0, "x": 1, "y": 1}, {"time": 0.5, "x": 1, "y": 1},
         {"time": 1.0, "x": 0.5, "y": 0.5}, {"time": 1.2, "x": 0.2, "y": 0.2}]

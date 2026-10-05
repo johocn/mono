@@ -36,7 +36,8 @@ for (const anim of anims) {
   await page.goto(`http://localhost:52666/?anim=${anim}`, { waitUntil: "load" });
   try {
     await page.waitForFunction("window.__ready === true", { timeout: 15000 });
-    await page.waitForTimeout(400);
+    await page.evaluate(() => { window.__skel.state.tracks[0].timeScale = 0; }); // 定格，防 400ms 漂移
+    await page.waitForTimeout(200);
     await page.screenshot({ path: `shot_${anim}.png` });
     console.log("ok", anim);
   } catch {

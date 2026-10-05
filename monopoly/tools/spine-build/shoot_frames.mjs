@@ -33,6 +33,7 @@ await page.waitForFunction("window.__ready === true", { timeout: 15000 });
 for (const t of TIMES) {
   await page.evaluate((tt) => {
     const tr = window.__skel.state.tracks[0];
+    tr.timeScale = 0; // 定格
     tr.trackTime = tt;
   }, t);
   await page.waitForTimeout(120);
