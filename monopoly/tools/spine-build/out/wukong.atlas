@@ -49,20 +49,22 @@ arm_r_raise
   bounds: 1320, 542, 263, 269
 arm_r_toss
   bounds: 1585, 542, 269, 241
+arm_r_palm
+  bounds: 0, 813, 243, 269
 legs_walk1
-  bounds: 0, 813, 244, 269
+  bounds: 245, 813, 244, 269
 legs_walk2
-  bounds: 246, 813, 228, 269
+  bounds: 491, 813, 228, 269
 legs_right
-  bounds: 476, 813, 236, 269
+  bounds: 721, 813, 236, 269
 legs_tiptoe_l
-  bounds: 714, 813, 260, 269
+  bounds: 959, 813, 260, 269
 staff_15
-  bounds: 976, 813, 269, 118
+  bounds: 1221, 813, 269, 118
 staff_30
-  bounds: 1247, 813, 269, 173
+  bounds: 1492, 813, 269, 173
 staff_45
-  bounds: 1518, 813, 269, 241
+  bounds: 1763, 813, 269, 241
 staff_close
   bounds: 0, 1084, 267, 269
 dice

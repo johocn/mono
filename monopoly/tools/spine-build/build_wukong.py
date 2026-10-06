@@ -50,6 +50,7 @@ PICK = {
     "孙悟空右手下垂": "arm_r_down",
     "孙悟空右手高举": "arm_r_raise",
     "孙悟空右手高举抛": "arm_r_toss",
+    "孙悟空右手托掌": "arm_r_palm",
     # 腿组（双腿整图，现存 5 件）
     "孙悟空足部向前走1": "legs_walk1",
     "孙悟空足部向前走2": "legs_walk2",
@@ -194,7 +195,8 @@ def build_skeleton():
         ("legs",     "legs",    ["legs_walk1", "legs_walk2",
                                  "legs_right", "legs_tiptoe_l"], "legs_walk1"),
         ("arm_l",    "arm_l",   ["arm_l_down", "arm_l_raise", "arm_l_toss"], "arm_l_down"),
-        ("arm_r",    "arm_r",   ["arm_r_down", "arm_r_raise", "arm_r_toss"], "arm_r_down"),
+        ("arm_r",    "arm_r",   ["arm_r_down", "arm_r_raise", "arm_r_toss",
+                                 "arm_r_palm"], "arm_r_down"),
         ("hand_l",   "hand_l",  ["hand_close"], None),
         ("hand_r",   "hand_r",  ["fist_close"], None),
         ("torso",    "torso_b", ["torso", "torso_hands"], "torso"),
@@ -328,15 +330,15 @@ def build_animations():
     scl("walk", "legs", [(0, s_leg, s_leg), (T, s_leg, s_leg)])
     tra("walk", "legs", [(0, 0, 20), (T, 0, 20)])
 
-    # —— spin：棒 15/30/45 度帧切换 + 骨旋转 = 耍棒透视效果 ——
+    # —— spin：右臂托掌，金箍棒在掌心旋转（15/30/45 度帧切换+骨旋转） ——
     T = 1.5
     att("spin", "weapon", [(0, "staff_30"), (0.18, "staff_15"), (0.42, "staff_45"),
                            (0.66, "staff_30"), (0.9, "staff_15"), (T, "staff_30")])
-    att("spin", "arm_r", [(0, "arm_r_down")])
+    att("spin", "arm_r", [(0, "arm_r_palm")])   # 右臂托掌图（用户指定，掌心朝上）
     att("spin", "arm_l", [(0, "arm_l_down")])
     rot("spin", "weapon", [(0, 0), (0.18, 90), (0.42, 200), (0.66, 320),
                            (0.9, 420), (1.2, 640), (T, 720)])
-    rot("spin", "arm_r", [(0, 0), (0.42, -12), (0.9, 10), (T, 0)])
+    tra("spin", "weapon", [(0, 100, 30), (T, 100, 30)])  # 棒心移到掌心（初值，截图迭代）
     rot("spin", "head", [(0, 0), (0.42, 4), (T, 0)])
     tra("spin", "chest", [(0, 0, 0), (0.42, 0, 3), (T, 0, 0)])
     # 图5 足部上移10/缩小10%（仅此动画，用户校准）
