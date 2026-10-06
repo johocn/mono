@@ -156,9 +156,13 @@ def build_skeleton():
     arm_y = round(torso_h * 0.26)
     arm_x = round(arm_w * 0.45)                                  # 臂骨内移贴躯干（用户校准：尽量对齐衣服）
     hand_y = round(arm_h * 0.62)                                 # 手随臂骨（槽内切换时臂图自带手，此骨备用）
-    skirt_y = round(leg_h * 0.12 + 80 + 10 + 10)                 # 裙上移 100（用户校准：原110下移10）
+    skirt_y = round(leg_h * 0.12 + 80 + 10 + 15)                 # 裙上移 105（用户校准：100再上移5）
     # 裙宽贴合腰身：目标宽 = 躯干宽×1.05（动态覆盖 SIZE_SCALE，用户校准「裙与腰部大小对齐」）
     SIZE_SCALE["skirt"] = round(torso_w * 1.05 / D["skirt"][0], 3)
+    # 足部缩小至能被裙覆盖：腿宽 = 裙宽×0.9（动态）
+    leg_fit = round(D["skirt"][0] * SIZE_SCALE["skirt"] * 0.9 / D["legs_walk1"][0], 3)
+    for k in ("legs_walk1", "legs_walk2", "legs_right", "legs_tiptoe_l"):
+        SIZE_SCALE[k] = leg_fit
 
     BONES = [
         ("root",     None,     0, 0, {}),
