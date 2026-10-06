@@ -357,6 +357,13 @@ def build_animations():
     # 图6 足部上移10/缩小10%（仅此动画，用户校准）
     scl("throw_dice", "legs", [(0, 0.90, 0.90), (T, 0.90, 0.90)])
     tra("throw_dice", "legs", [(0, 0, 10), (T, 0, 10)])
+    # 图6 左臂(托骰弯臂)缩小0.9+右移30贴身（用户校准初值）
+    scl("throw_dice", "arm_l", [(0, 0.90, 0.90), (T, 0.90, 0.90)])
+    tra("throw_dice", "arm_l", [(0, 30, 0), (T, 30, 0)])
+    # 图6 金箍棒旋转（用户二选一选定）：右手位全程转棒两圈
+    att("throw_dice", "weapon", [(0, "staff_30")])
+    rot("throw_dice", "weapon", [(0, 0), (T / 4, 180), (T / 2, 360),
+                                 (3 * T / 4, 540), (T, 720)])
 
     return anims
 
