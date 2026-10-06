@@ -39,15 +39,18 @@ PICK = {
     "孙悟空衣服没有手臂": "torso",
     "孙悟空衣服没有手部": "torso_hands",
     "孙悟空衣服穗子": "tassel",
-    "孙悟空虎皮裙绿色腰带": "skirt",   # 用户统一指定：所有裙均用此图
-    # 臂组（用户第四轮校准：左臂图挂画面左 arm_l、右臂图挂画面右 arm_r）
-    "孙悟空右手下垂": "arm_r_down",
-    "孙悟空右手高举": "arm_r_raise",
-    "孙悟空右手高举抛": "arm_r_toss",
+    "孙悟空虎皮裙绿色腰带": "skirt",
+    "孙悟空绿色虎皮裙左摆": "skirt_l",
+    "孙悟空绿色虎皮裙右摆": "skirt_r",
+    "孙悟空黑色腰带虎皮裙": "skirt_black",
+    # 臂组（新 6 件套：左臂图挂 arm_l、右臂图挂 arm_r，用户第四轮确认）
     "孙悟空左手下垂": "arm_l_down",
     "孙悟空左手高举": "arm_l_raise",
     "孙悟空左手高举抛": "arm_l_toss",
-    # 腿组（双腿整图）
+    "孙悟空右手下垂": "arm_r_down",
+    "孙悟空右手高举": "arm_r_raise",
+    "孙悟空右手高举抛": "arm_r_toss",
+    # 腿组（双腿整图，现存 5 件）
     "孙悟空足部向前走1": "legs_walk1",
     "孙悟空足部向前走2": "legs_walk2",
     "孙悟空足部向右走": "legs_right",
@@ -69,7 +72,7 @@ PICK = {
 # 特写件（手部/拳头特写构图，同 SCALE 会偏大）
 SIZE_SCALE = {"hand_close": 0.5, "fist_close": 0.5, "staff_close": 0.6,
               "dice": 0.42, "spark": 0.7, "headband_anim": 0.9, "tassel": 0.6,
-              "skirt": 0.92}  # 裙身紧贴腰身（用户校准）
+              "arm_l_grip": 0.55}
 
 SEM_OF = {v: k for k, v in PICK.items()}   # 语义名 → 文件 stem
 
@@ -146,24 +149,26 @@ def build_skeleton():
     head_y = round(neck_h / 2 + head_h / 2 - head_h * OVERLAP * 1.5)  # 头底压颈顶
     band_y = round(head_h / 2 - band_h * 0.55)                   # 金箍图心在头上沿
     arm_w = D["arm_r_raise"][0]
-    arm_y = round(torso_h * 0.26 - 89)                           # 臂整体下移 89（用户校准：169上移80）
-    arm_x = round(arm_w * 0.45)                                  # 臂骨内移贴躯干（用户校准：尽量对齐衣服）
+    arm_y = round(torso_h * 0.26 - 89)                           # 臂整体下移 89（用户校准）
+    arm_x = round(arm_w * 0.45)                                  # 臂骨内移贴躯干（用户校准）
     hand_y = round(arm_h * 0.62)                                 # 手随臂骨（槽内切换时臂图自带手，此骨备用）
-    skirt_y = round(leg_h * 0.12 + 80 + 10 + 15)                 # 裙上移 105（用户校准：100再上移5）
-    # 裙宽贴合腰身：目标宽 = 躯干宽×1.05（动态覆盖 SIZE_SCALE，用户校准「裙与腰部大小对齐」）
-    SIZE_SCALE["skirt"] = round(torso_w * 1.05 / D["skirt"][0], 3)
-    # 金箍缩放贴合头部轮廓：宽 = 头宽×0.9（动态，用户校准）
+    skirt_y = round(leg_h * 0.12 + 105)                          # 裙上移 105（用户校准：80+10+15）
+    # 用户校准的动态比例（换图自动适配）
     SIZE_SCALE["headband"] = round(D["head"][0] * 0.9 / D["headband"][0], 3)
-    SIZE_SCALE["headband_hair"] = round(D["head"][0] * 1.0 / D["headband"][0], 3)  # 头发金箍再放大贴合头缘
-    # 足部缩小至能被裙覆盖：腿宽 = 裙宽×0.9（动态）
-    leg_fit = round(D["skirt"][0] * SIZE_SCALE["skirt"] * 0.9 / D["legs_walk1"][0], 3)
-    for k in ("legs_walk1", "legs_walk2", "legs_right", "legs_tiptoe_l"):
-        SIZE_SCALE[k] = leg_fit
+    SIZE_SCALE["headband_hair"] = round(D["head"][0] * 1.0 / D["headband"][0], 3)
+    SIZE_SCALE["skirt"] = round(torso_w * 1.05 / D["skirt"][0], 3)
+    SIZE_SCALE["skirt_l"] = round(torso_w * 1.05 / D["skirt_l"][0], 3)
+    SIZE_SCALE["skirt_r"] = round(torso_w * 1.05 / D["skirt_r"][0], 3)
+    SIZE_SCALE["skirt_black"] = round(torso_w * 1.05 / D["skirt_black"][0], 3)
+    SIZE_SCALE["legs_walk1"] = round(D["skirt"][0] * 0.9 / D["legs_walk1"][0], 3)
+    SIZE_SCALE["legs_walk2"] = round(D["skirt"][0] * 0.9 / D["legs_walk2"][0], 3)
+    SIZE_SCALE["legs_right"] = round(D["skirt"][0] * 0.9 / D["legs_right"][0], 3)
+    SIZE_SCALE["legs_tiptoe_l"] = round(D["skirt"][0] * 0.9 / D["legs_tiptoe_l"][0], 3)
 
     BONES = [
         ("root",     None,     0, 0, {}),
         ("hips",     "root",   0, hips_y, {}),
-        ("legs",     "hips",   0, 10, {}),                      # 腿随裙以下部位上移 10（用户校准）
+        ("legs",     "hips",   0, 0, {}),
         ("skirt_b",  "hips",   0, skirt_y, {}),
         ("spine",    "hips",   0, spine_y, {}),
         ("neck_b",   "spine",  0, neck_y, {}),
@@ -182,24 +187,23 @@ def build_skeleton():
 
     # slot: (name, bone, [附件语义名], default)
     SLOTS = [
-        # 绘制顺序=数组顺序（后者在上层）：腿→臂在衣服下→躯干→裙/穗→颈→头→手/棒/骰/特效最上
-        ("legs",     "legs",    ["legs_walk1", "legs_walk2", "legs_right",
-                                 "legs_tiptoe_l"], "legs_walk1"),
+        ("fx",       "fx",      ["spark", "dice_throw_right", "dice_throw_back"], None),
+        ("legs",     "legs",    ["legs_walk1", "legs_walk2",
+                                 "legs_right", "legs_tiptoe_l"], "legs_walk1"),
+        ("skirt",    "skirt_b", ["skirt", "skirt_l", "skirt_r", "skirt_black"], "skirt"),
+        ("tassel",   "skirt_b", ["tassel"], "tassel"),
+        ("torso",    "spine",   ["torso", "torso_hands"], "torso"),
+        ("neck",     "neck_b",  ["neck_part"], "neck_part"),
         ("arm_l",    "arm_l",   ["arm_l_down", "arm_l_raise", "arm_l_toss"], "arm_l_down"),
         ("arm_r",    "arm_r",   ["arm_r_down", "arm_r_raise", "arm_r_toss"], "arm_r_down"),
-        ("torso",    "spine",   ["torso", "torso_hands"], "torso"),
-        ("skirt",    "skirt_b", ["skirt"], "skirt"),
-        ("tassel",   "skirt_b", ["tassel"], "tassel"),
-        ("neck",     "neck_b",  ["neck_part"], "neck_part"),
-        ("head",     "head",    ["head", "head_laugh", "head_sad", "head_grin",
-                                 "head_grit", "head_shock"], "head"),
-        ("band_hair", "band_b", ["headband_hair"], None),   # 金箍头发层（头与金箍之间）
-        ("headband", "band_b",  ["headband", "headband_anim"], "headband"),
         ("hand_l",   "hand_l",  ["hand_close"], None),
         ("hand_r",   "hand_r",  ["fist_close"], None),
         ("weapon",   "weapon",  ["staff_15", "staff_30", "staff_45", "staff_close"], None),
         ("prop",     "prop",    ["dice"], None),
-        ("fx",       "fx",      ["spark", "dice_throw_right", "dice_throw_back"], None),
+        ("head",     "head",    ["head", "head_laugh", "head_sad", "head_grin",
+                                 "head_grit", "head_shock"], "head"),
+        ("band_hair", "band_b", ["headband_hair"], None),
+        ("headband", "band_b",  ["headband", "headband_anim"], "headband"),
     ]
 
     bones = []
@@ -249,20 +253,18 @@ def build_animations():
 
     # —— idle_calm：右叉腰 + 左垂臂 + 呼吸微摆 ——
     T = 2.4
-    att("idle_calm", "arm_l", [(0, "arm_l_down")])   # 新批无叉腰图：双臂自然垂
+    att("idle_calm", "arm_r", [(0, "arm_r_fork")])
+    att("idle_calm", "arm_l", [(0, "arm_l_down")])
     rot("idle_calm", "chest", [(0, 0), (T / 2, 1.5), (T, 0)])
     tra("idle_calm", "chest", [(0, 0, 0), (T / 2, 0, 4), (T, 0, 0)])
     rot("idle_calm", "head", [(0, 0), (T / 2, 2), (T, 0)])
 
     # —— idle_happy：双臂振拳（臂图自带举姿）+ 正面踮脚蹦跳 + 大笑头 ——
     T = 1.2
-    att("idle_happy", "arm_r", [(0, "arm_r_raise")])
-    att("idle_happy", "arm_l", [(0, "arm_l_raise")])
+    att("idle_happy", "arm_r", [(0, "arm_r_fist")])
+    att("idle_happy", "arm_l", [(0, "arm_l_fist")])
     att("idle_happy", "head", [(0, "head_laugh")])
-    att("idle_happy", "band_hair", [(0, "headband_hair")])  # 图2 加头发与金箍（贴边 1.0 倍）
-    att("idle_happy", "headband", [(0, "headband")])
-    tra("idle_happy", "head", [(0, 0, -21), (T, 0, -21)])  # 头整体下移 21（用户校准：18再下移3）
-    att("idle_happy", "legs", [(0, "legs_tiptoe_l"), (T / 2, "legs_walk1"), (T, "legs_tiptoe_l")])
+    att("idle_happy", "legs", [(0, "legs_tiptoe_f"), (T / 2, "legs_idle"), (T, "legs_tiptoe_f")])
     tra("idle_happy", "hips", [(0, 0, 0), (T / 4, 0, 18), (T / 2, 0, 0),
                                (3 * T / 4, 0, 18), (T, 0, 0)])
     rot("idle_happy", "arm_r", [(0, 0), (T / 4, 8), (T / 2, 0), (3 * T / 4, 8), (T, 0)])
@@ -271,9 +273,6 @@ def build_animations():
     # —— idle_sad：委屈头 + 双垂臂 + 低头塌胸 ——
     T = 3.0
     att("idle_sad", "head", [(0, "head_sad")])
-    tra("idle_sad", "head", [(0, 0, -15), (T, 0, -15)])  # 头整体下移 15（用户校准：12再下移3）
-    att("idle_sad", "band_hair", [(0, "headband_hair")])  # 头三层构成：委屈头+金箍头发+金箍
-    att("idle_sad", "headband", [(0, "headband")])
     att("idle_sad", "arm_r", [(0, "arm_r_down")])
     att("idle_sad", "arm_l", [(0, "arm_l_down")])
     rot("idle_sad", "head", [(0, 0), (T / 3, 4), (T, 4)])
@@ -283,7 +282,7 @@ def build_animations():
     # —— walk：正面腿 1/2 交替 + 左右摆裙 + 双臂张开反相摆 ——
     T = 1.0
     att("walk", "legs", [(0, "legs_walk1"), (T / 2, "legs_walk2"), (T, "legs_walk1")])
-    # 裙统一单图后无摆动切帧（用户指定所有裙用同一张）
+    att("walk", "skirt", [(0, "skirt_l"), (T / 2, "skirt_r"), (T, "skirt_l")])
     att("walk", "arm_r", [(0, "arm_r_down")])
     att("walk", "arm_l", [(0, "arm_l_down")])
     rot("walk", "arm_r", [(0, -6), (T / 2, 6), (T, -6)])   # 反向小摆：手端朝下划弧，防翘到脸边
@@ -296,7 +295,7 @@ def build_animations():
     T = 1.5
     att("spin", "weapon", [(0, "staff_30"), (0.18, "staff_15"), (0.42, "staff_45"),
                            (0.66, "staff_30"), (0.9, "staff_15"), (T, "staff_30")])
-    att("spin", "arm_r", [(0, "arm_r_down")])   # 新批无握棒手型：垂臂+棒独立旋转
+    att("spin", "arm_r", [(0, "arm_r_grip")])
     att("spin", "arm_l", [(0, "arm_l_down")])
     rot("spin", "weapon", [(0, 0), (0.18, 90), (0.42, 200), (0.66, 320),
                            (0.9, 420), (1.2, 640), (T, 720)])
