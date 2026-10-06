@@ -370,12 +370,12 @@ def build_animations():
     T = 2.2
     att("throw_dice", "arm_l", [(0, "arm_l_raise")])   # 左手高举图（用户指定）
     scl("throw_dice", "arm_l", [(0, 0.75, 0.75), (T, 0.75, 0.75)])  # 左手缩小75%（用户校准）
-    tra("throw_dice", "arm_l", [(0, 0, 100), (T, 0, 100)])  # 左臂上移100贴合身体（用户校准）
+    tra("throw_dice", "arm_l", [(0, 0, 115), (T, 0, 115)])  # 左臂上移115贴合身体（用户校准）
     att("throw_dice", "arm_r", [(0, "arm_r_down")])
     att("throw_dice", "fx", [(0, "dice_throw_right"), (1.25, "spark"), (1.55, "blank")])
     # 骰子弧线反向（fx 骨水平镜像：骰子端贴手心、金光甩向右）+ 贴左手手心（用户校准）
     scl("throw_dice", "fx", [(0, -1, 1), (1.2, -1, 1)])
-    tra("throw_dice", "fx", [(0, -50, 25), (1.2, -50, 25)])
+    tra("throw_dice", "fx", [(0, -50, 40), (1.2, -50, 40)])
     tra("throw_dice", "chest", [(0, 0, 0), (1.1, 0, 4), (1.3, 0, -4), (T, 0, 0)])
     rot("throw_dice", "head", [(0, 0), (1.1, -6), (1.3, 8), (T, 0)])
     # 图6 足部上移20/缩小10%；裙整体上移20（仅此动画，用户校准）
