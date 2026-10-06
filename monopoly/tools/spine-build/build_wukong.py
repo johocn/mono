@@ -153,7 +153,7 @@ def build_skeleton():
     # 裙宽贴合腰身：目标宽 = 躯干宽×1.05（动态覆盖 SIZE_SCALE，用户校准「裙与腰部大小对齐」）
     SIZE_SCALE["skirt"] = round(torso_w * 1.05 / D["skirt"][0], 3)
     # 金箍缩放贴合头部轮廓：宽 = 头宽×0.9（动态，用户校准）
-    SIZE_SCALE["headband"] = round(D["head"][0] * 0.9 / D["headband"][0], 3)
+    SIZE_SCALE["headband"] = round(D["head"][0] * 0.8 / D["headband"][0], 3)
     SIZE_SCALE["headband_hair"] = SIZE_SCALE["headband"]
     # 足部缩小至能被裙覆盖：腿宽 = 裙宽×0.9（动态）
     leg_fit = round(D["skirt"][0] * SIZE_SCALE["skirt"] * 0.9 / D["legs_walk1"][0], 3)
@@ -193,7 +193,8 @@ def build_skeleton():
         ("neck",     "neck_b",  ["neck_part"], "neck_part"),
         ("head",     "head",    ["head", "head_laugh", "head_sad", "head_grin",
                                  "head_grit", "head_shock"], "head"),
-        ("headband", "band_b",  ["headband", "headband_hair", "headband_anim"], "headband"),
+        ("band_hair", "band_b", ["headband_hair"], None),   # 金箍头发层（头与金箍之间）
+        ("headband", "band_b",  ["headband", "headband_anim"], "headband"),
         ("hand_l",   "hand_l",  ["hand_close"], None),
         ("hand_r",   "hand_r",  ["fist_close"], None),
         ("weapon",   "weapon",  ["staff_15", "staff_30", "staff_45", "staff_close"], None),
@@ -258,7 +259,7 @@ def build_animations():
     att("idle_happy", "arm_r", [(0, "arm_r_raise")])
     att("idle_happy", "arm_l", [(0, "arm_l_raise")])
     att("idle_happy", "head", [(0, "head_laugh")])
-    tra("idle_happy", "head", [(0, 0, -15), (T, 0, -15)])  # 头整体下移 15（用户校准：12再下移3）
+    tra("idle_happy", "head", [(0, 0, -18), (T, 0, -18)])  # 头整体下移 18（用户校准：15再下移3）
     att("idle_happy", "headband", [(0, "headband_hair")])  # 金箍头发一体件：补头发，头发层在金箍上
     att("idle_happy", "legs", [(0, "legs_tiptoe_l"), (T / 2, "legs_walk1"), (T, "legs_tiptoe_l")])
     tra("idle_happy", "hips", [(0, 0, 0), (T / 4, 0, 18), (T / 2, 0, 0),
@@ -269,8 +270,9 @@ def build_animations():
     # —— idle_sad：委屈头 + 双垂臂 + 低头塌胸 ——
     T = 3.0
     att("idle_sad", "head", [(0, "head_sad")])
-    tra("idle_sad", "head", [(0, 0, -7), (T, 0, -7)])  # 头整体下移 7（用户校准）
-    att("idle_sad", "headband", [(0, "headband_hair")])  # 金箍头发一体件：补头发
+    tra("idle_sad", "head", [(0, 0, -12), (T, 0, -12)])  # 头整体下移 12（用户校准：7再下移5）
+    att("idle_sad", "band_hair", [(0, "headband_hair")])  # 头三层构成：委屈头+金箍头发+金箍
+    att("idle_sad", "headband", [(0, "headband")])
     att("idle_sad", "arm_r", [(0, "arm_r_down")])
     att("idle_sad", "arm_l", [(0, "arm_l_down")])
     rot("idle_sad", "head", [(0, 0), (T / 3, 4), (T, 4)])
