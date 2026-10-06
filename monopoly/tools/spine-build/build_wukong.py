@@ -39,11 +39,7 @@ PICK = {
     "孙悟空衣服没有手臂": "torso",
     "孙悟空衣服没有手部": "torso_hands",
     "孙悟空衣服穗子": "tassel",
-    "孙悟空绿色腰带虎皮裙": "skirt",
-    "孙悟空绿色虎皮裙": "skirt2",
-    "孙悟空绿色虎皮裙左摆": "skirt_l",
-    "孙悟空绿色虎皮裙右摆": "skirt_r",
-    "孙悟空黑色腰带虎皮裙": "skirt_black",
+    "孙悟空虎皮裙绿色腰带": "skirt",   # 用户统一指定：所有裙均用此图
     # 右臂/左臂语义名互换（用户第三轮校准：画面右臂=左手臂图、画面左臂=右手臂图）
     "孙悟空右手臂向下": "arm_l_down",
     "孙悟空右手叉腰": "arm_l_fork",
@@ -85,7 +81,7 @@ PICK = {
 SIZE_SCALE = {"hand_close": 0.5, "fist_close": 0.5, "staff_close": 0.6,
               "dice": 0.42, "spark": 0.7, "headband_anim": 0.9, "tassel": 0.6,
               "arm_l_grip": 0.55,
-              "skirt": 0.92, "skirt_l": 0.92, "skirt_r": 0.92}  # 裙身紧贴腰身（用户校准）
+              "skirt": 0.92}  # 裙身紧贴腰身（用户校准）
 
 SEM_OF = {v: k for k, v in PICK.items()}   # 语义名 → 文件 stem
 
@@ -197,7 +193,7 @@ def build_skeleton():
                                  "arm_l_open", "arm_l_grip", "arm_l_staff"], "arm_l_down"),
         ("arm_r",    "arm_r",   ["arm_r_down", "arm_r_fist", "arm_r_open", "arm_r_toss"], "arm_r_down"),
         ("torso",    "spine",   ["torso", "torso_hands"], "torso"),
-        ("skirt",    "skirt_b", ["skirt", "skirt2", "skirt_l", "skirt_r", "skirt_black"], "skirt"),
+        ("skirt",    "skirt_b", ["skirt"], "skirt"),
         ("tassel",   "skirt_b", ["tassel"], "tassel"),
         ("neck",     "neck_b",  ["neck_part"], "neck_part"),
         ("head",     "head",    ["head", "head_laugh", "head_sad", "head_grin",
@@ -288,7 +284,7 @@ def build_animations():
     # —— walk：正面腿 1/2 交替 + 左右摆裙 + 双臂张开反相摆 ——
     T = 1.0
     att("walk", "legs", [(0, "legs_walk1"), (T / 2, "legs_walk2"), (T, "legs_walk1")])
-    att("walk", "skirt", [(0, "skirt_l"), (T / 2, "skirt_r"), (T, "skirt_l")])
+    # 裙统一单图后无摆动切帧（用户指定所有裙用同一张）
     att("walk", "arm_r", [(0, "arm_r_down")])
     att("walk", "arm_l", [(0, "arm_l_down")])
     rot("walk", "arm_r", [(0, -6), (T / 2, 6), (T, -6)])   # 反向小摆：手端朝下划弧，防翘到脸边

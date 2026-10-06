@@ -1,1 +1,1 @@
-fix(mono-spine): 臂方向第三轮互换+臂骨贴身+臂图配色统一(红袖->黄/黑腕->蓝, fix_arm_colors.py)
+feat(mono-spine): 全部裙统一为「孙悟空虎皮裙绿色腰带」单图，移除裙摆切帧

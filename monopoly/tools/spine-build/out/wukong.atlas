@@ -30,72 +30,64 @@ torso_hands
 tassel
   bounds: 1231, 271, 239, 269
 skirt
-  bounds: 1472, 271, 269, 188
-skirt2
-  bounds: 1743, 271, 269, 202
-skirt_l
-  bounds: 0, 542, 269, 185
-skirt_r
-  bounds: 271, 542, 269, 198
-skirt_black
-  bounds: 542, 542, 269, 205
+  bounds: 1472, 271, 269, 179
 arm_l_down
-  bounds: 813, 542, 235, 269
+  bounds: 1743, 271, 235, 269
 arm_l_fork
-  bounds: 1050, 542, 215, 269
+  bounds: 0, 542, 215, 269
 arm_l_fist
-  bounds: 1267, 542, 216, 269
+  bounds: 217, 542, 216, 269
 arm_l_toss
-  bounds: 1485, 542, 262, 269
+  bounds: 435, 542, 262, 269
 arm_l_open
-  bounds: 1749, 542, 257, 269
+  bounds: 699, 542, 257, 269
 arm_l_grip
-  bounds: 0, 813, 259, 269
+  bounds: 958, 542, 259, 269
 arm_l_staff
-  bounds: 261, 813, 242, 269
+  bounds: 1219, 542, 242, 269
 arm_r_down
-  bounds: 505, 813, 129, 269
+  bounds: 1463, 542, 129, 269
 arm_r_fist
-  bounds: 636, 813, 226, 269
+  bounds: 1594, 542, 226, 269
 arm_r_open
-  bounds: 864, 813, 245, 269
+  bounds: 0, 813, 245, 269
 arm_r_toss
-  bounds: 1111, 813, 254, 269
+  bounds: 247, 813, 254, 269
 legs_idle
-  bounds: 1367, 813, 266, 269
+  bounds: 503, 813, 266, 269
 legs_walk1
-  bounds: 1635, 813, 244, 269
+  bounds: 771, 813, 244, 269
 legs_walk2
-  bounds: 0, 1084, 228, 269
+  bounds: 1017, 813, 228, 269
 legs_run1
-  bounds: 230, 1084, 269, 261
+  bounds: 1247, 813, 269, 261
 legs_run2
-  bounds: 501, 1084, 266, 269
+  bounds: 1518, 813, 266, 269
 legs_right
-  bounds: 769, 1084, 236, 269
+  bounds: 1786, 813, 236, 269
 legs_left
-  bounds: 1007, 1084, 269, 247
+  bounds: 0, 1084, 269, 247
 legs_tiptoe_l
-  bounds: 1278, 1084, 260, 269
+  bounds: 271, 1084, 260, 269
 legs_tiptoe_f
-  bounds: 1540, 1084, 269, 249
+  bounds: 533, 1084, 269, 249
 staff_15
-  bounds: 0, 1355, 269, 118
+  bounds: 804, 1084, 269, 118
 staff_30
-  bounds: 271, 1355, 269, 173
+  bounds: 1075, 1084, 269, 173
 staff_45
-  bounds: 542, 1355, 269, 241
+  bounds: 1346, 1084, 269, 241
 staff_close
-  bounds: 813, 1355, 267, 269
+  bounds: 1617, 1084, 267, 269
 dice
-  bounds: 1082, 1355, 255, 269
+  bounds: 0, 1355, 255, 269
 dice_throw_back
-  bounds: 1339, 1355, 234, 269
+  bounds: 257, 1355, 234, 269
 dice_throw_right
-  bounds: 1575, 1355, 269, 176
+  bounds: 493, 1355, 269, 176
 spark
-  bounds: 0, 1626, 269, 215
+  bounds: 764, 1355, 269, 215
 hand_close
-  bounds: 271, 1626, 250, 269
+  bounds: 1035, 1355, 250, 269
 fist_close
-  bounds: 523, 1626, 269, 247
+  bounds: 1287, 1355, 269, 247
