@@ -331,7 +331,7 @@ def build_animations():
     scl("walk", "torso_b", [(0, s_body, s_body), (T, s_body, s_body)])
     scl("walk", "skirt_b", [(0, s_body, s_body), (T, s_body, s_body)])
     scl("walk", "legs", [(0, s_leg, s_leg), (T, s_leg, s_leg)])
-    tra("walk", "legs", [(0, 0, 20), (T, 0, 20)])
+    tra("walk", "legs", [(0, -5, 10), (T, -5, 10)])  # 上移10/左移5（用户校准）
     # 图4 金箍缩小0.80+下移20贴合头部（仅此动画，用户校准）
     scl("walk", "band_b", [(0, 0.80, 0.80), (T, 0.80, 0.80)])
     tra("walk", "band_b", [(0, 0, -20), (T, 0, -20)])
