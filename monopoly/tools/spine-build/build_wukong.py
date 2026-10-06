@@ -87,7 +87,8 @@ PICK = {
 # 特写件（手部/拳头特写构图，同 SCALE 会偏大）
 SIZE_SCALE = {"hand_close": 0.5, "fist_close": 0.5, "staff_close": 0.6,
               "dice": 0.42, "spark": 0.7, "headband_anim": 0.9, "tassel": 0.6,
-              "arm_l_grip": 0.55}
+              "arm_l_grip": 0.55,
+              "skirt": 0.92, "skirt_l": 0.92, "skirt_r": 0.92}  # 裙身紧贴腰身（用户校准）
 
 SEM_OF = {v: k for k, v in PICK.items()}   # 语义名 → 文件 stem
 
@@ -167,7 +168,7 @@ def build_skeleton():
     arm_y = round(torso_h * 0.28)
     arm_x = round(arm_w * 0.55)                                  # 臂骨外移：臂图心=骨心，防胸前交叉
     hand_y = round(arm_h * 0.62)                                 # 手随臂骨（槽内切换时臂图自带手，此骨备用）
-    skirt_y = round(leg_h * 0.12 + 80 + 10)                      # 裙上移 80+10（用户校准）：底缘露脚踝不埋地面
+    skirt_y = round(leg_h * 0.12 + 80 + 10 + 20)                 # 裙上移 110（用户校准）：绿腰带盖住躯干蓝腰带消后腰
 
     BONES = [
         ("root",     None,     0, 0, {}),
