@@ -31,17 +31,17 @@ tassel
   bounds: 1231, 271, 239, 269
 skirt
   bounds: 1472, 271, 269, 179
-arm_l_down
-  bounds: 1743, 271, 116, 269
-arm_l_raise
-  bounds: 0, 542, 239, 269
-arm_l_toss
-  bounds: 241, 542, 269, 241
 arm_r_down
-  bounds: 512, 542, 118, 269
+  bounds: 1743, 271, 116, 269
 arm_r_raise
-  bounds: 632, 542, 267, 269
+  bounds: 0, 542, 239, 269
 arm_r_toss
+  bounds: 241, 542, 269, 241
+arm_l_down
+  bounds: 512, 542, 118, 269
+arm_l_raise
+  bounds: 632, 542, 267, 269
+arm_l_toss
   bounds: 901, 542, 269, 241
 legs_walk1
   bounds: 1172, 542, 244, 269

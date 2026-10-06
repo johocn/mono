@@ -40,13 +40,13 @@ PICK = {
     "孙悟空衣服没有手部": "torso_hands",
     "孙悟空衣服穗子": "tassel",
     "孙悟空虎皮裙绿色腰带": "skirt",   # 用户统一指定：所有裙均用此图
-    # 臂组（用户命名权威版：画面左=右手图、画面右=左手图，镜像约定）
-    "孙悟空右手下垂": "arm_l_down",
-    "孙悟空右手高举": "arm_l_raise",
-    "孙悟空右手高举抛": "arm_l_toss",
-    "孙悟空左手下垂": "arm_r_down",
-    "孙悟空左手高举": "arm_r_raise",
-    "孙悟空左手高举抛": "arm_r_toss",
+    # 臂组（用户第四轮校准：左臂图挂画面左 arm_l、右臂图挂画面右 arm_r）
+    "孙悟空右手下垂": "arm_r_down",
+    "孙悟空右手高举": "arm_r_raise",
+    "孙悟空右手高举抛": "arm_r_toss",
+    "孙悟空左手下垂": "arm_l_down",
+    "孙悟空左手高举": "arm_l_raise",
+    "孙悟空左手高举抛": "arm_l_toss",
     # 腿组（双腿整图）
     "孙悟空足部向前走1": "legs_walk1",
     "孙悟空足部向前走2": "legs_walk2",
@@ -136,7 +136,7 @@ def build_skeleton():
     neck_h = D["neck_part"][1]
     head_h = D["head"][1]
     band_h = D["headband"][1]
-    arm_h = D["arm_l_down"][1]
+    arm_h = D["arm_r_down"][1]
     skirt_h = D["skirt"][1]
 
     # 骨布局：部件图心=骨心，骨位=链式几何（比例参数在此集中可调）
@@ -145,16 +145,16 @@ def build_skeleton():
     neck_y = round(torso_h / 2 + neck_h / 2 - neck_h * OVERLAP - 100)  # 颈以上整体下移 100（用户校准）
     head_y = round(neck_h / 2 + head_h / 2 - head_h * OVERLAP * 1.5)  # 头底压颈顶
     band_y = round(head_h / 2 - band_h * 0.55)                   # 金箍图心在头上沿
-    arm_w = D["arm_l_raise"][0]
-    arm_y = round(torso_h * 0.26 - 90)                           # 臂整体下移 90（用户校准）
+    arm_w = D["arm_r_raise"][0]
+    arm_y = round(torso_h * 0.26 - 169)                          # 臂整体下移 169（用户校准：90+79）
     arm_x = round(arm_w * 0.45)                                  # 臂骨内移贴躯干（用户校准：尽量对齐衣服）
     hand_y = round(arm_h * 0.62)                                 # 手随臂骨（槽内切换时臂图自带手，此骨备用）
     skirt_y = round(leg_h * 0.12 + 80 + 10 + 15)                 # 裙上移 105（用户校准：100再上移5）
     # 裙宽贴合腰身：目标宽 = 躯干宽×1.05（动态覆盖 SIZE_SCALE，用户校准「裙与腰部大小对齐」）
     SIZE_SCALE["skirt"] = round(torso_w * 1.05 / D["skirt"][0], 3)
     # 金箍缩放贴合头部轮廓：宽 = 头宽×0.9（动态，用户校准）
-    SIZE_SCALE["headband"] = round(D["head"][0] * 0.8 / D["headband"][0], 3)
-    SIZE_SCALE["headband_hair"] = round(D["head"][0] * 0.9 / D["headband"][0], 3)  # 头发金箍放大贴合
+    SIZE_SCALE["headband"] = round(D["head"][0] * 0.9 / D["headband"][0], 3)
+    SIZE_SCALE["headband_hair"] = round(D["head"][0] * 1.0 / D["headband"][0], 3)  # 头发金箍再放大贴合头缘
     # 足部缩小至能被裙覆盖：腿宽 = 裙宽×0.9（动态）
     leg_fit = round(D["skirt"][0] * SIZE_SCALE["skirt"] * 0.9 / D["legs_walk1"][0], 3)
     for k in ("legs_walk1", "legs_walk2", "legs_right", "legs_tiptoe_l"):
