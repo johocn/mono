@@ -191,7 +191,7 @@ def build_skeleton():
 
     # slot: (name, bone, [附件语义名], default)
     SLOTS = [
-        ("fx",       "fx",      ["spark", "dice_throw_right", "dice_throw_back"], None),
+        # 绘制顺序=数组顺序（后者在上层）：腿/裙在最底，臂在躯干前、头在臂前，手/棒/骰/特效在最上
         ("legs",     "legs",    ["legs_idle", "legs_walk1", "legs_walk2", "legs_run1",
                                  "legs_run2", "legs_right", "legs_left",
                                  "legs_tiptoe_l", "legs_tiptoe_f"], "legs_idle"),
@@ -203,14 +203,15 @@ def build_skeleton():
                                  "arm_l_open", "arm_l_grip", "arm_l_staff"], "arm_l_down"),
         ("arm_r",    "arm_r",   ["arm_r_down", "arm_r_fist", "arm_r_open", "arm_r_toss",
                                  "arm_r_band"], "arm_r_down"),
+        ("head",     "head",    ["head", "head_laugh", "head_sad", "head_grin",
+                                 "head_grit", "head_shock"], "head"),
+        ("headband", "band_b",  ["headband", "headband_hair", "headband_anim"], "headband"),
         ("hand_l",   "hand_l",  ["hand_close"], None),
         ("hand_r",   "hand_r",  ["fist_close"], None),
         ("weapon",   "weapon",  ["staff_15", "staff_30", "staff_45", "staff_close",
                                  "staff_spin"], None),
         ("prop",     "prop",    ["dice"], None),
-        ("head",     "head",    ["head", "head_laugh", "head_sad", "head_grin",
-                                 "head_grit", "head_shock"], "head"),
-        ("headband", "band_b",  ["headband", "headband_hair", "headband_anim"], "headband"),
+        ("fx",       "fx",      ["spark", "dice_throw_right", "dice_throw_back"], None),
     ]
 
     bones = []
