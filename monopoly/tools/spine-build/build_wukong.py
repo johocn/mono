@@ -334,7 +334,8 @@ def build_animations():
     # 图4 身体+虎皮裙放大、足部缩小20%上移20（仅此动画，用户校准）
     s_body, s_leg = 1.10, 0.80
     scl("walk", "torso_b", [(0, s_body, s_body), (T, s_body, s_body)])
-    scl("walk", "skirt_b", [(0, s_body, s_body), (T, s_body, s_body)])
+    s_skirt = s_body * 1.05   # 裙在身体基础上再放大5%（用户校准）
+    scl("walk", "skirt_b", [(0, s_skirt, s_skirt), (T, s_skirt, s_skirt)])
     scl("walk", "legs", [(0, s_leg, s_leg), (T, s_leg, s_leg)])
     tra("walk", "legs", [(0, -5, 35), (T, -5, 35)])  # 上移35/左移5（用户校准）
     # 图4 金箍缩小0.80+下移20贴合头部（仅此动画，用户校准）
@@ -362,9 +363,10 @@ def build_animations():
     # —— throw_dice：左臂高举 + 向右抛出骰子特效 + 落地火花（用户方案试做） ——
     T = 2.2
     att("throw_dice", "arm_l", [(0, "arm_l_raise")])   # 左手高举图（用户指定）
+    scl("throw_dice", "arm_l", [(0, 0.50, 0.50), (T, 0.50, 0.50)])  # 左手缩小50%（用户校准）
     att("throw_dice", "arm_r", [(0, "arm_r_down")])
     att("throw_dice", "fx", [(0, "dice_throw_right"), (1.25, "spark"), (1.55, "blank")])
-    tra("throw_dice", "fx", [(0, -240, 70), (1.2, -240, 70)])  # 抛骰弧线尾对左手、骰子向右上（初值）
+    tra("throw_dice", "fx", [(0, -270, -60), (1.2, -270, -60)])  # 骰子贴左手手心（用户校准）
     tra("throw_dice", "chest", [(0, 0, 0), (1.1, 0, 4), (1.3, 0, -4), (T, 0, 0)])
     rot("throw_dice", "head", [(0, 0), (1.1, -6), (1.3, 8), (T, 0)])
     # 图6 足部上移10/缩小10%（仅此动画，用户校准）
