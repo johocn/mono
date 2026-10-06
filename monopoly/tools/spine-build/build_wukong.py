@@ -173,6 +173,7 @@ def build_skeleton():
         ("legs",     "hips",   0, leg_y, {}),
         ("skirt_b",  "hips",   0, skirt_y, {}),
         ("spine",    "hips",   0, spine_y, {}),
+        ("torso_b",  "spine",  0, 0, {}),      # 躯干独立骨（图3 单独缩放用，不影响头臂）
         ("neck_b",   "spine",  0, neck_y, {}),
         ("chest",    "spine",  0, round(spine_y * 0.45), {}),
         ("head",     "neck_b", 0, head_y, {}),
@@ -196,7 +197,7 @@ def build_skeleton():
         ("arm_r",    "arm_r",   ["arm_r_down", "arm_r_raise", "arm_r_toss"], "arm_r_down"),
         ("hand_l",   "hand_l",  ["hand_close"], None),
         ("hand_r",   "hand_r",  ["fist_close"], None),
-        ("torso",    "spine",   ["torso", "torso_hands"], "torso"),
+        ("torso",    "torso_b", ["torso", "torso_hands"], "torso"),
         ("neck",     "neck_b",  ["neck_part"], "neck_part"),
         ("skirt",    "skirt_b", ["skirt", "skirt_l", "skirt_r", "skirt_black"], "skirt"),
         ("tassel",   "skirt_b", ["tassel"], "tassel"),
@@ -253,6 +254,11 @@ def build_animations():
         a.setdefault("bones", {}).setdefault(bone, {})["translate"] = \
             [{"time": t, "x": x, "y": y} for t, x, y in frames]
 
+    def scl(anim, bone, frames):
+        a = anims.setdefault(anim, {})
+        a.setdefault("bones", {}).setdefault(bone, {})["scale"] = \
+            [{"time": t, "x": x, "y": y} for t, x, y in frames]
+
     # —— idle_calm：双垂臂 + 呼吸微摆 ——
     T = 2.4
     att("idle_calm", "arm_r", [(0, "arm_r_down")])
@@ -288,6 +294,14 @@ def build_animations():
     rot("idle_sad", "head", [(0, 0), (T / 3, 4), (T, 4)])
     rot("idle_sad", "chest", [(0, 0), (T / 3, 2), (T, 2)])
     tra("idle_sad", "chest", [(0, 0, 0), (T / 3, 0, -5), (T, 0, -5)])
+    # 图3 身体+虎皮裙放大、足部缩小（仅此动画，用户校准）
+    s_body, s_leg = 1.10, 0.88
+    scl("idle_sad", "torso_b", [(0, s_body, s_body), (T, s_body, s_body)])
+    scl("idle_sad", "skirt_b", [(0, s_body, s_body), (T, s_body, s_body)])
+    scl("idle_sad", "legs", [(0, s_leg, s_leg), (T, s_leg, s_leg)])
+    leg_h_eff = img_size("legs_walk1")[1] * SCALE * SIZE_SCALE["legs_walk1"]
+    leg_dy = round(-leg_h_eff / 2 * (1 - s_leg))  # 缩小后脚底下移补偿贴地
+    tra("idle_sad", "legs", [(0, 0, leg_dy), (T, 0, leg_dy)])
 
     # —— walk：正面腿 1/2 交替 + 左右摆裙 + 双臂张开反相摆 ——
     T = 1.0
