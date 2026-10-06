@@ -40,15 +40,13 @@ PICK = {
     "孙悟空衣服没有手部": "torso_hands",
     "孙悟空衣服穗子": "tassel",
     "孙悟空虎皮裙绿色腰带": "skirt",   # 用户统一指定：所有裙均用此图
-    # 臂组（新批次：画面左=右臂图、画面右=左臂图，用户三轮校准的镜像约定）
-    "孙悟空右手臂向下": "arm_l_down",
-    "孙悟空右手臂手掌张开": "arm_l_raise",
-    "孙悟空右手臂手心朝上可以抛东西": "arm_l_toss",
-    "孙悟空右手臂手掌并拢斜推掌": "arm_l_push",
-    "孙悟空右手臂手掌张开竖掌": "arm_l_palm",
-    "孙悟空左手臂向下": "arm_r_down",
-    "孙悟空左手臂手部张开": "arm_r_raise",
-    "孙悟空左手臂手掌并拢斜推掌": "arm_r_push",
+    # 臂组（用户命名权威版：画面左=右手图、画面右=左手图，镜像约定）
+    "孙悟空右手下垂": "arm_l_down",
+    "孙悟空右手高举": "arm_l_raise",
+    "孙悟空右手高举抛": "arm_l_toss",
+    "孙悟空左手下垂": "arm_r_down",
+    "孙悟空左手高举": "arm_r_raise",
+    "孙悟空左手高举抛": "arm_r_toss",
     # 腿组（双腿整图）
     "孙悟空足部向前走1": "legs_walk1",
     "孙悟空足部向前走2": "legs_walk2",
@@ -184,9 +182,8 @@ def build_skeleton():
         # 绘制顺序=数组顺序（后者在上层）：腿→臂在衣服下→躯干→裙/穗→颈→头→手/棒/骰/特效最上
         ("legs",     "legs",    ["legs_walk1", "legs_walk2", "legs_right",
                                  "legs_tiptoe_l"], "legs_walk1"),
-        ("arm_l",    "arm_l",   ["arm_l_down", "arm_l_raise", "arm_l_toss",
-                                 "arm_l_push", "arm_l_palm"], "arm_l_down"),
-        ("arm_r",    "arm_r",   ["arm_r_down", "arm_r_raise", "arm_r_push"], "arm_r_down"),
+        ("arm_l",    "arm_l",   ["arm_l_down", "arm_l_raise", "arm_l_toss"], "arm_l_down"),
+        ("arm_r",    "arm_r",   ["arm_r_down", "arm_r_raise", "arm_r_toss"], "arm_r_down"),
         ("torso",    "spine",   ["torso", "torso_hands"], "torso"),
         ("skirt",    "skirt_b", ["skirt"], "skirt"),
         ("tassel",   "skirt_b", ["tassel"], "tassel"),
