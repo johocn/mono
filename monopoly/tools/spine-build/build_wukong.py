@@ -285,12 +285,10 @@ def build_animations():
     rot("idle_happy", "arm_l", [(0, 8), (T / 4, 0), (T / 2, 8), (3 * T / 4, 0), (T, 8)])
     tra("idle_happy", "arm_r", [(0, 0, 140), (T, 0, 140)])  # 图2双臂上移 140（仅此动画，用户校准）
     tra("idle_happy", "arm_l", [(0, 0, 140), (T, 0, 140)])
-    # 图2 足部缩小+上移贴合裙摆（仅此动画，用户校准；legs 槽本就在裙下层）
+    # 图2 足部缩小0.88+上移20/左移5（仅此动画，用户校准；legs 槽本就在裙下层）
     s_leg = 0.88
     scl("idle_happy", "legs", [(0, s_leg, s_leg), (T, s_leg, s_leg)])
-    leg_h_eff = img_size("legs_walk1")[1] * SCALE * SIZE_SCALE["legs_walk1"]
-    leg_up = round(leg_h_eff / 2 * (1 - s_leg))
-    tra("idle_happy", "legs", [(0, 0, leg_up), (T, 0, leg_up)])
+    tra("idle_happy", "legs", [(0, -5, 20), (T, -5, 20)])
 
     # —— idle_sad：委屈头三层(头+金箍头发+金箍) + 双垂臂 + 低头塌胸 ——
     T = 3.0
@@ -323,14 +321,12 @@ def build_animations():
     tra("walk", "hips", [(0, 0, 0), (T / 4, 0, 8), (T / 2, 0, 0),
                          (3 * T / 4, 0, 8), (T, 0, 0)])
     rot("walk", "chest", [(0, 0), (T / 2, 1.5), (T, 0)])
-    # 图4 身体+虎皮裙放大、足部缩小上移贴合裙摆（仅此动画，用户校准）
-    s_body, s_leg = 1.10, 0.88
+    # 图4 身体+虎皮裙放大、足部缩小20%上移20（仅此动画，用户校准）
+    s_body, s_leg = 1.10, 0.80
     scl("walk", "torso_b", [(0, s_body, s_body), (T, s_body, s_body)])
     scl("walk", "skirt_b", [(0, s_body, s_body), (T, s_body, s_body)])
     scl("walk", "legs", [(0, s_leg, s_leg), (T, s_leg, s_leg)])
-    leg_h_eff = img_size("legs_walk1")[1] * SCALE * SIZE_SCALE["legs_walk1"]
-    leg_up = round(leg_h_eff / 2 * (1 - s_leg))  # 缩小后腿顶上移贴合裙摆
-    tra("walk", "legs", [(0, 0, leg_up), (T, 0, leg_up)])
+    tra("walk", "legs", [(0, 0, 20), (T, 0, 20)])
 
     # —— spin：棒 15/30/45 度帧切换 + 骨旋转 = 耍棒透视效果 ——
     T = 1.5
@@ -343,6 +339,9 @@ def build_animations():
     rot("spin", "arm_r", [(0, 0), (0.42, -12), (0.9, 10), (T, 0)])
     rot("spin", "head", [(0, 0), (0.42, 4), (T, 0)])
     tra("spin", "chest", [(0, 0, 0), (0.42, 0, 3), (T, 0, 0)])
+    # 图5 足部上移10/缩小10%（仅此动画，用户校准）
+    scl("spin", "legs", [(0, 0.90, 0.90), (T, 0.90, 0.90)])
+    tra("spin", "legs", [(0, 0, 10), (T, 0, 10)])
 
     # —— throw_dice：左臂托骰举起 → 掷出（骰上抛弧线+火花）→ 收回 ——
     T = 2.2
@@ -355,6 +354,9 @@ def build_animations():
     rot("throw_dice", "arm_l", [(0, 0), (1.1, -20), (1.25, -55), (1.5, -10), (1.8, 0)])
     tra("throw_dice", "chest", [(0, 0, 0), (1.1, 0, 4), (1.3, 0, -4), (T, 0, 0)])
     rot("throw_dice", "head", [(0, 0), (1.1, -6), (1.3, 8), (T, 0)])
+    # 图6 足部上移10/缩小10%（仅此动画，用户校准）
+    scl("throw_dice", "legs", [(0, 0.90, 0.90), (T, 0.90, 0.90)])
+    tra("throw_dice", "legs", [(0, 0, 10), (T, 0, 10)])
 
     return anims
 
