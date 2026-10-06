@@ -146,7 +146,7 @@ def build_skeleton():
     head_y = round(neck_h / 2 + head_h / 2 - head_h * OVERLAP * 1.5)  # 头底压颈顶
     band_y = round(head_h / 2 - band_h * 0.55)                   # 金箍图心在头上沿
     arm_w = D["arm_r_raise"][0]
-    arm_y = round(torso_h * 0.26 - 169)                          # 臂整体下移 169（用户校准：90+79）
+    arm_y = round(torso_h * 0.26 - 89)                           # 臂整体下移 89（用户校准：169上移80）
     arm_x = round(arm_w * 0.45)                                  # 臂骨内移贴躯干（用户校准：尽量对齐衣服）
     hand_y = round(arm_h * 0.62)                                 # 手随臂骨（槽内切换时臂图自带手，此骨备用）
     skirt_y = round(leg_h * 0.12 + 80 + 10 + 15)                 # 裙上移 105（用户校准：100再上移5）
@@ -259,8 +259,9 @@ def build_animations():
     att("idle_happy", "arm_r", [(0, "arm_r_raise")])
     att("idle_happy", "arm_l", [(0, "arm_l_raise")])
     att("idle_happy", "head", [(0, "head_laugh")])
+    att("idle_happy", "band_hair", [(0, "headband_hair")])  # 图2 加头发与金箍（贴边 1.0 倍）
+    att("idle_happy", "headband", [(0, "headband")])
     tra("idle_happy", "head", [(0, 0, -21), (T, 0, -21)])  # 头整体下移 21（用户校准：18再下移3）
-    att("idle_happy", "headband", [(0, "headband_hair")])  # 金箍头发一体件：补头发，头发层在金箍上
     att("idle_happy", "legs", [(0, "legs_tiptoe_l"), (T / 2, "legs_walk1"), (T, "legs_tiptoe_l")])
     tra("idle_happy", "hips", [(0, 0, 0), (T / 4, 0, 18), (T / 2, 0, 0),
                                (3 * T / 4, 0, 18), (T, 0, 0)])
