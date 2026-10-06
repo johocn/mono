@@ -44,20 +44,19 @@ PICK = {
     "孙悟空绿色虎皮裙左摆": "skirt_l",
     "孙悟空绿色虎皮裙右摆": "skirt_r",
     "孙悟空黑色腰带虎皮裙": "skirt_black",
-    # 右臂/左臂语义名互换（用户确认原图方向左右相反，交换后动画引用不变）
-    "孙悟空右手臂向下": "arm_l_down",
-    "孙悟空右手叉腰": "arm_l_fork",
-    "孙悟空右手振臂握拳": "arm_l_fist",
-    "孙悟空右手臂手心朝上可以抛东西": "arm_l_toss",
-    "孙悟空右手臂手掌张开": "arm_l_open",
-    "孙悟空右手握金箍棒图，没有金箍棒": "arm_l_grip",
-    "孙悟空右手持金箍棒": "arm_l_staff",
+    # 右臂（独立右臂图，无需镜像）——方向经用户两轮校准：左臂图挂画面左
+    "孙悟空右手臂向下": "arm_r_down",
+    "孙悟空右手叉腰": "arm_r_fork",
+    "孙悟空右手振臂握拳": "arm_r_fist",
+    "孙悟空右手臂手心朝上可以抛东西": "arm_r_toss",
+    "孙悟空右手臂手掌张开": "arm_r_open",
+    "孙悟空右手握金箍棒图，没有金箍棒": "arm_r_grip",
+    "孙悟空右手持金箍棒": "arm_r_staff",
     # 左臂
-    "孙悟空左手臂向下": "arm_r_down",
-    "孙悟空左手臂振臂握拳": "arm_r_fist",
-    "孙悟空左手臂手部张开": "arm_r_open",
-    "孙悟空左手臂手心朝上抛东西": "arm_r_toss",
-    "孙悟空金箍左手臂带手": "arm_r_band",
+    "孙悟空左手臂向下": "arm_l_down",
+    "孙悟空左手臂振臂握拳": "arm_l_fist",
+    "孙悟空左手臂手部张开": "arm_l_open",
+    "孙悟空左手臂手心朝上抛东西": "arm_l_toss",
     # 腿组（双腿整图）
     "孙悟空足部正面稍息": "legs_idle",
     "孙悟空足部向前走1": "legs_walk1",
@@ -81,13 +80,11 @@ PICK = {
     # 特写手（右手手部/拳头仅此部位，适合特写放大）
     "孙悟空右手手部": "hand_close",
     "孙悟空右手拳头": "fist_close",
-    # 旧部件保留
-    "生成骨架动画与游戏人物设计开发 (40)": "staff_spin",
 }
 # 特写件（手部/拳头特写构图，同 SCALE 会偏大）
 SIZE_SCALE = {"hand_close": 0.5, "fist_close": 0.5, "staff_close": 0.6,
               "dice": 0.42, "spark": 0.7, "headband_anim": 0.9, "tassel": 0.6,
-              "arm_l_grip": 0.55,
+              "arm_r_grip": 0.55,
               "skirt": 0.92, "skirt_l": 0.92, "skirt_r": 0.92}  # 裙身紧贴腰身（用户校准）
 
 SEM_OF = {v: k for k, v in PICK.items()}   # 语义名 → 文件 stem
@@ -192,25 +189,23 @@ def build_skeleton():
 
     # slot: (name, bone, [附件语义名], default)
     SLOTS = [
-        # 绘制顺序=数组顺序（后者在上层）：腿最底→躯干→裙/穗在衣服上→臂→头→手/棒/骰/特效最上
+        # 绘制顺序=数组顺序（后者在上层）：腿→臂在衣服下→躯干→裙/穗→颈→头→手/棒/骰/特效最上
         ("legs",     "legs",    ["legs_idle", "legs_walk1", "legs_walk2", "legs_run1",
                                  "legs_run2", "legs_right", "legs_left",
                                  "legs_tiptoe_l", "legs_tiptoe_f"], "legs_idle"),
+        ("arm_l",    "arm_l",   ["arm_l_down", "arm_l_fist", "arm_l_open", "arm_l_toss"], "arm_l_down"),
+        ("arm_r",    "arm_r",   ["arm_r_down", "arm_r_fork", "arm_r_fist", "arm_r_toss",
+                                 "arm_r_open", "arm_r_grip", "arm_r_staff"], "arm_r_down"),
         ("torso",    "spine",   ["torso", "torso_hands"], "torso"),
         ("skirt",    "skirt_b", ["skirt", "skirt2", "skirt_l", "skirt_r", "skirt_black"], "skirt"),
         ("tassel",   "skirt_b", ["tassel"], "tassel"),
         ("neck",     "neck_b",  ["neck_part"], "neck_part"),
-        ("arm_l",    "arm_l",   ["arm_l_down", "arm_l_fork", "arm_l_fist", "arm_l_toss",
-                                 "arm_l_open", "arm_l_grip", "arm_l_staff"], "arm_l_down"),
-        ("arm_r",    "arm_r",   ["arm_r_down", "arm_r_fist", "arm_r_open", "arm_r_toss",
-                                 "arm_r_band"], "arm_r_down"),
         ("head",     "head",    ["head", "head_laugh", "head_sad", "head_grin",
                                  "head_grit", "head_shock"], "head"),
         ("headband", "band_b",  ["headband", "headband_hair", "headband_anim"], "headband"),
         ("hand_l",   "hand_l",  ["hand_close"], None),
         ("hand_r",   "hand_r",  ["fist_close"], None),
-        ("weapon",   "weapon",  ["staff_15", "staff_30", "staff_45", "staff_close",
-                                 "staff_spin"], None),
+        ("weapon",   "weapon",  ["staff_15", "staff_30", "staff_45", "staff_close"], None),
         ("prop",     "prop",    ["dice"], None),
         ("fx",       "fx",      ["spark", "dice_throw_right", "dice_throw_back"], None),
     ]
