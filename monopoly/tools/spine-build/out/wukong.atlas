@@ -3,77 +3,77 @@ size: 2048,2048
 format: RGBA8888
 filter: Linear,Linear
 repeat: none
-torso
-  bounds: 0, 0, 645, 645
 head
-  bounds: 647, 0, 262, 269
+  bounds: 0, 0, 262, 269
 head_laugh
-  bounds: 911, 0, 269, 208
+  bounds: 264, 0, 269, 208
 head_sad
-  bounds: 1182, 0, 269, 216
+  bounds: 535, 0, 269, 216
 head_grin
-  bounds: 1453, 0, 269, 207
+  bounds: 806, 0, 269, 207
 head_grit
-  bounds: 1724, 0, 269, 247
+  bounds: 1077, 0, 269, 247
 head_shock
-  bounds: 0, 647, 269, 247
+  bounds: 1348, 0, 269, 247
 neck_part
-  bounds: 271, 647, 269, 182
+  bounds: 1619, 0, 269, 182
 headband
-  bounds: 542, 647, 269, 69
+  bounds: 0, 271, 269, 69
 headband_hair
-  bounds: 813, 647, 269, 193
+  bounds: 271, 271, 269, 193
 headband_anim
-  bounds: 1084, 647, 237, 269
+  bounds: 542, 271, 237, 269
+torso
+  bounds: 781, 271, 184, 269
 torso_hands
-  bounds: 1323, 647, 269, 250
+  bounds: 967, 271, 269, 250
 tassel
-  bounds: 1594, 647, 239, 269
+  bounds: 1238, 271, 239, 269
 skirt
-  bounds: 0, 918, 269, 179
+  bounds: 1479, 271, 269, 179
 skirt_l
-  bounds: 271, 918, 269, 185
+  bounds: 1750, 271, 269, 185
 skirt_r
-  bounds: 542, 918, 269, 198
+  bounds: 0, 542, 269, 198
 skirt_black
-  bounds: 813, 918, 269, 205
+  bounds: 271, 542, 269, 205
 arm_l_down
-  bounds: 1084, 918, 118, 269
+  bounds: 542, 542, 118, 269
 arm_l_raise
-  bounds: 1204, 918, 267, 269
+  bounds: 662, 542, 267, 269
 arm_l_toss
-  bounds: 1473, 918, 269, 241
+  bounds: 931, 542, 269, 241
 arm_r_down
-  bounds: 1744, 918, 116, 269
+  bounds: 1202, 542, 116, 269
 arm_r_raise
-  bounds: 0, 1189, 239, 269
+  bounds: 1320, 542, 239, 269
 arm_r_toss
-  bounds: 241, 1189, 269, 241
+  bounds: 1561, 542, 269, 241
 legs_walk1
-  bounds: 512, 1189, 244, 269
+  bounds: 0, 813, 244, 269
 legs_walk2
-  bounds: 758, 1189, 228, 269
+  bounds: 246, 813, 228, 269
 legs_right
-  bounds: 988, 1189, 236, 269
+  bounds: 476, 813, 236, 269
 legs_tiptoe_l
-  bounds: 1226, 1189, 260, 269
+  bounds: 714, 813, 260, 269
 staff_15
-  bounds: 1488, 1189, 269, 118
+  bounds: 976, 813, 269, 118
 staff_30
-  bounds: 1759, 1189, 269, 173
+  bounds: 1247, 813, 269, 173
 staff_45
-  bounds: 0, 1460, 269, 241
+  bounds: 1518, 813, 269, 241
 staff_close
-  bounds: 271, 1460, 267, 269
+  bounds: 0, 1084, 267, 269
 dice
-  bounds: 540, 1460, 255, 269
+  bounds: 269, 1084, 255, 269
 dice_throw_back
-  bounds: 797, 1460, 234, 269
+  bounds: 526, 1084, 234, 269
 dice_throw_right
-  bounds: 1033, 1460, 269, 176
+  bounds: 762, 1084, 269, 176
 spark
-  bounds: 1304, 1460, 269, 215
+  bounds: 1033, 1084, 269, 215
 hand_close
-  bounds: 1575, 1460, 250, 269
+  bounds: 1304, 1084, 250, 269
 fist_close
-  bounds: 0, 1731, 269, 247
+  bounds: 1556, 1084, 269, 247
