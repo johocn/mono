@@ -40,19 +40,15 @@ PICK = {
     "孙悟空衣服没有手部": "torso_hands",
     "孙悟空衣服穗子": "tassel",
     "孙悟空虎皮裙绿色腰带": "skirt",   # 用户统一指定：所有裙均用此图
-    # 右臂/左臂语义名互换（用户第三轮校准：画面右臂=左手臂图、画面左臂=右手臂图）
+    # 臂组（新批次：画面左=右臂图、画面右=左臂图，用户三轮校准的镜像约定）
     "孙悟空右手臂向下": "arm_l_down",
-    "孙悟空右手叉腰": "arm_l_fork",
-    "孙悟空右手振臂握拳": "arm_l_fist",
+    "孙悟空右手臂手掌张开": "arm_l_raise",
     "孙悟空右手臂手心朝上可以抛东西": "arm_l_toss",
-    "孙悟空右手臂手掌张开": "arm_l_open",
-    "孙悟空右手握金箍棒图，没有金箍棒": "arm_l_grip",
-    "孙悟空右手持金箍棒": "arm_l_staff",
-    # 左臂
+    "孙悟空右手臂手掌并拢斜推掌": "arm_l_push",
+    "孙悟空右手臂手掌张开竖掌": "arm_l_palm",
     "孙悟空左手臂向下": "arm_r_down",
-    "孙悟空左手臂振臂握拳": "arm_r_fist",
-    "孙悟空左手臂手部张开": "arm_r_open",
-    "孙悟空左手臂手心朝上抛东西": "arm_r_toss",
+    "孙悟空左手臂手部张开": "arm_r_raise",
+    "孙悟空左手臂手掌并拢斜推掌": "arm_r_push",
     # 腿组（双腿整图）
     "孙悟空足部向前走1": "legs_walk1",
     "孙悟空足部向前走2": "legs_walk2",
@@ -75,7 +71,6 @@ PICK = {
 # 特写件（手部/拳头特写构图，同 SCALE 会偏大）
 SIZE_SCALE = {"hand_close": 0.5, "fist_close": 0.5, "staff_close": 0.6,
               "dice": 0.42, "spark": 0.7, "headband_anim": 0.9, "tassel": 0.6,
-              "arm_l_grip": 0.55,
               "skirt": 0.92}  # 裙身紧贴腰身（用户校准）
 
 SEM_OF = {v: k for k, v in PICK.items()}   # 语义名 → 文件 stem
@@ -143,7 +138,7 @@ def build_skeleton():
     neck_h = D["neck_part"][1]
     head_h = D["head"][1]
     band_h = D["headband"][1]
-    arm_h = D["arm_r_down"][1]
+    arm_h = D["arm_l_down"][1]
     skirt_h = D["skirt"][1]
 
     # 骨布局：部件图心=骨心，骨位=链式几何（比例参数在此集中可调）
@@ -152,7 +147,7 @@ def build_skeleton():
     neck_y = round(torso_h / 2 + neck_h / 2 - neck_h * OVERLAP - 100)  # 颈以上整体下移 100（用户校准）
     head_y = round(neck_h / 2 + head_h / 2 - head_h * OVERLAP * 1.5)  # 头底压颈顶
     band_y = round(head_h / 2 - band_h * 0.55)                   # 金箍图心在头上沿
-    arm_w = D["arm_r_open"][0]
+    arm_w = D["arm_l_raise"][0]
     arm_y = round(torso_h * 0.26)
     arm_x = round(arm_w * 0.45)                                  # 臂骨内移贴躯干（用户校准：尽量对齐衣服）
     hand_y = round(arm_h * 0.62)                                 # 手随臂骨（槽内切换时臂图自带手，此骨备用）
@@ -189,9 +184,9 @@ def build_skeleton():
         # 绘制顺序=数组顺序（后者在上层）：腿→臂在衣服下→躯干→裙/穗→颈→头→手/棒/骰/特效最上
         ("legs",     "legs",    ["legs_walk1", "legs_walk2", "legs_right",
                                  "legs_tiptoe_l"], "legs_walk1"),
-        ("arm_l",    "arm_l",   ["arm_l_down", "arm_l_fork", "arm_l_fist", "arm_l_toss",
-                                 "arm_l_open", "arm_l_grip", "arm_l_staff"], "arm_l_down"),
-        ("arm_r",    "arm_r",   ["arm_r_down", "arm_r_fist", "arm_r_open", "arm_r_toss"], "arm_r_down"),
+        ("arm_l",    "arm_l",   ["arm_l_down", "arm_l_raise", "arm_l_toss",
+                                 "arm_l_push", "arm_l_palm"], "arm_l_down"),
+        ("arm_r",    "arm_r",   ["arm_r_down", "arm_r_raise", "arm_r_push"], "arm_r_down"),
         ("torso",    "spine",   ["torso", "torso_hands"], "torso"),
         ("skirt",    "skirt_b", ["skirt"], "skirt"),
         ("tassel",   "skirt_b", ["tassel"], "tassel"),
@@ -253,16 +248,15 @@ def build_animations():
 
     # —— idle_calm：右叉腰 + 左垂臂 + 呼吸微摆 ——
     T = 2.4
-    att("idle_calm", "arm_r", [(0, "arm_r_fork")])
-    att("idle_calm", "arm_l", [(0, "arm_l_down")])
+    att("idle_calm", "arm_l", [(0, "arm_l_down")])   # 新批无叉腰图：双臂自然垂
     rot("idle_calm", "chest", [(0, 0), (T / 2, 1.5), (T, 0)])
     tra("idle_calm", "chest", [(0, 0, 0), (T / 2, 0, 4), (T, 0, 0)])
     rot("idle_calm", "head", [(0, 0), (T / 2, 2), (T, 0)])
 
     # —— idle_happy：双臂振拳（臂图自带举姿）+ 正面踮脚蹦跳 + 大笑头 ——
     T = 1.2
-    att("idle_happy", "arm_r", [(0, "arm_r_fist")])
-    att("idle_happy", "arm_l", [(0, "arm_l_fist")])
+    att("idle_happy", "arm_r", [(0, "arm_r_raise")])
+    att("idle_happy", "arm_l", [(0, "arm_l_raise")])
     att("idle_happy", "head", [(0, "head_laugh")])
     tra("idle_happy", "head", [(0, 0, -12), (T, 0, -12)])  # 头整体下移 12（用户校准：7再下移5）
     att("idle_happy", "headband", [(0, "headband_hair")])  # 金箍头发一体件：补头发，头发层在金箍上
@@ -298,7 +292,7 @@ def build_animations():
     T = 1.5
     att("spin", "weapon", [(0, "staff_30"), (0.18, "staff_15"), (0.42, "staff_45"),
                            (0.66, "staff_30"), (0.9, "staff_15"), (T, "staff_30")])
-    att("spin", "arm_r", [(0, "arm_r_grip")])
+    att("spin", "arm_r", [(0, "arm_r_down")])   # 新批无握棒手型：垂臂+棒独立旋转
     att("spin", "arm_l", [(0, "arm_l_down")])
     rot("spin", "weapon", [(0, 0), (0.18, 90), (0.42, 200), (0.66, 320),
                            (0.9, 420), (1.2, 640), (T, 720)])

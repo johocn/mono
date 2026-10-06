@@ -18,7 +18,7 @@ head_shock
 neck_part
   bounds: 1619, 0, 269, 182
 headband
-  bounds: 0, 271, 269, 111
+  bounds: 0, 271, 269, 69
 headband_hair
   bounds: 271, 271, 269, 193
 headband_anim
@@ -32,52 +32,46 @@ tassel
 skirt
   bounds: 1472, 271, 269, 179
 arm_l_down
-  bounds: 1743, 271, 235, 269
-arm_l_fork
-  bounds: 0, 542, 215, 269
-arm_l_fist
-  bounds: 217, 542, 216, 269
+  bounds: 1743, 271, 118, 269
+arm_l_raise
+  bounds: 0, 542, 263, 269
 arm_l_toss
-  bounds: 435, 542, 262, 269
-arm_l_open
-  bounds: 699, 542, 257, 269
-arm_l_grip
-  bounds: 958, 542, 259, 269
-arm_l_staff
-  bounds: 1219, 542, 242, 269
+  bounds: 265, 542, 269, 241
+arm_l_push
+  bounds: 536, 542, 242, 269
+arm_l_palm
+  bounds: 780, 542, 239, 269
 arm_r_down
-  bounds: 1463, 542, 129, 269
-arm_r_fist
-  bounds: 1594, 542, 226, 269
-arm_r_open
-  bounds: 0, 813, 245, 269
-arm_r_toss
-  bounds: 247, 813, 254, 269
+  bounds: 1021, 542, 116, 269
+arm_r_raise
+  bounds: 1139, 542, 267, 269
+arm_r_push
+  bounds: 1408, 542, 247, 269
 legs_walk1
-  bounds: 503, 813, 244, 269
+  bounds: 1657, 542, 244, 269
 legs_walk2
-  bounds: 749, 813, 228, 269
+  bounds: 0, 813, 228, 269
 legs_right
-  bounds: 979, 813, 236, 269
+  bounds: 230, 813, 236, 269
 legs_tiptoe_l
-  bounds: 1217, 813, 260, 269
+  bounds: 468, 813, 260, 269
 staff_15
-  bounds: 1479, 813, 269, 118
+  bounds: 730, 813, 269, 118
 staff_30
-  bounds: 1750, 813, 269, 173
+  bounds: 1001, 813, 269, 173
 staff_45
-  bounds: 0, 1084, 269, 241
+  bounds: 1272, 813, 269, 241
 staff_close
-  bounds: 271, 1084, 267, 269
+  bounds: 1543, 813, 267, 269
 dice
-  bounds: 540, 1084, 255, 269
+  bounds: 0, 1084, 255, 269
 dice_throw_back
-  bounds: 797, 1084, 234, 269
+  bounds: 257, 1084, 234, 269
 dice_throw_right
-  bounds: 1033, 1084, 269, 176
+  bounds: 493, 1084, 269, 176
 spark
-  bounds: 1304, 1084, 269, 215
+  bounds: 764, 1084, 269, 215
 hand_close
-  bounds: 1575, 1084, 250, 269
+  bounds: 1035, 1084, 250, 269
 fist_close
-  bounds: 0, 1355, 269, 247
+  bounds: 1287, 1084, 269, 247

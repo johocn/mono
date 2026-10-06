@@ -1,1 +1,1 @@
-fix(mono-spine): idle_happy 头再下移5(累计12)
+feat(mono-spine): 新臂批次8图入库(子代理看图定名,(7)翻转为左臂)+金箍新图重处理;动画改用raise/toss,废弃叉腰振拳握棒手型
