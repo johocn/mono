@@ -46,9 +46,9 @@ arm_l_toss
 arm_r_down
   bounds: 1202, 542, 116, 269
 arm_r_raise
-  bounds: 1320, 542, 239, 269
+  bounds: 1320, 542, 263, 269
 arm_r_toss
-  bounds: 1561, 542, 269, 241
+  bounds: 1585, 542, 269, 241
 legs_walk1
   bounds: 0, 813, 244, 269
 legs_walk2
