@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>岁月神偷：脑力花园</title>
+  <meta name="renderer" content="webkit" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="full-screen" content="true" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+  <!-- 空 data-URI 图标：避免浏览器自动请求 /favicon.ico 造成控制台 404 -->
+  <link rel="icon" href="data:," />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1a2e;
+      font-family: "Microsoft YaHei","Noto Sans CJK SC","WenQuanYi Micro Hei",sans-serif; }
+    #GameCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; touch-action: none; }
+    #Loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      color: #e0e0e0; font-size: 24px; z-index: 999; }
+  </style>
+</head>
+<body>
+  <div id="Loading">花园正在苏醒…</div>
+  <canvas id="GameCanvas"></canvas>
+  <!--
+    运行时环境变量覆盖（可选，优先级高于构建期注入的 process.env.VENDURE_*）。
+    部署时可由后端模板 / 网关注入，无需重新构建即可切换真实 Vendure 后端。
+    留空对象 {} 表示沿用构建期配置（默认本地 mock 商品）。
+  -->
+  <script>
+    window.__APP_ENV__ = {
+      // VENDURE_API_URL: "https://your-vendure.example/shop-api",
+      // VENDURE_STOREFRONT_URL: "https://shop.your-vendure.example",
+      // VENDURE_CHANNEL_TOKEN: "",
+      // 消消乐后端（换装花园：模板中心 / AI 生成 / 素材上传 / 积分同步）
+      // GAME_SERVER_API_URL: "http://localhost:3000",
+    };
+  </script>
+  <!-- 相对路径兼容三种入口：本地 `npm run serve`、线上目录 /tour/xxl/（./bundle.js 直接命中）、
+       线上快捷入口 /tour/xxl.html（nginx alias 返回本文件但 URL 基准目录是 /tour/，
+       首个 404 后自动兜底加载 ./xxl/bundle.js） -->
+  <!-- 微信内 JS-SDK 分享（自定义转发卡片；非微信环境自动跳过） -->
+  <script src="./wechat-share.js"></script>
+  <script src="./bundle.js" onerror="var s=document.createElement('script');s.src='./xxl/bundle.js';document.body.appendChild(s)"></script>
+</body>
+</html>
