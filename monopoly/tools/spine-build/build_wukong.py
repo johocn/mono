@@ -192,7 +192,7 @@ def build_skeleton():
         ("closeup",  "root",   round(torso_w * 1.4), round(hips_y + spine_y * 1.6), {}),
     ]
 
-    # slot: (name, bone, [附件语义名], default)；顺序=绘制顺序（fx 放最后=骰子特效在最上层）
+    # slot: (name, bone, [附件语义名], default)；顺序=绘制顺序（裙/穗子/骰子特效在最上层）
     SLOTS = [
         ("legs",     "legs",    ["legs_walk1", "legs_walk2",
                                  "legs_right", "legs_tiptoe_l"], "legs_walk1"),
@@ -203,14 +203,14 @@ def build_skeleton():
         ("hand_r",   "hand_r",  ["fist_close"], None),
         ("torso",    "torso_b", ["torso", "torso_hands"], "torso"),
         ("neck",     "neck_b",  ["neck_part"], "neck_part"),
-        ("skirt",    "skirt_b", ["skirt", "skirt_l", "skirt_r", "skirt_black"], "skirt"),
-        ("tassel",   "skirt_b", ["tassel"], "tassel"),
         ("weapon",   "weapon",  ["staff_15", "staff_30", "staff_45", "staff_close"], None),
         ("prop",     "prop",    ["dice"], None),
         ("head",     "head",    ["head", "head_laugh", "head_sad", "head_grin",
                                  "head_grit", "head_shock"], "head"),
         ("band_hair", "band_b", ["headband_hair"], None),
         ("headband", "band_b",  ["headband", "headband_anim"], "headband"),
+        ("tassel",   "skirt_b", ["tassel"], "tassel"),
+        ("skirt",    "skirt_b", ["skirt", "skirt_l", "skirt_r", "skirt_black"], "skirt"),
         ("fx",       "fx",      ["spark", "dice_throw_right", "dice_throw_back"], None),
     ]
 
@@ -336,7 +336,7 @@ def build_animations():
     # 图4 身体+虎皮裙放大、足部缩小20%上移20（仅此动画，用户校准）
     s_body, s_leg = 1.10, 0.80
     scl("walk", "torso_b", [(0, s_body, s_body), (T, s_body, s_body)])
-    s_skirt = s_body * 1.05   # 裙在身体基础上再放大5%（用户校准）
+    s_skirt = s_body * 1.10   # 裙在身体基础上再放大10%（用户校准，贴合腰部）
     scl("walk", "skirt_b", [(0, s_skirt, s_skirt), (T, s_skirt, s_skirt)])
     scl("walk", "legs", [(0, s_leg, s_leg), (T, s_leg, s_leg)])
     tra("walk", "legs", [(0, -5, 35), (T, -5, 35)])  # 上移35/左移5（用户校准）
@@ -365,7 +365,7 @@ def build_animations():
     # —— throw_dice：左臂高举 + 向右抛出骰子特效 + 落地火花（用户方案试做） ——
     T = 2.2
     att("throw_dice", "arm_l", [(0, "arm_l_raise")])   # 左手高举图（用户指定）
-    scl("throw_dice", "arm_l", [(0, 0.50, 0.50), (T, 0.50, 0.50)])  # 左手缩小50%（用户校准）
+    scl("throw_dice", "arm_l", [(0, 0.75, 0.75), (T, 0.75, 0.75)])  # 左手缩小75%（用户校准）
     tra("throw_dice", "arm_l", [(0, 0, 100), (T, 0, 100)])  # 左臂上移100贴合身体（用户校准）
     att("throw_dice", "arm_r", [(0, "arm_r_down")])
     att("throw_dice", "fx", [(0, "dice_throw_right"), (1.25, "spark"), (1.55, "blank")])
