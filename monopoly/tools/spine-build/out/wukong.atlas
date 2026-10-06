@@ -53,41 +53,31 @@ arm_r_open
   bounds: 0, 813, 245, 269
 arm_r_toss
   bounds: 247, 813, 254, 269
-legs_idle
-  bounds: 503, 813, 266, 269
 legs_walk1
-  bounds: 771, 813, 244, 269
+  bounds: 503, 813, 244, 269
 legs_walk2
-  bounds: 1017, 813, 228, 269
-legs_run1
-  bounds: 1247, 813, 269, 261
-legs_run2
-  bounds: 1518, 813, 266, 269
+  bounds: 749, 813, 228, 269
 legs_right
-  bounds: 1786, 813, 236, 269
-legs_left
-  bounds: 0, 1084, 269, 247
+  bounds: 979, 813, 236, 269
 legs_tiptoe_l
-  bounds: 271, 1084, 260, 269
-legs_tiptoe_f
-  bounds: 533, 1084, 269, 249
+  bounds: 1217, 813, 260, 269
 staff_15
-  bounds: 804, 1084, 269, 118
+  bounds: 1479, 813, 269, 118
 staff_30
-  bounds: 1075, 1084, 269, 173
+  bounds: 1750, 813, 269, 173
 staff_45
-  bounds: 1346, 1084, 269, 241
+  bounds: 0, 1084, 269, 241
 staff_close
-  bounds: 1617, 1084, 267, 269
+  bounds: 271, 1084, 267, 269
 dice
-  bounds: 0, 1355, 255, 269
+  bounds: 540, 1084, 255, 269
 dice_throw_back
-  bounds: 257, 1355, 234, 269
+  bounds: 797, 1084, 234, 269
 dice_throw_right
-  bounds: 493, 1355, 269, 176
+  bounds: 1033, 1084, 269, 176
 spark
-  bounds: 764, 1355, 269, 215
+  bounds: 1304, 1084, 269, 215
 hand_close
-  bounds: 1035, 1355, 250, 269
+  bounds: 1575, 1084, 250, 269
 fist_close
-  bounds: 1287, 1355, 269, 247
+  bounds: 0, 1355, 269, 247

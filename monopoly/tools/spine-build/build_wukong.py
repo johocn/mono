@@ -54,15 +54,10 @@ PICK = {
     "孙悟空左手臂手部张开": "arm_r_open",
     "孙悟空左手臂手心朝上抛东西": "arm_r_toss",
     # 腿组（双腿整图）
-    "孙悟空足部正面稍息": "legs_idle",
     "孙悟空足部向前走1": "legs_walk1",
     "孙悟空足部向前走2": "legs_walk2",
-    "孙悟空足部右前方奔跑": "legs_run1",
-    "孙悟空足部右前方奔跑2": "legs_run2",
     "孙悟空足部向右走": "legs_right",
-    "孙悟空足部向左走": "legs_left",
     "孙悟空足部向左踮脚": "legs_tiptoe_l",
-    "孙悟空足部正面踮脚": "legs_tiptoe_f",
     # 棒组
     "孙悟空金箍棒全图15度角": "staff_15",
     "孙悟空金箍棒全图30度角": "staff_30",
@@ -142,7 +137,7 @@ def build_skeleton():
     # 量取关键部件尺寸（骨架单位）
     D = {sem: (w * SCALE, h * SCALE) for sem, (w, h) in
          ((s, img_size(s)) for s in PICK.values())}
-    leg_h = D["legs_idle"][1]
+    leg_h = D["legs_walk1"][1]
     torso_h = D["torso"][1]
     torso_w = D["torso"][0]
     neck_h = D["neck_part"][1]
@@ -161,7 +156,9 @@ def build_skeleton():
     arm_y = round(torso_h * 0.26)
     arm_x = round(arm_w * 0.45)                                  # 臂骨内移贴躯干（用户校准：尽量对齐衣服）
     hand_y = round(arm_h * 0.62)                                 # 手随臂骨（槽内切换时臂图自带手，此骨备用）
-    skirt_y = round(leg_h * 0.12 + 80 + 10 + 20)                 # 裙上移 110（用户校准）：绿腰带盖住躯干蓝腰带消后腰
+    skirt_y = round(leg_h * 0.12 + 80 + 10 + 10)                 # 裙上移 100（用户校准：原110下移10）
+    # 裙宽贴合腰身：目标宽 = 躯干宽×1.05（动态覆盖 SIZE_SCALE，用户校准「裙与腰部大小对齐」）
+    SIZE_SCALE["skirt"] = round(torso_w * 1.05 / D["skirt"][0], 3)
 
     BONES = [
         ("root",     None,     0, 0, {}),
@@ -186,9 +183,8 @@ def build_skeleton():
     # slot: (name, bone, [附件语义名], default)
     SLOTS = [
         # 绘制顺序=数组顺序（后者在上层）：腿→臂在衣服下→躯干→裙/穗→颈→头→手/棒/骰/特效最上
-        ("legs",     "legs",    ["legs_idle", "legs_walk1", "legs_walk2", "legs_run1",
-                                 "legs_run2", "legs_right", "legs_left",
-                                 "legs_tiptoe_l", "legs_tiptoe_f"], "legs_idle"),
+        ("legs",     "legs",    ["legs_walk1", "legs_walk2", "legs_right",
+                                 "legs_tiptoe_l"], "legs_walk1"),
         ("arm_l",    "arm_l",   ["arm_l_down", "arm_l_fork", "arm_l_fist", "arm_l_toss",
                                  "arm_l_open", "arm_l_grip", "arm_l_staff"], "arm_l_down"),
         ("arm_r",    "arm_r",   ["arm_r_down", "arm_r_fist", "arm_r_open", "arm_r_toss"], "arm_r_down"),
@@ -265,7 +261,7 @@ def build_animations():
     att("idle_happy", "arm_l", [(0, "arm_l_fist")])
     att("idle_happy", "head", [(0, "head_laugh")])
     att("idle_happy", "headband", [(0, "headband_hair")])  # 金箍头发一体件：补头发，头发层在金箍上
-    att("idle_happy", "legs", [(0, "legs_tiptoe_f"), (T / 2, "legs_idle"), (T, "legs_tiptoe_f")])
+    att("idle_happy", "legs", [(0, "legs_tiptoe_l"), (T / 2, "legs_walk1"), (T, "legs_tiptoe_l")])
     tra("idle_happy", "hips", [(0, 0, 0), (T / 4, 0, 18), (T / 2, 0, 0),
                                (3 * T / 4, 0, 18), (T, 0, 0)])
     rot("idle_happy", "arm_r", [(0, 0), (T / 4, 8), (T / 2, 0), (3 * T / 4, 8), (T, 0)])
