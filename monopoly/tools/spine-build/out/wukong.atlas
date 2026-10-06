@@ -79,3 +79,5 @@ hand_close
   bounds: 1304, 1084, 250, 269
 fist_close
   bounds: 1556, 1084, 269, 247
+blank
+  bounds: 1827, 1084, 2, 2

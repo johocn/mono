@@ -84,14 +84,17 @@ def img_size(sem):
 
 # ---------------- 1. Atlas 打包 ----------------
 def pack_atlas():
-    names = list(PICK.values())
+    names = list(PICK.values()) + ["blank"]   # blank: 2x2 透明件（动画隐藏附件用）
     regions = []
     for name in names:
-        img = Image.open(PARTS / f"{SEM_OF[name]}.png").convert("RGBA")
-        img = img.resize(
-            (max(1, round(img.width * SCALE)), max(1, round(img.height * SCALE))),
-            Image.LANCZOS,
-        )
+        if name == "blank":
+            img = Image.new("RGBA", (2, 2), (0, 0, 0, 0))
+        else:
+            img = Image.open(PARTS / f"{SEM_OF[name]}.png").convert("RGBA")
+            img = img.resize(
+                (max(1, round(img.width * SCALE)), max(1, round(img.height * SCALE))),
+                Image.LANCZOS,
+            )
         regions.append((name, img))
     regions.sort(key=lambda r: -max(r[1].size))
 
@@ -228,6 +231,7 @@ def build_skeleton():
         for sem in atts:
             a = make_attachment(sem)
             entries[sem] = a
+        entries["blank"] = {"x": 0, "y": 0, "width": 2, "height": 2}  # 隐藏用透明件
         skin[slot_name] = entries
     return {
         "skeleton": {"spine": "4.2.24", "hash": "zhao-wukong-4", "x": -400, "y": -100,
@@ -319,6 +323,7 @@ def build_animations():
     T = 1.0
     att("walk", "legs", [(0, "legs_walk1"), (T / 2, "legs_walk2"), (T, "legs_walk1")])
     att("walk", "skirt", [(0, "skirt_l"), (T / 2, "skirt_r"), (T, "skirt_l")])
+    att("walk", "tassel", [(0, "blank")])  # 穗子静止遮挡摆动裙摆边缘，walk 中隐藏（用户反馈）
     att("walk", "arm_r", [(0, "arm_r_down")])
     att("walk", "arm_l", [(0, "arm_l_down")])
     rot("walk", "arm_r", [(0, -6), (T / 2, 6), (T, -6)])   # 反向小摆：手端朝下划弧，防翘到脸边
@@ -331,7 +336,7 @@ def build_animations():
     scl("walk", "torso_b", [(0, s_body, s_body), (T, s_body, s_body)])
     scl("walk", "skirt_b", [(0, s_body, s_body), (T, s_body, s_body)])
     scl("walk", "legs", [(0, s_leg, s_leg), (T, s_leg, s_leg)])
-    tra("walk", "legs", [(0, -5, 10), (T, -5, 10)])  # 上移10/左移5（用户校准）
+    tra("walk", "legs", [(0, -5, 35), (T, -5, 35)])  # 上移35/左移5（用户校准）
     # 图4 金箍缩小0.80+下移20贴合头部（仅此动画，用户校准）
     scl("walk", "band_b", [(0, 0.80, 0.80), (T, 0.80, 0.80)])
     tra("walk", "band_b", [(0, 0, -20), (T, 0, -20)])
@@ -354,27 +359,17 @@ def build_animations():
     scl("spin", "legs", [(0, 0.90, 0.90), (T, 0.90, 0.90)])
     tra("spin", "legs", [(0, 0, 10), (T, 0, 10)])
 
-    # —— throw_dice：左臂托骰举起 → 掷出（骰上抛弧线+火花）→ 收回 ——
+    # —— throw_dice：左臂高举 + 向右抛出骰子特效 + 落地火花（用户方案试做） ——
     T = 2.2
-    att("throw_dice", "arm_l", [(0, "arm_l_toss"), (1.5, "arm_l_toss"), (1.8, "arm_l_down")])
+    att("throw_dice", "arm_l", [(0, "arm_l_raise")])   # 左手高举图（用户指定）
     att("throw_dice", "arm_r", [(0, "arm_r_down")])
-    att("throw_dice", "prop", [(0, "dice"), (1.25, "dice"), (1.26, None)])
-    att("throw_dice", "fx", [(1.25, "spark"), (1.55, None)])
-    tra("throw_dice", "prop", [(0, 0, 0), (1.1, 0, 10), (1.3, 60, 150),
-                               (1.5, 40, 40), (1.7, 20, -60)])
-    rot("throw_dice", "arm_l", [(0, 0), (1.1, -20), (1.25, -55), (1.5, -10), (1.8, 0)])
+    att("throw_dice", "fx", [(0, "dice_throw_right"), (1.25, "spark"), (1.55, "blank")])
+    tra("throw_dice", "fx", [(0, -240, 70), (1.2, -240, 70)])  # 抛骰弧线尾对左手、骰子向右上（初值）
     tra("throw_dice", "chest", [(0, 0, 0), (1.1, 0, 4), (1.3, 0, -4), (T, 0, 0)])
     rot("throw_dice", "head", [(0, 0), (1.1, -6), (1.3, 8), (T, 0)])
     # 图6 足部上移10/缩小10%（仅此动画，用户校准）
     scl("throw_dice", "legs", [(0, 0.90, 0.90), (T, 0.90, 0.90)])
     tra("throw_dice", "legs", [(0, 0, 10), (T, 0, 10)])
-    # 图6 左臂(托骰弯臂)缩小0.9+右移30贴身（用户校准初值）
-    scl("throw_dice", "arm_l", [(0, 0.90, 0.90), (T, 0.90, 0.90)])
-    tra("throw_dice", "arm_l", [(0, 30, 0), (T, 30, 0)])
-    # 图6 金箍棒旋转（用户二选一选定）：右手位全程转棒两圈
-    att("throw_dice", "weapon", [(0, "staff_30")])
-    rot("throw_dice", "weapon", [(0, 0), (T / 4, 180), (T / 2, 360),
-                                 (3 * T / 4, 540), (T, 720)])
     # 图6 金箍缩小0.80+下移20贴合头部（仅此动画，用户校准）
     scl("throw_dice", "band_b", [(0, 0.80, 0.80), (T, 0.80, 0.80)])
     tra("throw_dice", "band_b", [(0, 0, -20), (T, 0, -20)])
