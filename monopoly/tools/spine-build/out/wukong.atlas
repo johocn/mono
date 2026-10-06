@@ -39,27 +39,27 @@ skirt_r
   bounds: 271, 542, 269, 198
 skirt_black
   bounds: 542, 542, 269, 205
-arm_r_down
-  bounds: 813, 542, 235, 269
-arm_r_fork
-  bounds: 1050, 542, 215, 269
-arm_r_fist
-  bounds: 1267, 542, 216, 269
-arm_r_toss
-  bounds: 1485, 542, 262, 269
-arm_r_open
-  bounds: 1749, 542, 257, 269
-arm_r_grip
-  bounds: 0, 813, 259, 269
-arm_r_staff
-  bounds: 261, 813, 242, 269
 arm_l_down
-  bounds: 505, 813, 129, 269
+  bounds: 813, 542, 235, 269
+arm_l_fork
+  bounds: 1050, 542, 215, 269
 arm_l_fist
-  bounds: 636, 813, 226, 269
-arm_l_open
-  bounds: 864, 813, 245, 269
+  bounds: 1267, 542, 216, 269
 arm_l_toss
+  bounds: 1485, 542, 262, 269
+arm_l_open
+  bounds: 1749, 542, 257, 269
+arm_l_grip
+  bounds: 0, 813, 259, 269
+arm_l_staff
+  bounds: 261, 813, 242, 269
+arm_r_down
+  bounds: 505, 813, 129, 269
+arm_r_fist
+  bounds: 636, 813, 226, 269
+arm_r_open
+  bounds: 864, 813, 245, 269
+arm_r_toss
   bounds: 1111, 813, 254, 269
 legs_idle
   bounds: 1367, 813, 266, 269

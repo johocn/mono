@@ -44,19 +44,19 @@ PICK = {
     "孙悟空绿色虎皮裙左摆": "skirt_l",
     "孙悟空绿色虎皮裙右摆": "skirt_r",
     "孙悟空黑色腰带虎皮裙": "skirt_black",
-    # 右臂（独立右臂图，无需镜像）——方向经用户两轮校准：左臂图挂画面左
-    "孙悟空右手臂向下": "arm_r_down",
-    "孙悟空右手叉腰": "arm_r_fork",
-    "孙悟空右手振臂握拳": "arm_r_fist",
-    "孙悟空右手臂手心朝上可以抛东西": "arm_r_toss",
-    "孙悟空右手臂手掌张开": "arm_r_open",
-    "孙悟空右手握金箍棒图，没有金箍棒": "arm_r_grip",
-    "孙悟空右手持金箍棒": "arm_r_staff",
+    # 右臂/左臂语义名互换（用户第三轮校准：画面右臂=左手臂图、画面左臂=右手臂图）
+    "孙悟空右手臂向下": "arm_l_down",
+    "孙悟空右手叉腰": "arm_l_fork",
+    "孙悟空右手振臂握拳": "arm_l_fist",
+    "孙悟空右手臂手心朝上可以抛东西": "arm_l_toss",
+    "孙悟空右手臂手掌张开": "arm_l_open",
+    "孙悟空右手握金箍棒图，没有金箍棒": "arm_l_grip",
+    "孙悟空右手持金箍棒": "arm_l_staff",
     # 左臂
-    "孙悟空左手臂向下": "arm_l_down",
-    "孙悟空左手臂振臂握拳": "arm_l_fist",
-    "孙悟空左手臂手部张开": "arm_l_open",
-    "孙悟空左手臂手心朝上抛东西": "arm_l_toss",
+    "孙悟空左手臂向下": "arm_r_down",
+    "孙悟空左手臂振臂握拳": "arm_r_fist",
+    "孙悟空左手臂手部张开": "arm_r_open",
+    "孙悟空左手臂手心朝上抛东西": "arm_r_toss",
     # 腿组（双腿整图）
     "孙悟空足部正面稍息": "legs_idle",
     "孙悟空足部向前走1": "legs_walk1",
@@ -84,7 +84,7 @@ PICK = {
 # 特写件（手部/拳头特写构图，同 SCALE 会偏大）
 SIZE_SCALE = {"hand_close": 0.5, "fist_close": 0.5, "staff_close": 0.6,
               "dice": 0.42, "spark": 0.7, "headband_anim": 0.9, "tassel": 0.6,
-              "arm_r_grip": 0.55,
+              "arm_l_grip": 0.55,
               "skirt": 0.92, "skirt_l": 0.92, "skirt_r": 0.92}  # 裙身紧贴腰身（用户校准）
 
 SEM_OF = {v: k for k, v in PICK.items()}   # 语义名 → 文件 stem
@@ -162,8 +162,8 @@ def build_skeleton():
     head_y = round(neck_h / 2 + head_h / 2 - head_h * OVERLAP * 1.5)  # 头底压颈顶
     band_y = round(head_h / 2 - band_h * 0.55)                   # 金箍图心在头上沿
     arm_w = D["arm_r_open"][0]
-    arm_y = round(torso_h * 0.28)
-    arm_x = round(arm_w * 0.55)                                  # 臂骨外移：臂图心=骨心，防胸前交叉
+    arm_y = round(torso_h * 0.26)
+    arm_x = round(arm_w * 0.45)                                  # 臂骨内移贴躯干（用户校准：尽量对齐衣服）
     hand_y = round(arm_h * 0.62)                                 # 手随臂骨（槽内切换时臂图自带手，此骨备用）
     skirt_y = round(leg_h * 0.12 + 80 + 10 + 20)                 # 裙上移 110（用户校准）：绿腰带盖住躯干蓝腰带消后腰
 
@@ -193,9 +193,9 @@ def build_skeleton():
         ("legs",     "legs",    ["legs_idle", "legs_walk1", "legs_walk2", "legs_run1",
                                  "legs_run2", "legs_right", "legs_left",
                                  "legs_tiptoe_l", "legs_tiptoe_f"], "legs_idle"),
-        ("arm_l",    "arm_l",   ["arm_l_down", "arm_l_fist", "arm_l_open", "arm_l_toss"], "arm_l_down"),
-        ("arm_r",    "arm_r",   ["arm_r_down", "arm_r_fork", "arm_r_fist", "arm_r_toss",
-                                 "arm_r_open", "arm_r_grip", "arm_r_staff"], "arm_r_down"),
+        ("arm_l",    "arm_l",   ["arm_l_down", "arm_l_fork", "arm_l_fist", "arm_l_toss",
+                                 "arm_l_open", "arm_l_grip", "arm_l_staff"], "arm_l_down"),
+        ("arm_r",    "arm_r",   ["arm_r_down", "arm_r_fist", "arm_r_open", "arm_r_toss"], "arm_r_down"),
         ("torso",    "spine",   ["torso", "torso_hands"], "torso"),
         ("skirt",    "skirt_b", ["skirt", "skirt2", "skirt_l", "skirt_r", "skirt_black"], "skirt"),
         ("tassel",   "skirt_b", ["tassel"], "tassel"),
