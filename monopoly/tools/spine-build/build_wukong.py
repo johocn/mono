@@ -167,12 +167,12 @@ def build_skeleton():
     arm_y = round(torso_h * 0.28)
     arm_x = round(arm_w * 0.55)                                  # 臂骨外移：臂图心=骨心，防胸前交叉
     hand_y = round(arm_h * 0.62)                                 # 手随臂骨（槽内切换时臂图自带手，此骨备用）
-    skirt_y = round(leg_h * 0.12 + 80)                           # 裙上移 80（用户校准）：底缘露脚踝不埋地面
+    skirt_y = round(leg_h * 0.12 + 80 + 10)                      # 裙上移 80+10（用户校准）：底缘露脚踝不埋地面
 
     BONES = [
         ("root",     None,     0, 0, {}),
         ("hips",     "root",   0, hips_y, {}),
-        ("legs",     "hips",   0, 0, {}),
+        ("legs",     "hips",   0, 10, {}),                      # 腿随裙以下部位上移 10（用户校准）
         ("skirt_b",  "hips",   0, skirt_y, {}),
         ("spine",    "hips",   0, spine_y, {}),
         ("neck_b",   "spine",  0, neck_y, {}),
@@ -191,13 +191,13 @@ def build_skeleton():
 
     # slot: (name, bone, [附件语义名], default)
     SLOTS = [
-        # 绘制顺序=数组顺序（后者在上层）：腿/裙在最底，臂在躯干前、头在臂前，手/棒/骰/特效在最上
+        # 绘制顺序=数组顺序（后者在上层）：腿最底→躯干→裙/穗在衣服上→臂→头→手/棒/骰/特效最上
         ("legs",     "legs",    ["legs_idle", "legs_walk1", "legs_walk2", "legs_run1",
                                  "legs_run2", "legs_right", "legs_left",
                                  "legs_tiptoe_l", "legs_tiptoe_f"], "legs_idle"),
+        ("torso",    "spine",   ["torso", "torso_hands"], "torso"),
         ("skirt",    "skirt_b", ["skirt", "skirt2", "skirt_l", "skirt_r", "skirt_black"], "skirt"),
         ("tassel",   "skirt_b", ["tassel"], "tassel"),
-        ("torso",    "spine",   ["torso", "torso_hands"], "torso"),
         ("neck",     "neck_b",  ["neck_part"], "neck_part"),
         ("arm_l",    "arm_l",   ["arm_l_down", "arm_l_fork", "arm_l_fist", "arm_l_toss",
                                  "arm_l_open", "arm_l_grip", "arm_l_staff"], "arm_l_down"),
@@ -272,6 +272,7 @@ def build_animations():
     att("idle_happy", "arm_r", [(0, "arm_r_fist")])
     att("idle_happy", "arm_l", [(0, "arm_l_fist")])
     att("idle_happy", "head", [(0, "head_laugh")])
+    att("idle_happy", "headband", [(0, "headband_hair")])  # 金箍头发一体件：补头发，头发层在金箍上
     att("idle_happy", "legs", [(0, "legs_tiptoe_f"), (T / 2, "legs_idle"), (T, "legs_tiptoe_f")])
     tra("idle_happy", "hips", [(0, 0, 0), (T / 4, 0, 18), (T / 2, 0, 0),
                                (3 * T / 4, 0, 18), (T, 0, 0)])
@@ -281,6 +282,7 @@ def build_animations():
     # —— idle_sad：委屈头 + 双垂臂 + 低头塌胸 ——
     T = 3.0
     att("idle_sad", "head", [(0, "head_sad")])
+    att("idle_sad", "headband", [(0, "headband_hair")])  # 金箍头发一体件：补头发
     att("idle_sad", "arm_r", [(0, "arm_r_down")])
     att("idle_sad", "arm_l", [(0, "arm_l_down")])
     rot("idle_sad", "head", [(0, 0), (T / 3, 4), (T, 4)])
