@@ -282,6 +282,12 @@ def build_animations():
     rot("idle_happy", "arm_l", [(0, 8), (T / 4, 0), (T / 2, 8), (3 * T / 4, 0), (T, 8)])
     tra("idle_happy", "arm_r", [(0, 0, 140), (T, 0, 140)])  # 图2双臂上移 140（仅此动画，用户校准）
     tra("idle_happy", "arm_l", [(0, 0, 140), (T, 0, 140)])
+    # 图2 足部缩小+上移贴合裙摆（仅此动画，用户校准；legs 槽本就在裙下层）
+    s_leg = 0.88
+    scl("idle_happy", "legs", [(0, s_leg, s_leg), (T, s_leg, s_leg)])
+    leg_h_eff = img_size("legs_walk1")[1] * SCALE * SIZE_SCALE["legs_walk1"]
+    leg_up = round(leg_h_eff / 2 * (1 - s_leg))
+    tra("idle_happy", "legs", [(0, 0, leg_up), (T, 0, leg_up)])
 
     # —— idle_sad：委屈头三层(头+金箍头发+金箍) + 双垂臂 + 低头塌胸 ——
     T = 3.0
@@ -294,14 +300,14 @@ def build_animations():
     rot("idle_sad", "head", [(0, 0), (T / 3, 4), (T, 4)])
     rot("idle_sad", "chest", [(0, 0), (T / 3, 2), (T, 2)])
     tra("idle_sad", "chest", [(0, 0, 0), (T / 3, 0, -5), (T, 0, -5)])
-    # 图3 身体+虎皮裙放大、足部缩小（仅此动画，用户校准）
+    # 图3 身体+虎皮裙放大、足部缩小上移贴合裙摆（仅此动画，用户校准）
     s_body, s_leg = 1.10, 0.88
     scl("idle_sad", "torso_b", [(0, s_body, s_body), (T, s_body, s_body)])
     scl("idle_sad", "skirt_b", [(0, s_body, s_body), (T, s_body, s_body)])
     scl("idle_sad", "legs", [(0, s_leg, s_leg), (T, s_leg, s_leg)])
     leg_h_eff = img_size("legs_walk1")[1] * SCALE * SIZE_SCALE["legs_walk1"]
-    leg_dy = round(-leg_h_eff / 2 * (1 - s_leg))  # 缩小后脚底下移补偿贴地
-    tra("idle_sad", "legs", [(0, 0, leg_dy), (T, 0, leg_dy)])
+    leg_up = round(leg_h_eff / 2 * (1 - s_leg))  # 缩小后腿顶上移贴合裙摆
+    tra("idle_sad", "legs", [(0, 0, leg_up), (T, 0, leg_up)])
 
     # —— walk：正面腿 1/2 交替 + 左右摆裙 + 双臂张开反相摆 ——
     T = 1.0
@@ -314,14 +320,14 @@ def build_animations():
     tra("walk", "hips", [(0, 0, 0), (T / 4, 0, 8), (T / 2, 0, 0),
                          (3 * T / 4, 0, 8), (T, 0, 0)])
     rot("walk", "chest", [(0, 0), (T / 2, 1.5), (T, 0)])
-    # 图4 身体+虎皮裙放大、足部缩小（仅此动画，用户校准）
+    # 图4 身体+虎皮裙放大、足部缩小上移贴合裙摆（仅此动画，用户校准）
     s_body, s_leg = 1.10, 0.88
     scl("walk", "torso_b", [(0, s_body, s_body), (T, s_body, s_body)])
     scl("walk", "skirt_b", [(0, s_body, s_body), (T, s_body, s_body)])
     scl("walk", "legs", [(0, s_leg, s_leg), (T, s_leg, s_leg)])
     leg_h_eff = img_size("legs_walk1")[1] * SCALE * SIZE_SCALE["legs_walk1"]
-    leg_dy = round(-leg_h_eff / 2 * (1 - s_leg))  # 缩小后脚底下移补偿贴地
-    tra("walk", "legs", [(0, 0, leg_dy), (T, 0, leg_dy)])
+    leg_up = round(leg_h_eff / 2 * (1 - s_leg))  # 缩小后腿顶上移贴合裙摆
+    tra("walk", "legs", [(0, 0, leg_up), (T, 0, leg_up)])
 
     # —— spin：棒 15/30/45 度帧切换 + 骨旋转 = 耍棒透视效果 ——
     T = 1.5
