@@ -192,9 +192,8 @@ def build_skeleton():
         ("closeup",  "root",   round(torso_w * 1.4), round(hips_y + spine_y * 1.6), {}),
     ]
 
-    # slot: (name, bone, [附件语义名], default)
+    # slot: (name, bone, [附件语义名], default)；顺序=绘制顺序（fx 放最后=骰子特效在最上层）
     SLOTS = [
-        ("fx",       "fx",      ["spark", "dice_throw_right", "dice_throw_back"], None),
         ("legs",     "legs",    ["legs_walk1", "legs_walk2",
                                  "legs_right", "legs_tiptoe_l"], "legs_walk1"),
         ("arm_l",    "arm_l",   ["arm_l_down", "arm_l_raise", "arm_l_toss"], "arm_l_down"),
@@ -212,6 +211,7 @@ def build_skeleton():
                                  "head_grit", "head_shock"], "head"),
         ("band_hair", "band_b", ["headband_hair"], None),
         ("headband", "band_b",  ["headband", "headband_anim"], "headband"),
+        ("fx",       "fx",      ["spark", "dice_throw_right", "dice_throw_back"], None),
     ]
 
     bones = []
@@ -225,11 +225,13 @@ def build_skeleton():
         bones.append(b)
 
     slots, skin = [], {}
+    # 附件微调（原图构图偏差补偿）：左右摆裙腰带均偏左17原图px，右移对齐躯干中线（贴合腰部）
+    ATT_OFF = {"skirt_l": (7, 0), "skirt_r": (7, 0)}
     for slot_name, bone, atts, default in SLOTS:
         slots.append({"name": slot_name, "bone": bone, "attachment": default})
         entries = {}
         for sem in atts:
-            a = make_attachment(sem)
+            a = make_attachment(sem, ATT_OFF.get(sem, (0, 0)))
             entries[sem] = a
         entries["blank"] = {"x": 0, "y": 0, "width": 2, "height": 2}  # 隐藏用透明件
         skin[slot_name] = entries
@@ -364,9 +366,12 @@ def build_animations():
     T = 2.2
     att("throw_dice", "arm_l", [(0, "arm_l_raise")])   # 左手高举图（用户指定）
     scl("throw_dice", "arm_l", [(0, 0.50, 0.50), (T, 0.50, 0.50)])  # 左手缩小50%（用户校准）
+    tra("throw_dice", "arm_l", [(0, 0, 100), (T, 0, 100)])  # 左臂上移100贴合身体（用户校准）
     att("throw_dice", "arm_r", [(0, "arm_r_down")])
     att("throw_dice", "fx", [(0, "dice_throw_right"), (1.25, "spark"), (1.55, "blank")])
-    tra("throw_dice", "fx", [(0, -270, -60), (1.2, -270, -60)])  # 骰子贴左手手心（用户校准）
+    # 骰子弧线反向（fx 骨水平镜像：骰子端贴手心、金光甩向右）+ 贴左手手心（用户校准）
+    scl("throw_dice", "fx", [(0, -1, 1), (1.2, -1, 1)])
+    tra("throw_dice", "fx", [(0, -50, 25), (1.2, -50, 25)])
     tra("throw_dice", "chest", [(0, 0, 0), (1.1, 0, 4), (1.3, 0, -4), (T, 0, 0)])
     rot("throw_dice", "head", [(0, 0), (1.1, -6), (1.3, 8), (T, 0)])
     # 图6 足部上移10/缩小10%（仅此动画，用户校准）
