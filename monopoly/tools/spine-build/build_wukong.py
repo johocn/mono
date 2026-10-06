@@ -276,7 +276,8 @@ def build_animations():
     rot("idle_calm", "head", [(0, 0), (T / 2, 2), (T, 0)])
     # 图1 足部累计上移20、累计缩小20%（仅此动画，用户校准）
     scl("idle_calm", "legs", [(0, 0.80, 0.80), (T, 0.80, 0.80)])
-    tra("idle_calm", "legs", [(0, 0, 20), (T, 0, 20)])
+    tra("idle_calm", "legs", [(0, 0, 27), (T, 0, 27)])   # 足部累计27（20再上移7）
+    tra("idle_calm", "skirt_b", [(0, 0, 7), (T, 0, 7)])  # 裙上移7（用户校准）
     # 图1 金箍缩小0.80+下移20贴合头部（仅此动画，用户校准）
     scl("idle_calm", "band_b", [(0, 0.80, 0.80), (T, 0.80, 0.80)])
     tra("idle_calm", "band_b", [(0, 0, -20), (T, 0, -20)])
@@ -299,7 +300,8 @@ def build_animations():
     # 图2 足部缩小0.88+上移20/左移5（仅此动画，用户校准；legs 槽本就在裙下层）
     s_leg = 0.88
     scl("idle_happy", "legs", [(0, s_leg, s_leg), (T, s_leg, s_leg)])
-    tra("idle_happy", "legs", [(0, -5, 20), (T, -5, 20)])
+    tra("idle_happy", "legs", [(0, -5, 27), (T, -5, 27)])  # 足部累计27（20再上移7）
+    tra("idle_happy", "skirt_b", [(0, 0, 7), (T, 0, 7)])   # 裙上移7（用户校准）
 
     # —— idle_sad：委屈头三层(头+金箍头发+金箍) + 双垂臂 + 低头塌胸 ——
     T = 3.0
