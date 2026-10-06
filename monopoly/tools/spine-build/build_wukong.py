@@ -225,8 +225,8 @@ def build_skeleton():
         bones.append(b)
 
     slots, skin = [], {}
-    # 附件微调（原图构图偏差补偿）：左右摆裙腰带均偏左17原图px，右移对齐躯干中线（贴合腰部）
-    ATT_OFF = {"skirt_l": (7, 0), "skirt_r": (7, 0)}
+    # 附件微调（原图构图偏差补偿）：两摆裙腰带均偏左17原图px(+7)；右摆腰带比左摆高6原图px(+2下移对齐)
+    ATT_OFF = {"skirt_l": (7, 0), "skirt_r": (7, 2)}
     for slot_name, bone, atts, default in SLOTS:
         slots.append({"name": slot_name, "bone": bone, "attachment": default})
         entries = {}
@@ -358,9 +358,10 @@ def build_animations():
     # 图5 金箍缩小0.80+下移20贴合头部（仅此动画，用户校准）
     scl("spin", "band_b", [(0, 0.80, 0.80), (T, 0.80, 0.80)])
     tra("spin", "band_b", [(0, 0, -20), (T, 0, -20)])
-    # 图5 足部上移10/缩小10%（仅此动画，用户校准）
+    # 图5 足部上移15/缩小10%；裙整体上移20（仅此动画，用户校准）
     scl("spin", "legs", [(0, 0.90, 0.90), (T, 0.90, 0.90)])
     tra("spin", "legs", [(0, 0, 15), (T, 0, 15)])
+    tra("spin", "skirt_b", [(0, 0, 20), (T, 0, 20)])
 
     # —— throw_dice：左臂高举 + 向右抛出骰子特效 + 落地火花（用户方案试做） ——
     T = 2.2
@@ -374,9 +375,10 @@ def build_animations():
     tra("throw_dice", "fx", [(0, -50, 25), (1.2, -50, 25)])
     tra("throw_dice", "chest", [(0, 0, 0), (1.1, 0, 4), (1.3, 0, -4), (T, 0, 0)])
     rot("throw_dice", "head", [(0, 0), (1.1, -6), (1.3, 8), (T, 0)])
-    # 图6 足部上移15/缩小10%（仅此动画，用户校准）
+    # 图6 足部上移15/缩小10%；裙整体上移20（仅此动画，用户校准）
     scl("throw_dice", "legs", [(0, 0.90, 0.90), (T, 0.90, 0.90)])
     tra("throw_dice", "legs", [(0, 0, 15), (T, 0, 15)])
+    tra("throw_dice", "skirt_b", [(0, 0, 20), (T, 0, 20)])
     # 图6 金箍缩小0.80+下移20贴合头部（仅此动画，用户校准）
     scl("throw_dice", "band_b", [(0, 0.80, 0.80), (T, 0.80, 0.80)])
     tra("throw_dice", "band_b", [(0, 0, -20), (T, 0, -20)])
