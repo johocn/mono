@@ -74,9 +74,12 @@ export function createCamera(deps: { world: Container }): CameraHandle {
     world.scale.set(cur.zoom);
     world.position.set(CAM_VIEW_CX - cur.cx * cur.zoom, CAM_VIEW_CY - cur.cy * cur.zoom);
     /* 裁剪盒跟随相机（spec §6 P1 第 14 项 / R3）：`cullArea` 用**局部坐标**，
-       等于把整块画布经相机逆变换拉回 world 空间（恒等位姿下即 0,0,390,844）。 */
-    cull.set(cur.cx - CAM_VIEW_CX / cur.zoom, cur.cy - CAM_VIEW_CY / cur.zoom,
-      STAGE_W / cur.zoom, STAGE_H / cur.zoom);
+       等于把整块画布经相机逆变换拉回 world 空间（恒等位姿下即 0,0,390,844）。
+       逐字段赋值而非 `rect.set()`：spine-pixi 2.1.1 仅兼容 pixi ≤8.19（无 Rectangle.set）。 */
+    cull.x = cur.cx - CAM_VIEW_CX / cur.zoom;
+    cull.y = cur.cy - CAM_VIEW_CY / cur.zoom;
+    cull.width = STAGE_W / cur.zoom;
+    cull.height = STAGE_H / cur.zoom;
     world.cullArea = cull;
   };
 

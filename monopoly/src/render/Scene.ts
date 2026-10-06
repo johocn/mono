@@ -191,6 +191,7 @@ export class Scene {
     const g = new Graphics();
     const texts: TextRequest[] = [];
     const sprites: SpriteRequest[] = [];
+    const customs: Container[] = [];
     const place = spec.fixed
       ? { cx: spec.fixed.cx, cy: spec.fixed.cy, s: spec.fixed.s ?? 1 }
       : resolvePlacement(
@@ -217,11 +218,13 @@ export class Scene {
       asset: (rel) => this.assetOf(rel),
       sprite: (r) => sprites.push(r),
       text: (r) => texts.push(r),
+      custom: (o) => customs.push(o),
     };
     providerFor(inst.provider).draw(g, ctx);
     out.addChild(g);
     for (const r of texts) out.addChild(makeText(r));
     for (const r of sprites) out.addChild(makeSprite(r));
+    for (const o of customs) out.addChild(o);
   }
 
   /** 素材解析：按 skinIds 顺序在各包内找同名相对路径的已装载纹理（都没有 → null） */

@@ -1162,7 +1162,120 @@ $env:MONO_ORIGIN='http://127.0.0.1:52303'; node local/mono-shots-m205.mjs   # [m
 
 **AI 策略（spec §7）**：① 存款改为**金额分档**（不再「一键全存」）；② 新增**保证金补仓分支**（市值 < 借款 × 1.3 → 优先「现金 + 现金追加」；现金不足且站银行格 → 「现金 + 抵押补仓」）；③ 新道具出牌：「惠农补贴」「造势」**抽到即用**（惠农补贴现金不足时优先），「避税凭证」**不出牌**（被动）；④ 存款判据加「无保证金借款」（有杠杆时不存款，先补仓）。
 
-### 最终验收（对照 spec §11 硬性标准）
+### M20.6 经济闭环收口轮（多人分账挂起 · 板块商圈租金 · 设施控股溢价 · 终局三段加速 · 唯一胜者）2026-10-02
+
+**范围**：M20「经济闭环」的**收口轮**。M20.1–M20.5 已铺出「拍卖 / 信贷 / 股票杠杆 / 设施入股 / 新闻景气查税」五条轨道，复盘留下 4 个口子 + 1 条客户新增硬需求，本轮**全部补完**并把整局收束到唯一胜者。决策编号 **D49–D56**（承接 D1–D48），细化见 spec `docs/superpowers/specs/2026-10-02-monopoly-m20-6-economy-wrapup-design.md`、计划 `docs/superpowers/plans/2026-10-02-monopoly-m20-6-economy-wrapup-plan.md`。
+
+**客户新增硬需求（原话）**：「游戏后期 20 分钟左右加快淘汰用户的节奏，地租涨价，股市波动加大，利好利空力度加大，让用户淘汰，最后只有 1 人成为唯一胜利者」——逐句落在 ⑤（终局三段加速）与唯一胜者闸门。
+
+**五项交付与落点**：
+
+| # | 交付项 | 落点 | 结果 |
+|---|---|---|---|
+| ① | **多人分账改走拍卖** | [game.ts](file:///d:/zhao/monopoly/src/core/game.ts) `PendingMulti` + `pumpMulti` | `tribute`（进贡）/ `harvest` / `collect`（抽成）三处由 `settleDebtAuto`（静默半价贱卖）改调 **`settleDebt`**（现金 → 存款 → **拍卖** → 折股 → 破产）；新增可恢复状态机 `state.pendingMulti`：某位付款人清算挂起（真人出价）时暂存剩余队列，拍卖收尾后自动续跑 |
+| ② | **板块商圈租金** | [board.ts](file:///d:/zhao/monopoly/src/data/board.ts) `TILE_TIER` / `tierOf` + [news.ts](file:///d:/zhao/monopoly/src/data/news.ts) `SECTOR_RENT_COEF` + [sector.ts](file:///d:/zhao/monopoly/src/core/sector.ts) | 立**商圈 tier 真源**（18 个商家格）；新闻 `scope` 增 `'sector'`（target = 商圈 id），**利好板块**全部地块租金 **×1.25**、**利空** **×0.8**；新闻表 12 → **18 条**（core/tourism/town 各利好久利空） |
+| ③ | **设施现金流分成强化** | [economy.ts](file:///d:/zhao/monopoly/src/data/economy.ts) 三常量 + [facility.ts](file:///d:/zhao/monopoly/src/core/facility.ts) `dividendOf` / `isControlling` | ① 现金流通过系数 `FACILITY_FLOW_MULT = 2`；② **控股权溢价**：单一玩家持股 **> 50%**（20 股中 ≥ 11 股）额外得 `round(price × shares × 0.02)`；③ 基础分红率 **5% → 6%**（≈17 轮回本，仍高于存款 3%） |
+| ④ | **数值再平衡** | 同上 + 终局三段系数 | 分红 6% 与 `FLOW_MULT = 2` 抬高设施回报、终局三段抬高时间压力；不改 L1–L3 逐值租金基线（`PROPOSED_RENT_TIER_PLAN` 的 1.4/1.2/0.8 分档价目**仍不启用**，属后续平衡项） |
+| ⑤ | **终局加速 + 唯一胜者** | [economy.ts](file:///d:/zhao/monopoly/src/data/economy.ts) `ENDGAME_STAGES` + [endgame.ts](file:///d:/zhao/monopoly/src/core/endgame.ts) `amplify` + [game.ts](file:///d:/zhao/monopoly/src/core/game.ts) 租金/tick/景气口径 | 自 `round = 40` 起**三段加压**（Ⅰ 40–46 / Ⅱ 47–53 / Ⅲ 54–60），每段给 `rentMult / volMult / newsMult`；「仅剩 1 名未破产 → 该人胜」由 `test/core/unique-winner.spec.ts` 锁定 |
+
+**终局加速模型（D54）**：
+
+```text
+段位        轮次      地租 rentMult   股市波动 volMult   新闻力度 newsMult
+加速 Ⅰ     40– 46        1.4              1.3                1.3
+加速 Ⅱ     47– 53        1.8              1.6                1.6
+终局       54– 60        2.4              2.0                2.0
+```
+
+- **语义**：`×Mult` 一律解释为「**放大偏离 1 的部分**」——`amplify(coef, mult) = 1 + (coef − 1) × mult`（如新闻利好分红系数 1.5，在 `newsMult = 2` 下放大为 `1 + 0.5×2 = 2.0`）。用「放大偏离量」而非「直接乘系数」，保证中性情形（系数 = 1）**逐值不变**。
+- 落地口径：租金 `round(rentAt × economyIndex × amplify(sectorCoef, newsMult) × rentMult)`；股价 `tick(force, volMult)`；景气游走 `nextEconomyIndex(..., newsMult)` 只放大**新闻偏置**项（随机项 `±0.08` 不动）。
+- **段外（`round < 40`）返回中性档（全 1）⇒ 全部既有回归逐值不变**（`ENDGAME_NEUTRAL`）。
+
+**多人分账状态机（D50）**——① 的关键；`pendingMulti` 缺省 `null`（零回归）：
+
+```ts
+export interface PendingMulti {
+  kind: 'tribute' | 'harvest' | 'collect';
+  index: number; cardId: string; amount: number;
+  actorId: number;          // tribute = 付款人；harvest / collect = 收款人
+  queue: number[];          // 尚未处理的对手 id（升序，队首 = 当前待结算）
+  paid: number;             // 已累计（tribute = 已付出 / 其他 = 已收）
+  bankrupt: boolean;        // tribute 专用：付款人是否因付不起而破产
+  total: number;            // tribute 应收总额 = amount × 初始对手数
+}
+```
+
+- `pumpMulti()`：逐个 `settleDebt`；某位挂起 → **保留队首**返回 `'suspended'`；全部完成 → 清 `pendingMulti` + 写 `state.lastEvent`。
+- **续跑钩子**：`finishAuction` 末尾（`state.auction === null` 且 `pendingMulti` 非空）再泵一次；二级拍卖（`liquidateMortgages` 新开的）由那场收尾时续跑，互不重入。
+- `resolveChance` 返回类型扩为 `ChanceSettle | 'suspended'`，`settleCurrent` 同步包装（挂起时对外呈现 `auctionSettle`）。
+- 破产者跳过（补队列时已过滤，续跑时二次防御）；`tribute` 付款人破产 → 剩余队列不再产生实付。
+
+**商圈 tier 真源（D51）**：`TILE_TIER` 登记 **18 个商家格**（core 10 / tourism 6 / town 4，起点 0 计入 core）；`TileDef.tier` 由构造时写入；`PROPOSED_TILE_TIER` 改为 **re-export** 本表（避免两处漂移）。**基础租金 / 建造价口径保持不变**（仍全局按级）⇒ 零回归。
+
+**设施分红（D53）**：
+
+```text
+base    = shares × price × rate                     （rate = 6%）
+flow    = cashflow × shares / shares_total × 2      （FACILITY_FLOW_MULT）
+control = 控股 ? round(price × shares × 0.02) : 0   （FACILITY_CONTROL_BONUS，>50% 持股）
+分红    = round((base + flow) × coef) + control
+```
+
+`dividendOf` / `estimateDividend` 末参 `controlling` **缺省 `false`** ⇒ 非控股口径，既有调用逐值可对照；`isControlling(def, shares) = shares × 2 > def.shares`。轮末 `payFacilityDividends` 中按 `isControlling(def, shares)` 追加溢价（**不动现金流、不改持股**，唯一新增现金来源是控股权溢价本身）。
+
+**AI 同源加压（D56）**：新增纯函数 `endgameAiParams(base, round)`（[endgame.ts](file:///d:/zhao/monopoly/src/core/endgame.ts)）——段外**原样返回同一引用**（零回归）；段内按阶段 `bidMult × rentMult`（拍地更凶）、`reserve ÷ rentMult`（更敢花钱）。`game.ts` 的 `aiParamsOf`（拍卖出价）与 `ai.ts` 的 `decideTurn`（常规预算）**共用同一函数**，保证真人 / AI 同源承压。
+
+**UI / 渲染**：
+
+| 元素 id | 用途 | 台位（中心 / 顶边） | 深度 |
+|---|---|---|---|
+| `ui.endgameBadge` | 终局加速角标：段名 + 三项系数（如 `加速 Ⅱ · 租×1.8 市×1.6 讯×1.6`），深红底 + 警示边 | 中心 195 / 426（414..438） | `r = 0` |
+| `ui.endgameBar` | 终局进度条：Ⅰ/Ⅱ/Ⅲ 三段等分，当前段金高亮、其余 `rgba(255,255,255,.16)` | 中心 195 / 450（446..454） | `r = 0` |
+| `ui.sectorTag` | 停留气泡**顶边之上**的「板块利好 ×1.25」小标（金底）/「板块利空 ×0.8」（灰底） | 由 `bubbleHeightOf` 与气泡同源推导 | `r = BUBBLE_DEPTH = 24` |
+
+- 两条 HUD 信息带落 **406..474 自由带**（badge 414..438 / bar 446..454）：不压新闻条（474..500）与地块卡（508）；**不吃事件**（`r = 0`，HUD 命中按钮数逐值不变，闸门 `endgame_info_only` 实证 8 → 8）。
+- `ui.sectorTag` 与气泡**同深度、后插入**⇒ 压在气泡之上且贴其顶边；由 `bubbleSpecs(..., sector)` 第 5 参触发，`main.ts` 传 `sectorTagTextOf(state, currentPlayer.pos)`。
+- 新闻条前缀（D52）：板块新闻时 `ui.newsTicker.state.prefix` 由「景气 N%」换成 **「板块·核心商圈 ×1.25」**（不带「利好/利空」字样，避免与语义色重复）。
+- 设施浮层（D53）：`facilityDetail` 文案 `已售 N/20 股 · 基础分红 6%/轮`，持股过半追加 **`你的持股 N 股 · 控股溢价`**，预估值含溢价（如银行 20/20 股 → `预估分红 ￥320/轮` = 基础 240 + 溢价 80）。
+
+> **必要偏差（命名，已回填）**：spec §6.1 字面写 `hud.endgameBadge` / `hud.endgameBar` / `bubble.sectorTag`，但 `NAMESPACES` 不含 `hud` / `bubble` 两个命名空间。为**零改动** `ids.ts` / `lint-skin.mjs` / `ids.spec.ts`，实际登记为 **`ui.endgameBadge` / `ui.endgameBar` / `ui.sectorTag`**（三者与 `ui.newsTicker` 同属 `ui` 命名空间，语义一致）。id 总数 342 → **345**。
+
+**四级回退**：新增 3 枚可见元素均已在 [registry.ts](file:///d:/zhao/monopoly/src/skin/registry.ts) 登记 + [skin.json](file:///d:/zhao/monopoly/public/skins/default/skin.json) 绑定 preset（`uiEndgameBadge` / `uiEndgameBar` / `uiSectorTag`）+ L4 内建 `fb({...})` 兜底；`npm run lint:skin` 通过（`registry-ids.json` 342 → **345 ids**）；几何全部集中在 [layout.ts](file:///d:/zhao/monopoly/src/skin/layout.ts)（`HUD_ENDGAME_*` / `BUBBLE_TAG_*`），`src/render` 内零裸值（`tools/check-hardcoded.mjs` clean）。气泡高度/引文分行抽为**纯函数** `bubbleHeightOf` / `bubbleQuoteLines`（[proc-bubble.ts](file:///d:/zhao/monopoly/src/render/providers/proc-bubble.ts)），供气泡本体与 `ui.sectorTag` 贴边**同源推导**，避免两处公式漂移。
+
+**确定性**：**不新增任何随机源**（终局加速是纯系数、板块系数是纯查表、`pumpMulti` 无随机）⇒ `cardRng` / `marketRng` / `newsRng` / `econRng` / `auditRng` 五条既有独立流序列**逐字节不变**；全程无 `Math.random`（`test/smoke.spec.ts` 源码闸门通过）。
+
+**⚠ 两条已知行为变更（M20.6 有意为之，需知会客户）**：
+
+1. **设施分红口径上调**：基础率 5% → 6%、现金流占比 ×2、过半持股加控股权溢价 ⇒ **同样持股的分红高于 M20.5**（属 D53 授权的有意平衡变更，已同步更新既有单测期望）。
+2. **`tribute` / `harvest` / `collect` 的清算方式改变**：原先「付不起即静默半价贱卖资产」，现改为**走拍卖**（可能挂起等真人出价，且成交价由竞价决定）⇒ 同 seed 下这三条卡牌的后续局面与 M20.5 不同；影响面仅限这三类卡牌触发点，**不影响回合推进骨架与唯一胜者保证**。
+
+**回归口径（本轮实测）**：
+
+```powershell
+npx tsc --noEmit                                  # 退出码 0、无输出
+npm run check                                     # eslint 0 错；[theme] OK / [skin:default] OK / [skin:photo] OK；registry-ids.json: 345 ids；88 文件 / 967 例全绿
+npm run build                                     # [check-hardcoded] clean → vite build 通过
+node local/mono-e2e-m206.mjs                      # 4 页（A 终局三段 / B 板块新闻租金 ×1.25 与前缀 / C 设施控股溢价 / D 唯一胜者）全 OK · problems: []
+$env:MONO_ORIGIN='http://127.0.0.1:52301'; node local/mono-shots-m206.mjs   # [m20-6-shots] PASS · 13 项 gate 全 true、errors: []
+```
+
+**截图清单（5 张，均 390×844 @dpr2 手机视口，出 780×1688 PNG，入 `docs/verify/`）**：
+
+| 文件 | 内容 |
+|---|---|
+| `mono-m20-6-01-endgame-2` | 终局加速 Ⅱ（round 47）：角标「**加速 Ⅱ · 租×1.8 市×1.6 讯×1.6**」（深红底警示边）+ 进度条**第 2 段金高亮** |
+| `mono-m20-6-02-endgame-3` | 终局（round 54）：角标「**终局 · 租×2.4 市×2 讯×2**」+ 进度条**第 3 段金高亮** |
+| `mono-m20-6-03-sector` | 板块新闻：新闻条前缀「**板块·核心商圈 ×1.25** · 利好 · 核心商圈客流爆棚…」+ 前进气泡顶边「**板块利好 ×1.25**」小标（贴气泡、同深压在气泡上） |
+| `mono-m20-6-04-facility` | 设施浮层控股溢价：`已售 20/20 股 · 基础分红 6%/轮` / `你的持股 20 股 · **控股溢价**` / `预估分红 **￥320/轮**`（基础 240 + 溢价 80） |
+| `mono-m20-6-05-winner` | 唯一胜者：破产 3 席后结束回合 → `over = true`，「本局结算」#1 孙悟空 ￥3000、其余 **￥0**（HUD 资产条同步归零） |
+
+目视复核要点：① 角标（414..438）与进度条（446..454）**不压**新闻条与地块卡，且**均不吃点击**；② 板块小标贴气泡顶边、不遮气泡正文；③ 设施浮层全部可点元素底 ≤ 606（实测 576）；④ 结算表三名破产者净资归零、仅 #1 为胜者。
+
+**取证脚本**：[local/mono-shots-m206.mjs](file:///d:/zhao/monopoly/local/mono-shots-m206.mjs)（**13 项机器闸门**：`endgame_off` / `endgame_stage1` / `endgame_stage2` / `endgame_stage3` / `endgame_info_only` / `sector_prefix` / `sector_tag` / `sector_tag_over_bubble` / `facility_pct` / `facility_controlling` / `facility_estimate` / `facility_no_overlap` / `winner_gate`）。关键口径：打 `?play=1&seed=20261002&nofx=1&humans=4&tour=0` 真实对局；终局段位直接改 `state.round` 后 `paint()`（段位只读 round）；板块小标必须走**真实 HUD「掷骰 → 前进」点击**（气泡 / 小标由点击链路产生，非程序化布置）——为让 780×1688 截图与快照读到同一瞬态，脚本**只屏蔽 `delay === 820ms` 的那一次定时器**（`BUBBLE_MOVE_HOLD_MS`，气泡正文与小标本身不经任何改写）；设施 / 胜者局面用 `__monoMain` 布置。
+
+**e2e 脚本**：[local/mono-e2e-m206.mjs](file:///d:/zhao/monopoly/local/mono-e2e-m206.mjs)（4 页：A 终局三段阈值与段名 / B 同 seed 两跑对比板块利好租金 `≈ rent0 × 1.25` 与前缀 / C 设施控股溢价逐字文案 / D 破产 3 人后结束回合的唯一胜者），全部 `OK`、`problems: []`。
+
+**单测**（新增 5 个 spec，共 32 例）：`test/core/endgame.spec.ts`（阶段阈值 / `amplify` 恒等性 / `endgameAiParams` 段内外）、`test/core/sector.spec.ts`（板块系数命中与回退）、`test/core/facility-boost.spec.ts`（控股权溢价 / 通过系数）、`test/core/multi-settle.spec.ts`（分账挂起 / 续跑 / 破产续接）、`test/core/unique-winner.spec.ts`（`autoPlay` 任意 seed 恰返回 1 个胜者且与 `winnerOf` 一致）。
 
 | # | spec §11 条目 | 证据 |
 |---|---|---|

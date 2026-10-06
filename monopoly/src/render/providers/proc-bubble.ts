@@ -41,6 +41,35 @@ const D = fb({
   tonemove: '#2f6fbf',
 });
 
+/** 引文按 `quoteChars` 个汉字定宽折行（最多 `quoteLines` 行，超出末行补省略号）；`bubble()` 与 `bubbleHeightOf` 共用
+ *  同一份公式 ⇒ `ui.sectorTag`（挂在气泡顶边之上）的台位不会与气泡体高漂移。 */
+export function bubbleQuoteLines(quote: string, perLine: number, lineMax: number): string[] {
+  const qLines: string[] = [];
+  for (let i = 0; i < quote.length && qLines.length < lineMax; i += perLine) {
+    qLines.push(quote.slice(i, i + perLine));
+  }
+  if (quote.length > perLine * lineMax && qLines.length === lineMax) {
+    const last = qLines[lineMax - 1];
+    qLines[lineMax - 1] = `${last.slice(0, Math.max(1, perLine - 1))}…`;
+  }
+  return qLines;
+}
+
+/**
+ * 气泡「体底 → 顶边」总高（含三角）：`(h + 引文行数 × quoteLineH) × s + triH × s`。
+ * 与 `bubble()` 内同式（`p` 缺省走 L4 兜底；默认皮肤 `ui.bubble` 的 params 为空 ⇒ 逐值一致）。
+ * 供 `BubbleView` 把 `ui.sectorTag` 贴到气泡顶边之上 `BUBBLE_TAG_GAP` 处。
+ */
+export function bubbleHeightOf(quote: string | null, s: number, p: Record<string, unknown> = {}): number {
+  const lines = bubbleQuoteLines(
+    quote ?? '',
+    num(p, 'quoteChars', (D as P).quoteChars as number),
+    num(p, 'quoteLines', (D as P).quoteLines as number),
+  );
+  return (num(p, 'h', (D as P).h as number) + lines.length * num(p, 'quoteLineH', (D as P).quoteLineH as number)) * s
+    + num(p, 'triH', (D as P).triH as number) * s;
+}
+
 /** 头顶事件气泡：暖白圆角底 + 指向三角 + 标题 / 金额 / 原著引文（引文缺省则退回两行旧观感） */
 export function bubble(g: Graphics, ctx: ProcCtx): void {
   const p = ctx.params as P;
@@ -52,16 +81,7 @@ export function bubble(g: Graphics, ctx: ProcCtx): void {
   const w = n('w') * s;
   /* 引文按 `quoteChars` 个汉字定宽折行（汉字等宽，无需量字宽），最多 `quoteLines` 行，超出末行补省略号 */
   const raw = typeof st.quote === 'string' ? st.quote : '';
-  const perLine = n('quoteChars');
-  const lineMax = n('quoteLines');
-  const qLines: string[] = [];
-  for (let i = 0; i < raw.length && qLines.length < lineMax; i += perLine) {
-    qLines.push(raw.slice(i, i + perLine));
-  }
-  if (raw.length > perLine * lineMax && qLines.length === lineMax) {
-    const last = qLines[lineMax - 1];
-    qLines[lineMax - 1] = `${last.slice(0, Math.max(1, perLine - 1))}…`;
-  }
+  const qLines = bubbleQuoteLines(raw, n('quoteChars'), n('quoteLines'));
   /* 气泡随引文行数向上长高：三角尖端不动，只把顶边抬高 */
   const h = (n('h') + qLines.length * n('quoteLineH')) * s;
   const tipY = ctx.cy;                          // 箭头尖端 = 定格台位

@@ -107,18 +107,18 @@ describe('canSubscribe 四分支（spec §5.3 / F-D13）', () => {
   });
 });
 
-describe('dividendOf（F-D3 / D27 逐值）', () => {
-  it('银行 10 股、现金流 200、利好 1.5 → round((100 + 100) × 1.5) = 300', () => {
-    expect(dividendOf(facilityOf('bank'), 10, 200, 1.5)).toBe(300);
+describe('dividendOf（F-D3 / D27；M20.6 D53 强化：flow×2 + 6% 基础率）', () => {
+  it('银行 10 股、现金流 200、利好 1.5 → round((120 + 200) × 1.5) = 480', () => {
+    expect(dividendOf(facilityOf('bank'), 10, 200, 1.5)).toBe(480);
   });
 
-  it('利空 0.5 → round((100 + 100) × 0.5) = 100', () => {
-    expect(dividendOf(facilityOf('bank'), 10, 200, 0.5)).toBe(100);
+  it('利空 0.5 → round((120 + 200) × 0.5) = 160', () => {
+    expect(dividendOf(facilityOf('bank'), 10, 200, 0.5)).toBe(160);
   });
 
-  it('无新闻系数（1）且无现金流 → 纯基础分红', () => {
-    expect(dividendOf(facilityOf('bank'), 10, 0, 1)).toBe(100);
-    expect(dividendOf(facilityOf('welfare'), 20, 0, 1)).toBe(100);
+  it('无新闻系数（1）且无现金流 → 纯基础分红（6%）', () => {
+    expect(dividendOf(facilityOf('bank'), 10, 0, 1)).toBe(120);
+    expect(dividendOf(facilityOf('welfare'), 20, 0, 1)).toBe(120);
   });
 
   it('0 股 → 0（零回归关键）', () => {
@@ -127,8 +127,8 @@ describe('dividendOf（F-D3 / D27 逐值）', () => {
     }
   });
 
-  it('现金流按持股比例分成：福利 5 股、现金流 100 → 基础 25 + 分成 25 = 50', () => {
-    expect(dividendOf(facilityOf('welfare'), 5, 100, 1)).toBe(50);
+  it('现金流按持股比例 × 通过系数分成：福利 5 股、现金流 100 → 基础 30 + 分成 50 = 80', () => {
+    expect(dividendOf(facilityOf('welfare'), 5, 100, 1)).toBe(80);
   });
 
   it('estimateDividend 与 dividendOf 同值', () => {

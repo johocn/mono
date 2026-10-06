@@ -8,7 +8,7 @@
  *
  * 浮层可见性：由 `overlayOf` 从状态派生（拍卖 > 结算 > 银行 > 股票盘 > 抽卡翻牌 > 无），天然满足 `?play=1` 默认收起。
  */
-import { PLAYER_NAME, RING_SIZE, brandAt } from '../data/board';
+import { PLAYER_NAME, RING_SIZE, TIER_NAME, brandAt, tierOf, type TileTier } from '../data/board';
 import { ITEM_CARDS, type ItemCardKind } from '../data/cards';
 import { LEVERAGES, LIQUIDATION_RATIO, LOT_TIERS, MARGIN_UNLOCK_ROUND, MARGIN_WARN_RATIO, STOCKS, STOCK_TILE_INDEX, type LotTier } from '../data/stocks';
 import { lotShares, marginGapPctOf, marginLineOf, marketValue } from '../core/stocks';
@@ -21,7 +21,7 @@ import { priceOf, resaleOf } from '../core/item-shop';
 import { creditLocked, currentPlayer, netWorth, winnerOf, type Game, type GameState, type PendingAuction } from '../core/game';
 import { STORE_CATALOG } from '../data/item-shop';
 import { FACILITIES, type FacilityId } from '../data/facilities';
-import { canSubscribe, estimateDividend, newsCoefOf, soldSharesOf } from '../core/facility';
+import { canSubscribe, estimateDividend, isControlling, newsCoefOf, soldSharesOf } from '../core/facility';
 import { previewFor, type PickKind } from '../core/targeting';
 import type { ElementSpec } from '../skin/instantiate';
 import {
@@ -767,7 +767,8 @@ export function facilityDetail(state: GameState, id: FacilityId): FacilityDetail
   const mine = p.facilities[def.id] ?? 0;
   const coef = newsCoefOf(state.news, def.id);
   const cashflow = state.facilityCashflow[def.id] ?? 0;
-  const perRound = estimateDividend(def.id, mine, cashflow, coef);
+  const controlling = isControlling(def, mine);
+  const perRound = estimateDividend(def.id, mine, cashflow, coef, controlling);
   const buy1 = canSubscribe(state.players, def.id, 1, p.cash);
   const buy5 = canSubscribe(state.players, def.id, 5, p.cash);
   return {
@@ -775,8 +776,10 @@ export function facilityDetail(state: GameState, id: FacilityId): FacilityDetail
     title: def.name,
     lines: [
       `${def.name} · 每股 ￥${def.price}`,
-      `已售 ${sold}/${def.shares} 股 · 基础分红 5%/轮`,
-      `你的持股 ${mine} 股`,
+      /* M20.6 D53：基础分红率 5% → 6% */
+      `已售 ${sold}/${def.shares} 股 · 基础分红 6%/轮`,
+      /* M20.6 D53：持股 > 50% 控股，额外吃控股权溢价（提示词与 `dividendOf` 的 control 项同源） */
+      `你的持股 ${mine} 股${controlling ? ' · 控股溢价' : ''}`,
       `预估分红 ￥${perRound}/轮${coef === 1 ? '' : ` · 新闻 ×${coef}`}`,
       `现金 ￥${p.cash}`,
     ],
@@ -785,18 +788,39 @@ export function facilityDetail(state: GameState, id: FacilityId): FacilityDetail
   };
 }
 
+/**
+ * M20.6 板块利好小标（spec §6.1 D52）：当前格所属商圈命中当期板块新闻时给出
+ * 「板块利好 ×1.25」/「板块利空 ×0.8」+ 语义色；未命中 / 非板块新闻 / 无商圈归属 → null。
+ * 供 `main.ts` 传给 `bubbleSpecs`，在停留气泡顶边之上挂 `ui.sectorTag`。
+ */
+export function sectorTagTextOf(state: GameState, index: number): { text: string; sentiment: 'good' | 'bad' } | null {
+  const news = state.news;
+  if (!news || news.scope !== 'sector') return null;
+  const tier = tierOf(index);
+  if (tier === null || news.target !== tier) return null;
+  return {
+    text: `板块${news.sentiment === 'good' ? '利好' : '利空'} ×${news.magnitude}`,
+    sentiment: news.sentiment,
+  };
+}
+
 /** M20.4 新闻条（spec §6.2）：`state.news === null` → 不出（`null`）；否则 1 条（深度 0 ⇒ 浮层自然盖住）
- *  M20.5（spec §6.5 D48）：`prefix` 前置景气度摘要（如「景气 105%」） */
+ *  M20.5（spec §6.5 D48）：`prefix` 前置景气度摘要（如「景气 105%」）
+ *  M20.6（spec §6.1 D52）：板块新闻时 `prefix` 改前置「板块·<商圈名> ×系数」（不带「利好/利空」字样，
+ *  避免与 preset 的「利好/利空」标记重复）。 */
 export function newsTickerSpecOf(state: GameState): ElementSpec | null {
   const news = state.news;
   if (!news) return null;
+  const prefix = news.scope === 'sector'
+    ? `板块·${TIER_NAME[news.target as TileTier]} ×${news.magnitude}`
+    : `景气 ${Math.round(state.economyIndex * 100)}%`;
   return {
     id: 'ui.newsTicker', slot: null, c: 0, r: 0, pass: 4,
     fixed: { cx: NEWS_TICKER_X + NEWS_TICKER_W / 2, cy: NEWS_TICKER_Y + NEWS_TICKER_H / 2 },
     state: {
       sentiment: news.sentiment, scope: news.scope, target: news.target, title: news.title,
       coef: newsCoefOf(state.news, news.target as FacilityId),
-      prefix: `景气 ${Math.round(state.economyIndex * 100)}%`,
+      prefix,
     },
   };
 }

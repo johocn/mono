@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { TILES, ringPath, typeAt, shortAt, nameAt, RING_SIZE, tileIndexOf, START_PUBLIC_LEVEL } from '../../src/data/board';
+import {
+  TILES, ringPath, typeAt, shortAt, nameAt, RING_SIZE, tileIndexOf, START_PUBLIC_LEVEL,
+  TILE_TIER, TIER_NAME, tierOf, PROPOSED_TILE_TIER,
+} from '../../src/data/board';
 
 describe('board 数据（spec §4）', () => {
   it('正好 32 格', () => {
@@ -72,5 +75,41 @@ describe('START_PUBLIC_LEVEL · M18 开局公共设施楼（D1）', () => {
     expect(typeAt(9)).toBe('bank');
     expect(typeAt(19)).toBe('stock');
     expect(typeAt(25)).toBe('hospital');
+  });
+});
+
+describe('商圈分档真源 · M20.6 D51（TILE_TIER / tierOf）', () => {
+  it('覆盖 18 个商家格（type === shop 或起点 core 0），值 ∈ {core,tourism,town}', () => {
+    const keys = Object.keys(TILE_TIER).map(Number);
+    expect(keys.length).toBe(18);
+    for (const i of keys) {
+      expect(typeAt(i) === 'shop' || i === 0).toBe(true);
+      expect(['core', 'tourism', 'town']).toContain(TILE_TIER[i]);
+    }
+  });
+
+  it('非商家格 → null（监狱 12 / 银行 9 / 股票 19 / 医院 25 / 税务 23）', () => {
+    expect(tierOf(12)).toBeNull();
+    expect(tierOf(9)).toBeNull();
+    expect(tierOf(19)).toBeNull();
+    expect(tierOf(25)).toBeNull();
+    expect(tierOf(23)).toBeNull();
+  });
+
+  it('tierOf 抽取真源；TILES[i].tier 与真源一致', () => {
+    expect(tierOf(0)).toBe('core');
+    expect(tierOf(4)).toBe('tourism');
+    expect(tierOf(16)).toBe('town');
+    for (const t of TILES) {
+      expect(t.tier).toBe(TILE_TIER[t.index] ?? null);
+    }
+  });
+
+  it('PROPOSED_TILE_TIER 为 TILE_TIER 的 re-export（同引用，避免两处漂移）', () => {
+    expect(PROPOSED_TILE_TIER).toBe(TILE_TIER);
+  });
+
+  it('TIER_NAME 三档中文名齐备', () => {
+    expect(TIER_NAME).toEqual({ core: '核心商圈', tourism: '文旅商圈', town: '乡镇商圈' });
   });
 });

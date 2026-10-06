@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createGame, type Game } from '../../src/core/game';
 import { ECON_INDEX_MAX, ECON_INDEX_MIN, ECON_INDEX_START, START_CASH, rentOf } from '../../src/data/economy';
 import { makeRng, type Dice } from '../../src/core/dice';
+import { NEWS_TABLE, type NewsItem } from '../../src/data/news';
 import type { ItemCardKind } from '../../src/data/cards';
 import type { BuildLevel } from '../../src/data/board';
 
@@ -46,6 +47,7 @@ describe('M20.5 景气度（spec §5.2 D42）', () => {
     /* index = 1.0（默认）→ rentOf(1) = 15 */
     const g1 = createGame({ seed: 11, dice: fixed(1, 1) });
     dropCard(g1, 0, 'pardon');
+    g1.state.news = null;                               // M20.6：租金口径只验证景气度，去除板块新闻干扰
     giveEstate(g1, 1, 2, 1);
     landOn(g1, 0, 1);
     const r1 = g1.settleCurrent();
@@ -57,6 +59,7 @@ describe('M20.5 景气度（spec §5.2 D42）', () => {
     /* index = 1.3 → round(15 × 1.3) = 20 */
     const g2 = createGame({ seed: 12, dice: fixed(1, 1) });
     dropCard(g2, 0, 'pardon');
+    g2.state.news = null;                               // M20.6：同上，去除板块新闻干扰
     g2.state.economyIndex = 1.3;
     giveEstate(g2, 1, 2, 1);
     landOn(g2, 0, 1);
@@ -103,6 +106,50 @@ describe('M20.5 景气度（spec §5.2 D42）', () => {
       expect(v).toBeGreaterThanOrEqual(ECON_INDEX_MIN);
       expect(v).toBeLessThanOrEqual(ECON_INDEX_MAX);
     }
+  });
+});
+
+describe('M20.6 终局租金与板块系数（D52 / D54）', () => {
+  /** 开局 1 号玩家落在 2 号玩家的 L1 地块（index 1，基础租金 15），返回实际租金 */
+  const rentOfLanding = (news: NewsItem | null, round = 1): number => {
+    const g = createGame({ seed: 11, dice: fixed(1, 1) });
+    dropCard(g, 0, 'pardon');
+    giveEstate(g, 1, 2, 1);
+    landOn(g, 0, 1);
+    g.state.news = news;
+    g.state.round = round;
+    const r = g.settleCurrent();
+    return r.kind === 'rent' ? r.rent : -1;
+  };
+
+  it('段外（round < 40）+ 无板块新闻 ⇒ 租金逐值回旧口径', () => {
+    expect(rentOfLanding(null, 1)).toBe(rentOf(1));
+    expect(rentOfLanding(null, 39)).toBe(rentOf(1));
+  });
+
+  it('终局阶段按 rentMult 放大：Ⅰ ×1.4 / Ⅱ ×1.8 / Ⅲ ×2.4', () => {
+    expect(rentOfLanding(null, 40)).toBe(Math.round(rentOf(1) * 1.4));
+    expect(rentOfLanding(null, 46)).toBe(Math.round(rentOf(1) * 1.4));
+    expect(rentOfLanding(null, 47)).toBe(Math.round(rentOf(1) * 1.8));
+    expect(rentOfLanding(null, 54)).toBe(Math.round(rentOf(1) * 2.4));
+    expect(rentOfLanding(null, 60)).toBe(Math.round(rentOf(1) * 2.4));   // 超出末段沿用Ⅲ
+  });
+
+  it('板块新闻：命中商圈 ×1.25 / ×0.8，非本商圈不影响（段外 newsMult=1）', () => {
+    const good = NEWS_TABLE.find((n) => n.id === 'n-sector-core-good')!;
+    const bad = NEWS_TABLE.find((n) => n.id === 'n-sector-core-bad')!;
+    const other = NEWS_TABLE.find((n) => n.id === 'n-sector-town-good')!;
+    expect(rentOfLanding(good)).toBe(Math.round(rentOf(1) * 1.25));
+    expect(rentOfLanding(bad)).toBe(Math.round(rentOf(1) * 0.8));
+    expect(rentOfLanding(other)).toBe(rentOf(1));                        // 乡镇利好不作用于核心商圈
+  });
+
+  it('终局 newsMult 放大板块偏离量：Ⅲ 段利好 ×1.5、利空 ×0.6', () => {
+    const good = NEWS_TABLE.find((n) => n.id === 'n-sector-core-good')!;
+    const bad = NEWS_TABLE.find((n) => n.id === 'n-sector-core-bad')!;
+    /* amplify(1.25, 2) = 1.5；amplify(0.8, 2) = 0.6 */
+    expect(rentOfLanding(good, 54)).toBe(Math.round(rentOf(1) * 1.5 * 2.4));
+    expect(rentOfLanding(bad, 54)).toBe(Math.round(rentOf(1) * 0.6 * 2.4));
   });
 });
 

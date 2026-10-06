@@ -49,3 +49,7 @@ export const MARGIN_WARN_RATIO = 1.5;
 export const DIVIDEND_PER_SHARE = 20;
 /** 红利卡：无持仓时的折现额（B-D7） */
 export const DIVIDEND_REFUND = 100;
+
+/* —— M20.6 终局加速（spec §4.4 D54）—— */
+/** 股价 tick 的默认波动放大倍数（= 1 ⇒ 未进入终局时逐值回旧口径） */
+export const ENDGAME_VOL_MULT_DEFAULT = 1;

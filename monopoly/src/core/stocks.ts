@@ -9,7 +9,9 @@
  * 命中的标的按下限幅度定向走动（`dir = 1` 按上限 +vol、`dir = -1` 按 −vol），
  * **命中时不调用 `rng()`**，故不改变未命中标的的既有随机序列（seed 回放逐字节一致）。
  */
-import { LIQUIDATION_RATIO, SHARE_LOT, STOCKS, type LotTier, type StockDef } from '../data/stocks';
+import {
+  ENDGAME_VOL_MULT_DEFAULT, LIQUIDATION_RATIO, SHARE_LOT, STOCKS, type LotTier, type StockDef,
+} from '../data/stocks';
 
 export type Quotes = Record<string, number>;
 
@@ -33,8 +35,8 @@ export interface Market {
   quotes(): Quotes;
   /** 每支标的的历史价（首点 = 发行价，每 tick 追加一点）——供行情走势折线消费 */
   history(): Record<string, number[]>;
-  /** 统一 tick 一次（轮末）；`force` 内的标的按下限幅度定向走动 */
-  tick(force?: StockForce[]): Quotes;
+  /** 统一 tick 一次（轮末）；`force` 内的标的按下限幅度定向走动；`volMult` 放大波动幅度（终局加速） */
+  tick(force?: StockForce[], volMult?: number): Quotes;
 }
 
 export function createMarket(rng: () => number, defs: StockDef[] = STOCKS): Market {
@@ -51,12 +53,12 @@ export function createMarket(rng: () => number, defs: StockDef[] = STOCKS): Mark
       for (const d of defs) out[d.code] = [...series[d.code]];
       return out;
     },
-    tick: (force: StockForce[] = []): Quotes => {
+    tick: (force: StockForce[] = [], volMult: number = ENDGAME_VOL_MULT_DEFAULT): Quotes => {
       for (const d of defs) {
         const prev = prices[d.code];
         /* 命中强制方向 ⇒ 走定点幅度、**不消耗 `rng()`**；未命中才摇随机（与既有 tips 短路逐字节一致） */
         const f = force.find((x) => x.code === d.code);
-        const delta = f ? d.vol * f.dir : d.vol * (2 * rng() - 1);
+        const delta = (f ? d.vol * f.dir : d.vol * (2 * rng() - 1)) * volMult;
         prices[d.code] = Math.max(1, Math.round(prev * (1 + delta)));
         series[d.code].push(prices[d.code]);
       }

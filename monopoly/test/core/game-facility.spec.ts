@@ -72,7 +72,7 @@ describe('game-facility 认购（spec §5.3 / F-D13）', () => {
 });
 
 describe('game-facility 轮末分红（spec §5.4 ⑤ / F-D3）', () => {
-  it('利好系数 ×1.5：银行 10 股 + 现金流 200 → +300', () => {
+  it('利好系数 ×1.5：银行 10 股 + 现金流 200 → +480', () => {
     const g = createGame({ dice: fixed(1, 1), seed: 20261002 });
     const p = g.state.players[0];
     p.facilities = { bank: 10 };
@@ -83,10 +83,10 @@ describe('game-facility 轮末分红（spec §5.4 ⑤ / F-D3）', () => {
     soloBoundary(g);
     g.endTurn();
 
-    expect(p.cash).toBe(cash0 + 300);                    // round((100 + 100) × 1.5)
+    expect(p.cash).toBe(cash0 + 480);                    // round((120 + 200) × 1.5)（M20.6 D53：基础 6% + 现金流 ×2）
   });
 
-  it('利空系数 ×0.5 → +100', () => {
+  it('利空系数 ×0.5 → +160', () => {
     const g = createGame({ dice: fixed(1, 1), seed: 20261002 });
     const p = g.state.players[0];
     p.facilities = { bank: 10 };
@@ -97,21 +97,21 @@ describe('game-facility 轮末分红（spec §5.4 ⑤ / F-D3）', () => {
     soloBoundary(g);
     g.endTurn();
 
-    expect(p.cash).toBe(cash0 + 100);                    // round((100 + 100) × 0.5)
+    expect(p.cash).toBe(cash0 + 160);                    // round((120 + 200) × 0.5)
   });
 
   it('无新闻（系数 1）：纯基础分红 + 现金流按持股比例分成，且现金流结算后清零', () => {
     const g = createGame({ dice: fixed(1, 1), seed: 20261002 });
     const p = g.state.players[0];
-    p.facilities = { welfare: 5 };                       // 福利 ￥100/股 → 基础 25
+    p.facilities = { welfare: 5 };                       // 福利 ￥100/股 → 基础 30（6%）
     g.state.news = null;
-    g.state.facilityCashflow.welfare = 100;              // 分成 100 × 5 / 20 = 25
+    g.state.facilityCashflow.welfare = 100;              // 分成 100 × 5 × 2 / 20 = 50
     const cash0 = p.cash;
 
     soloBoundary(g);
     g.endTurn();
 
-    expect(p.cash).toBe(cash0 + 50);
+    expect(p.cash).toBe(cash0 + 80);
     expect(g.state.facilityCashflow).toEqual({ bank: 0, exchange: 0, hospital: 0, lottery: 0, welfare: 0 });
   });
 
@@ -141,8 +141,8 @@ describe('game-facility 现金流挂载点（spec §5.2 / F-D4）', () => {
     soloBoundary(g);
     g.endTurn();
 
-    /* 利息 round(1000 × 0.06) = 60 → 分红 基础 200 + 分成 60 = 260 */
-    expect(p.cash).toBe(cash0 + 260);
+    /* 利息 round(1000 × 0.06) = 60 → 分红 基础 240 + 分成 120 + 控股溢价 80 = 440 */
+    expect(p.cash).toBe(cash0 + 440);
     expect(p.loan!.principal).toBe(1060);                // 计息照常资本化
     expect(p.loan!.freeFirstRound).toBe(false);
   });
@@ -161,8 +161,8 @@ describe('game-facility 现金流挂载点（spec §5.2 / F-D4）', () => {
     soloBoundary(g);
     g.endTurn();
 
-    /* 基础 20 × 120 × 0.05 = 120 + 分成 100 = 220 */
-    expect(p.cash).toBe(cash0 + 220);
+    /* 基础 20 × 120 × 0.06 = 144 + 分成 100 × 20 × 2 / 20 = 200 + 控股溢价 48 = 392 */
+    expect(p.cash).toBe(cash0 + 392);
   });
 
   it('交易所：当前费率 0 ⇒ 买卖均不产生现金流（零余额回归）', () => {

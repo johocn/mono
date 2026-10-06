@@ -1,5 +1,6 @@
 import { brandAt, PLAYER_NAME } from '../data/board';
-import { buyPrice, canUpgrade, nextLevel } from '../data/economy';
+import { buyPrice, canUpgrade, ENDGAME_STAGES, nextLevel } from '../data/economy';
+import { endgameStageOf, inEndgame } from '../core/endgame';
 import { buyable, discounted, ownedBy } from '../core/estate';
 import { buyDiscountOf, currentPlayer, netWorth, type Game, type GameState } from '../core/game';
 import { abilityOfPlayer } from '../data/abilities';
@@ -13,6 +14,8 @@ import {
   HUD_BTN_AI_W, HUD_BTN_AI_X, HUD_BTN_BUY_X, HUD_BTN_H, HUD_BTN_PRIMARY_W, HUD_BTN_PRIMARY_X,
   HUD_BTN_SECONDARY_W, HUD_BTN_UPGRADE_X, HUD_DICE_DX, HUD_DICE_SIZE, HUD_DICE_X0, HUD_DICE_Y,
   HUD_DEBT_H, HUD_DEBT_W, HUD_DEBT_X, HUD_DEBT_Y,
+  HUD_ENDGAME_BADGE_H, HUD_ENDGAME_BADGE_W, HUD_ENDGAME_BADGE_X, HUD_ENDGAME_BADGE_Y,
+  HUD_ENDGAME_BAR_H, HUD_ENDGAME_BAR_W, HUD_ENDGAME_BAR_X, HUD_ENDGAME_BAR_Y,
   AUDIO_BGM_BOX, AUDIO_KEY_SIZE, AUDIO_SFX_BOX,
   HUD_DOCK_H, HUD_LABEL_SHIFT_X, HUD_LABEL_Y, HUD_PERSONA_DX, HUD_PERSONA_DY,
   HUD_QK_BANK_X, HUD_QK_FACILITY_X, HUD_QK_FAST_X, HUD_QK_H, HUD_QK_SKIP_X, HUD_QK_STORE_X, HUD_QK_W, HUD_QK_Y, STAGE_W,
@@ -201,6 +204,17 @@ export function hudSpecs(
   };
 
   bar('ui.dock', 0, STAGE_W / 2, DOCK_Y + HUD_DOCK_H / 2, { round: state.round });
+  /* 终局加速角标 + 进度条（M20.6 spec §6.1 D54）：`round >= 40` 时出，段外整段隐藏（零回归）；
+     `r = 0`（与 `ui.newsTicker` 同「信息带」约定）⇒ 浮层自然盖住，且不参与 `BUBBLE_DEPTH` 复算。
+     夹在底坞（r=0）与状态行（r=1）之间，保证 r 非递减（`hud.spec.ts` 有闸门）。 */
+  if (inEndgame(state.round)) {
+    const seg = endgameStageOf(state.round);
+    const stage = Math.max(1, ENDGAME_STAGES.indexOf(seg) + 1);
+    bar('ui.endgameBadge', 0, HUD_ENDGAME_BADGE_X + HUD_ENDGAME_BADGE_W / 2, HUD_ENDGAME_BADGE_Y + HUD_ENDGAME_BADGE_H / 2, {
+      label: `${seg.label} · 租×${seg.rentMult} 市×${seg.volMult} 讯×${seg.newsMult}`,
+    });
+    bar('ui.endgameBar', 0, HUD_ENDGAME_BAR_X + HUD_ENDGAME_BAR_W / 2, HUD_ENDGAME_BAR_Y + HUD_ENDGAME_BAR_H / 2, { stage });
+  }
   /* 状态行：AI 回合把文字左移，给右侧「加速 / 跳过」让位；有气泡播报时优先显示播报 */
   bar('ui.label', 1, STAGE_W / 2, HUD_LABEL_Y, { text: ui.callout ?? statusText(state), dx: aiSeat ? HUD_LABEL_SHIFT_X : 0 });
 

@@ -8,6 +8,8 @@ import {
   HUD_BAR_W, HUD_BAR_X0, HUD_BTN_AI_W, HUD_BTN_AI_X, HUD_BTN_H, HUD_DICE_Y,
   HUD_DEBT_H, HUD_DEBT_W, HUD_DEBT_X, HUD_DEBT_Y,
   HUD_QK_BANK_X, HUD_QK_FACILITY_X, HUD_QK_FAST_X, HUD_QK_H, HUD_QK_SKIP_X, HUD_QK_STORE_X, HUD_QK_W, HUD_QK_Y, STAGE_W,
+  HUD_ENDGAME_BADGE_H, HUD_ENDGAME_BADGE_W, HUD_ENDGAME_BADGE_X, HUD_ENDGAME_BADGE_Y,
+  HUD_ENDGAME_BAR_H, HUD_ENDGAME_BAR_W, HUD_ENDGAME_BAR_X, HUD_ENDGAME_BAR_Y,
   TILE_CARD_BTN_Y, TILE_CARD_H, TILE_CARD_W, TILE_CARD_X, TILE_CARD_Y,
 } from '../../src/skin/layout';
 import type { Dice } from '../../src/core/dice';
@@ -549,5 +551,53 @@ describe('hud 设施键与快键行 5 槽（M20.4 spec §6.3 / F-D15）', () => 
     /* 五槽均落同一 y；最右（手牌键）右缘 ≤ 舞台宽 */
     expect(qks.every((s) => s.fixed!.cy === HUD_QK_Y + HUD_QK_H / 2)).toBe(true);
     expect(HUD_QK_SKIP_X + HUD_QK_W).toBeLessThanOrEqual(STAGE_W);
+  });
+});
+
+/* M20.6（spec §6.1 D51）：终局三段 —— 角标（段名 + 三系数行）+ 进度条（高亮当前段） */
+describe('hud 终局角标与进度条（M20.6）', () => {
+  const byId = (specs: ReturnType<typeof hudSpecs>, id: string) => specs.filter((s) => s.id === id);
+
+  it('段外（round < 40）→ 角标与进度条均不出', () => {
+    const g = createGame({ seed: 1 });
+    g.state.round = 39;
+    expect(byId(hudSpecs(g.state), 'ui.endgameBadge')).toHaveLength(0);
+    expect(byId(hudSpecs(g.state), 'ui.endgameBar')).toHaveLength(0);
+  });
+
+  it('进入终局 → 角标文案逐段、进度条高亮段号 1..3 且台位命中常量', () => {
+    const g = createGame({ seed: 1 });
+    const at = (round: number) => {
+      g.state.round = round;
+      const specs = hudSpecs(g.state);
+      return { badge: byId(specs, 'ui.endgameBadge')[0], bar: byId(specs, 'ui.endgameBar')[0] };
+    };
+
+    const s1 = at(40);
+    expect(s1.badge.state).toEqual({ label: '加速 Ⅰ · 租×1.4 市×1.3 讯×1.3' });
+    expect(s1.bar.state).toEqual({ stage: 1 });
+    expect(s1.badge.fixed!.cx).toBe(HUD_ENDGAME_BADGE_X + HUD_ENDGAME_BADGE_W / 2);
+    expect(s1.badge.fixed!.cy).toBe(HUD_ENDGAME_BADGE_Y + HUD_ENDGAME_BADGE_H / 2);
+    expect(s1.bar.fixed!.cx).toBe(HUD_ENDGAME_BAR_X + HUD_ENDGAME_BAR_W / 2);
+    expect(s1.bar.fixed!.cy).toBe(HUD_ENDGAME_BAR_Y + HUD_ENDGAME_BAR_H / 2);
+
+    expect(at(46).badge.state).toEqual({ label: '加速 Ⅰ · 租×1.4 市×1.3 讯×1.3' });
+    expect(at(47).badge.state).toEqual({ label: '加速 Ⅱ · 租×1.8 市×1.6 讯×1.6' });
+    expect(at(47).bar.state).toEqual({ stage: 2 });
+    expect(at(53).badge.state).toEqual({ label: '加速 Ⅱ · 租×1.8 市×1.6 讯×1.6' });
+    expect(at(54).badge.state).toEqual({ label: '终局 · 租×2.4 市×2 讯×2' });
+    expect(at(54).bar.state).toEqual({ stage: 3 });
+    expect(at(60).badge.state).toEqual({ label: '终局 · 租×2.4 市×2 讯×2' });
+  });
+
+  it('角标 / 进度条为信息带（r=0）：不吃事件、不新增命中区、不改 depth 递增', () => {
+    const g = createGame({ seed: 1 });
+    g.state.round = 40;
+    const specs = hudSpecs(g.state);
+    expect(byId(specs, 'ui.endgameBadge')[0].r).toBe(0);
+    expect(byId(specs, 'ui.endgameBar')[0].r).toBe(0);
+    const rs = specs.map((s) => s.r);
+    expect([...rs].sort((a, b) => a - b)).toEqual(rs);
+    expect(hitAreas(g.state).length).toBe(8);
   });
 });

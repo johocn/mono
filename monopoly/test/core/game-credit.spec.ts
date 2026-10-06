@@ -237,6 +237,7 @@ describe('M20.2 信贷 · 逾期付租罚息（spec §3.4 链一）', () => {
   /** 让 2 号玩家（逾期）走到 1 号格向 1 号玩家付租 */
   const rentFromOverdue = (g: Game) => {
     giveEstate(g);
+    g.state.news = null;                              // M20.6：隔离随机开局的板块新闻（否则会改租金系数）
     g.state.hands[1] = g.state.hands[1].filter((k) => k !== 'pardon');
     g.state.current = 1;
     g.state.players[1].pos = 0;
@@ -354,6 +355,7 @@ describe('M20.2 信贷 · 银行格与清算顺序（spec §3.5 / §3.7）', () 
 
   it('清算优先取存款：现金不足时先全额取存款补齐，不触拍卖、不动自有地产', () => {
     const g = createGame({ dice: step(1) });
+    g.state.news = null;                 // M20.6：板块新闻会改租金，租金口径用例与新闻解耦
     const p = g.state.players[0];
     g.state.estates[1] = { index: 1, owner: 2, level: 1, processing: false };   // 2 号收租格
     giveEstate(g, 3);                  // 自有未抵押地产（若误走拍卖会被卖掉）

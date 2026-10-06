@@ -3,6 +3,7 @@ import { createDebugPanel } from './debug/panel';
 import { createThemeConsole, type ThemeConsoleHandle } from './ui/themeConsole';
 import { loadSkin } from './skin/skinLoader';
 import { Scene } from './render/Scene';
+import { loadWukongSkeleton } from './render/spine-wukong';
 import type { PlacementOpts } from './render/Scene';
 import { boardCells, boardTileSpecs } from './render/BoardView';
 import { innerSpecs, fountainSpec } from './render/InnerView';
@@ -21,7 +22,7 @@ import { candidatesFor, canTarget, type PickKind } from './core/targeting';
 import { bboxOf, choreography, frameFor, landingPose, type CamPose, type Cell, type ChoreographyOpts, type View } from './core/framing';
 import { createCamera, toWorld } from './render/camera';
 import { hudSpecs, mountHud, type HudActionId, type HudHandle } from './ui/Hud';
-import { applyAmountKey, applyAmountTier, handLayout, mountPanels, newsTickerSpecOf, overlayOf, panelSpecs, parseAmount, parseTierKey, tierShares, type BankProductKind, type BullbearUiState, type FacilityUiState, type PanelActionId, type PanelHandle, type StockUiState, type StoreUiState, type TargetingView } from './ui/panels';
+import { applyAmountKey, applyAmountTier, handLayout, mountPanels, newsTickerSpecOf, overlayOf, panelSpecs, parseAmount, parseTierKey, sectorTagTextOf, tierShares, type BankProductKind, type BullbearUiState, type FacilityUiState, type PanelActionId, type PanelHandle, type StockUiState, type StoreUiState, type TargetingView } from './ui/panels';
 import { createAiDriver, type AiDriver } from './ui/aiDriver';
 import { createAudioEngine } from './ui/audio';
 import { mountSetup, readPlan, resolveSeats, type SeatPlan } from './ui/setup';
@@ -279,6 +280,11 @@ export async function boot(): Promise<void> {
     assetBase: './skins',
     skinIds: skinPackIds,
   });
+
+  /* Spine 悟空骨架预加载：完成后重建一次画面，棋子从矢量兜底切到骨骼动画版 */
+  loadWukongSkeleton()
+    .then(() => scene.render())
+    .catch((e) => { console.warn('[spine-wukong] load failed:', e?.message ?? e); });
 
   /* —— M6 动效层：只回放视觉，绝不写 state；一切参数经 skin.fx / layout 注入 —— */
   const fxTokens = (skin ?? defaultSkin)?.fx ?? null;
@@ -569,8 +575,10 @@ export async function boot(): Promise<void> {
       ...buildingSpecs({ ownerOf: ownedOf, brandOf: shops.brandAt, levelOf: (i) => lv[i] }),
       ...streetPropSpecs(),
       ...pawnSpecs(pawnStates),
-      /* 停留事件气泡（spec §6.7）：当前玩家棋子头顶，跟 pawnSpecs 同一分组口径 */
-      ...bubbleSpecs(pawnStates, bubble, geo, PLACEMENT),
+      /* 停留事件气泡（spec §6.7）：当前玩家棋子头顶，跟 pawnSpecs 同一分组口径
+         M20.6（spec §6.1 D52）：命中当期板块新闻时，气泡顶边之上再挂「板块利好/利空 ×系数」小标 */
+      ...bubbleSpecs(pawnStates, bubble, geo, PLACEMENT,
+        sectorTagTextOf(g.state, currentPlayer(g.state).pos)),
       /* M19-D2 选目标态：候选格金框高亮（c/r 取自既有 cells 表，字段与 boardTileSpecs 同口径） */
       ...(uiSel ? candidatesFor(uiSel.kind, g.state).map((idx): ElementSpec => {
         const cell = cells[idx];

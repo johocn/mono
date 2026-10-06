@@ -24,8 +24,10 @@
     "check": "npm run lint && npm run lint:skin && npm run test"
   },
   "dependencies": {
+    "@esotericsoftware/spine-core": "~4.2.45",
+    "@pixi/spine-pixi": "^2.1.1",
     "gsap": "^3.12.5",
-    "pixi.js": "^8.6.0"
+    "pixi.js": "8.6.6"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

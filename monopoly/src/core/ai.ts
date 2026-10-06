@@ -15,6 +15,7 @@ import { RING_SIZE } from '../data/board';
 import { STOCK_TILE_INDEX, STOCKS, type StockPlay } from '../data/stocks';
 import { FACILITIES, type FacilityId } from '../data/facilities';
 import { canSubscribe } from './facility';
+import { endgameAiParams } from './endgame';
 import { SPEC_LEADER_MIN_ROUND, personaParams, type AiParams, type Persona } from '../data/ai';
 
 export { personaParams } from '../data/ai';
@@ -426,7 +427,8 @@ function settledPlan(state: GameState, persona: Persona, P: AiParams): AiStep[] 
  */
 export function decideTurn(state: GameState, persona: Persona): AiStep[] {
   if (state.over) return [];
-  const P = personaParams(persona);
+  /* M20.6 D56：终局加速期（`round ≥ 40`）AI 预算/出价激进化（`reserve` 下调、`bidMult` 上调）；段外原样 */
+  const P = endgameAiParams(personaParams(persona), state.round);
   const phase: Phase = state.phase;
   if (phase === 'idle') return idlePlan(state, persona, P);
   if (phase === 'rolled') return rolledPlan(state, persona);

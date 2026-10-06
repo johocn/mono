@@ -38,6 +38,11 @@ export const HUD_D = fb({
   /* 骰子 */
   diceR: 10, diceFill: '#f3efe4', diceRollFill: '#ffffff', diceEdge: '#2a3830', diceEdgeW: 1.5,
   pipR: 4.2, pipSpan: 13, pipFill: '#243029',
+  /* M20.6 终局加速角标 + 进度条（spec §6.1 D54）：角标深红底金/警示边 + 单行文字；进度条三段（当前段高亮） */
+  endgameR: 6, endgameFill: 'rgba(43,26,26,.92)', endgameEdge: '#e0606a', endgameEdgeW: 1,
+  endgameFs: 11, endgameTextFill: '#ffd0b0',
+  endgameBarR: 4, endgameBarSegs: 3, endgameBarGap: 6,
+  endgameBarFill: '#f5c451', endgameBarIdle: 'rgba(255,255,255,.16)',
 });
 
 const G = (p: Record<string, unknown>, k: keyof typeof HUD_D): number => num(p, k, HUD_D[k] as number);
@@ -150,5 +155,39 @@ export const diceFace: ProcPreset = (g, ctx) => {
   const span = G(params, 'pipSpan') * s;
   for (const [dx, dy] of grid) {
     g.circle(cx + dx * span, cy + dy * span, G(params, 'pipR') * s).fill({ color: S(params, 'pipFill') });
+  }
+};
+
+/* —— M20.6 终局加速角标（spec §6.1 D54）：深红圆角底 + 居中单行「段标签 · 租× 市× 讯×」。
+   文案由 UI 层经 `state.label` 组装传入（preset 不含业务语义）；信息元素不吃事件。 —— */
+export const uiEndgameBadge: ProcPreset = (g, ctx) => {
+  const { cx, cy, box, params, state, s, text } = ctx;
+  const w = box.w * s;
+  const h = box.h * s;
+  g.roundRect(cx - w / 2, cy - h / 2, w, h, G(params, 'endgameR'))
+    .fill({ color: S(params, 'endgameFill') })
+    .stroke({ color: S(params, 'endgameEdge'), width: G(params, 'endgameEdgeW') });
+  if (!text) return;
+  text({
+    text: typeof state.label === 'string' ? state.label : '', x: cx, y: cy,
+    size: G(params, 'endgameFs'), fill: S(params, 'endgameTextFill'),
+  });
+};
+
+/* —— M20.6 终局进度条（spec §6.1 D54）：Ⅰ/Ⅱ/Ⅲ 三段等分，当前段（`state.stage` 1..3）高亮。
+   UI 层只给阶段序号，段数 / 间隙 / 配色一律走 params（L4 可回退）。 —— */
+export const uiEndgameBar: ProcPreset = (g, ctx) => {
+  const { cx, cy, box, params, state, s } = ctx;
+  const w = box.w * s;
+  const h = box.h * s;
+  const x0 = cx - w / 2;
+  const y0 = cy - h / 2;
+  const segs = G(params, 'endgameBarSegs');
+  const gap = G(params, 'endgameBarGap') * s;
+  const stage = typeof state.stage === 'number' ? state.stage : 1;
+  const segW = (w - gap * (segs - 1)) / segs;
+  for (let i = 0; i < segs; i++) {
+    g.roundRect(x0 + i * (segW + gap), y0, segW, h, G(params, 'endgameBarR'))
+      .fill({ color: i === stage - 1 ? S(params, 'endgameBarFill') : S(params, 'endgameBarIdle') });
   }
 };

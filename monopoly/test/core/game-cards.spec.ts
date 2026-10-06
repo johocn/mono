@@ -13,6 +13,8 @@ const fixed = (d1: number, d2: number): Dice => ({ roll: () => ({ d1, d2, total:
 /** 摘掉开局常驻的「免罚」（租金/入狱口径要验证「无免罚」时的真实结算） */
 const dropPardon = (g: Game): void => {
   g.state.hands[0] = g.state.hands[0].filter((k) => k !== 'pardon');
+  /* M20.6：去除当期新闻，租金口径用例须与板块新闻解耦 */
+  g.state.news = null;
 };
 
 /** 抽指定命运/机会卡（固定牌堆顺序、不洗牌，逐张复现） */
@@ -111,6 +113,7 @@ describe('game-cards 路障（spec §5.3）', () => {
 describe('game-cards 免罚卡（spec §5.3）', () => {
   it('抵消租金：waived=true、现金不变、pardon 消耗', () => {
     const g = createGame({ dice: fixed(1, 1) });
+    g.state.news = null;                              // M20.6：板块新闻会改租金，与新闻解耦
     g.state.estates[4] = { index: 4, owner: 2, level: 3, processing: false };
     g.state.players[0].pos = 2;
     g.rollDice();

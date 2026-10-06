@@ -94,6 +94,10 @@ export const PANEL_D = fb({
   newsGoodEdge: '#f5c451', newsBadEdge: '#5b6b63', newsEdgeW: 1,
   newsFs: 12, newsTextGoodFill: '#ffe9b0', newsTextBadFill: '#9fb3a8',
   newsPadX: 14, newsMarkGood: '利好', newsMarkBad: '利空',
+  /* M20.6 板块利好小标（ui.sectorTag，spec §6.1 D52）：挂在气泡顶边之上的小药丸，good/bad 两态配色 */
+  sectorTagR: 8, sectorTagEdgeW: 1, sectorTagFs: 10,
+  sectorTagGoodFill: 'rgba(43,36,22,.94)', sectorTagGoodEdge: '#f5c451', sectorTagGoodText: '#ffe9b0',
+  sectorTagBadFill: 'rgba(26,31,28,.94)', sectorTagBadEdge: '#5b6b63', sectorTagBadText: '#9fb3a8',
 });
 
 const G = (p: Record<string, unknown>, k: keyof typeof PANEL_D): number => num(p, k, PANEL_D[k] as number);
@@ -482,5 +486,26 @@ export const uiNewsTicker: ProcPreset = (g, ctx) => {
     text: `${prefix}${mark} · ${typeof state.title === 'string' ? state.title : ''}`,
     x: cx - w / 2 + G(params, 'newsPadX'), y: cy, size: G(params, 'newsFs'),
     fill: good ? S(params, 'newsTextGoodFill') : S(params, 'newsTextBadFill'), align: 'left',
+  });
+};
+
+/* —— M20.6 板块利好小标（ui.sectorTag，spec §6.1 D52）：挂在停留气泡顶边之上的小药丸。
+   利好金底 / 利空灰底由 `state.sentiment` 选语义色；文案由 UI 层经 `state.text` 传入（preset 不含业务语义）。
+   信息元素不吃事件 ⇒ 无命中区。 —— */
+export const uiSectorTag: ProcPreset = (g, ctx) => {
+  const { cx, cy, box, params, state, s, text } = ctx;
+  const good = state.sentiment === 'good';
+  const w = box.w * s;
+  const h = box.h * s;
+  g.roundRect(cx - w / 2, cy - h / 2, w, h, G(params, 'sectorTagR'))
+    .fill({ color: good ? S(params, 'sectorTagGoodFill') : S(params, 'sectorTagBadFill') })
+    .stroke({
+      color: good ? S(params, 'sectorTagGoodEdge') : S(params, 'sectorTagBadEdge'),
+      width: G(params, 'sectorTagEdgeW'),
+    });
+  if (!text) return;
+  text({
+    text: typeof state.text === 'string' ? state.text : '', x: cx, y: cy,
+    size: G(params, 'sectorTagFs'), fill: good ? S(params, 'sectorTagGoodText') : S(params, 'sectorTagBadText'),
   });
 };

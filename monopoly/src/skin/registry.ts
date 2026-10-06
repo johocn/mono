@@ -1,5 +1,7 @@
 import {
-  AUDIO_KEY_SIZE, BUBBLE_H, BUBBLE_W, HUD_BAR_W, HUD_DEBT_H, HUD_DEBT_W, NEWS_TICKER_H, NEWS_TICKER_W,
+  AUDIO_KEY_SIZE, BUBBLE_H, BUBBLE_TAG_H, BUBBLE_TAG_W, BUBBLE_W,
+  HUD_BAR_W, HUD_DEBT_H, HUD_DEBT_W, HUD_ENDGAME_BADGE_H, HUD_ENDGAME_BADGE_W,
+  HUD_ENDGAME_BAR_H, HUD_ENDGAME_BAR_W, NEWS_TICKER_H, NEWS_TICKER_W,
   PANEL_BANK_AMOUNT_H, PANEL_BANK_AMOUNT_W, PANEL_BANK_CONFIRM_H, PANEL_BANK_CONFIRM_W,
   PANEL_BANK_KEY_H, PANEL_BANK_KEY_W,
   PANEL_BANK_ROW_H, PANEL_BANK_ROW_W,
@@ -257,6 +259,12 @@ reg['ui.handBar'] = showcaseEntry('ui.handBar', { w: PANEL_HAND_BAR_W, d: 1, h: 
 /* M20.4 新闻条（spec §6.2）：每轮 1 条（`state.news !== null` 时出），利好金底 / 利空灰底两态；
    信息条不吃事件 ⇒ 不进任何命中区 */
 reg['ui.newsTicker'] = showcaseEntry('ui.newsTicker', { w: NEWS_TICKER_W, d: 1, h: NEWS_TICKER_H });
+/* M20.6 终局加速角标 + 进度条（spec §6.1 D54）：信息元素（不吃事件、不进命中区），
+   台位由 `Hud.ts` 给；`r = 0` ⇒ 不参与 `BUBBLE_DEPTH` 复算 */
+reg['ui.endgameBadge'] = showcaseEntry('ui.endgameBadge', { w: HUD_ENDGAME_BADGE_W, d: 1, h: HUD_ENDGAME_BADGE_H });
+reg['ui.endgameBar'] = showcaseEntry('ui.endgameBar', { w: HUD_ENDGAME_BAR_W, d: 1, h: HUD_ENDGAME_BAR_H });
+/* M20.6 板块利好小标（spec §6.1 D52）：挂在停留气泡**顶边之上**的小药丸，台位由 `BubbleView` 给 */
+reg['ui.sectorTag'] = showcaseEntry('ui.sectorTag', { w: BUBBLE_TAG_W, d: 1, h: BUBBLE_TAG_H });
 
 export const REGISTRY: Record<string, RegistryEntry> = reg;
 

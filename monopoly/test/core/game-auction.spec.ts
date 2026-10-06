@@ -4,8 +4,10 @@ import type { Dice } from '../../src/core/dice';
 import type { FateCardDef } from '../../src/data/cards';
 
 const fixed = (d1: number, d2: number): Dice => ({ roll: () => ({ d1, d2, total: d1 + d2 }) });
+/** 摘免罚 + 去除当期新闻：租金口径用例须与板块新闻（M20.6）解耦 */
 const dropPardon = (g: ReturnType<typeof createGame>): void => {
   g.state.hands[0] = g.state.hands[0].filter((k) => k !== 'pardon');
+  g.state.news = null;
 };
 const FINE_150: FateCardDef = { id: 'f-fine', name: '违规罚金', kind: 'fine', amount: 150, text: '摊位违规，罚金 ￥150' };
 

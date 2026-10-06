@@ -1,0 +1,8 @@
+feat(mono): 悟空Spine骨骼棋子接入游戏 + M20.6功能包入库
+
+- 新增 src/render/spine-wukong.ts：骨架数据模块缓存+Spine工厂（mood→idle三态映射，矢量兜底）
+- ProcCtx 增加 custom 显示对象通道（Scene.paintItem 统一落地）
+- pawn() style=wukong 走 Spine 渲染（保留矢量光晕/投影），AI 三众仍矢量
+- public/spine/ 骨骼产物；pixi 锁 8.6.6（spine-pixi 2.1.1 不兼容 8.20+ ViewContainer 构造）
+- camera.ts cull.set 改逐字段赋值（8.6.6 无 Rectangle.set）
+- 收录此前完成未提交的 M20.6：终局结算/板块新闻/设施加成及配套测试

@@ -81,6 +81,36 @@ describe('stocks 盘面与涨跌（spec §5.5）', () => {
     expect(m.history().SY01).toHaveLength(3);
     expect(q1.SY01).toBeGreaterThanOrEqual(1);
   });
+
+  /* —— M20.6 D54：volMult 放大波动幅度 —— */
+  it('volMult 缺省 1 ⇒ 与显式 1 逐值相同（零回归）', () => {
+    const a = createMarket(makeRng(21));
+    const b = createMarket(makeRng(21));
+    for (let i = 0; i < 4; i++) {
+      expect(a.tick([], 1)).toEqual(b.tick());
+    }
+  });
+
+  it('volMult 放大强制方向的定点幅度（dir=1 涨停 ×mult）', () => {
+    const m = createMarket(makeRng(5));
+    const prev = m.quotes();
+    const vol = STOCKS.find((s) => s.code === 'SY01')!.vol;
+    const up = m.tick([{ code: 'SY01', dir: 1 }], 2);
+    expect(up.SY01).toBe(Math.round(prev.SY01 * (1 + vol * 2)));
+  });
+
+  it('volMult 放大随机波动幅度（同 seed 下 |Δ| 不超过 vol × mult）', () => {
+    const m = createMarket(makeRng(33));
+    let prev = m.quotes();
+    for (let k = 0; k < 30; k++) {
+      const next = m.tick([], 2);
+      for (const s of STOCKS) {
+        expect(next[s.code]).toBeGreaterThanOrEqual(1);
+        expect(Math.abs(next[s.code] - prev[s.code])).toBeLessThanOrEqual(prev[s.code] * s.vol * 2 + 1);
+      }
+      prev = next;
+    }
+  });
 });
 
 describe('stocks 买卖（spec §5.5）', () => {

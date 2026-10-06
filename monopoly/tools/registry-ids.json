@@ -340,5 +340,8 @@
   "ui.key",
   "ui.keyWide",
   "ui.handBar",
-  "ui.newsTicker"
+  "ui.newsTicker",
+  "ui.endgameBadge",
+  "ui.endgameBar",
+  "ui.sectorTag"
 ]

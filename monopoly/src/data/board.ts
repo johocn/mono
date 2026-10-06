@@ -17,6 +17,9 @@ export type TileType =
 /** 建筑层级（M7 起 3 级 → 5 级，对齐《大富翁 5》并做超越）：1 摊位 → 5 产业园区 */
 export type BuildLevel = 1 | 2 | 3 | 4 | 5;
 
+/** 商圈分档（M20.6 D51）：板块效应（新闻 `scope:'sector'`）的挂载真源；非商家格为 null */
+export type TileTier = 'core' | 'tourism' | 'town';
+
 export interface TileDef {
   index: number;
   name: string;
@@ -24,6 +27,7 @@ export interface TileDef {
   brand: string;
   type: TileType;
   level: 0 | BuildLevel;   // 演示初始层级（0 = 无楼）
+  tier: TileTier | null;   // 商圈归属（非商家格 = null）
 }
 
 /**
@@ -80,6 +84,27 @@ export const START_PUBLIC_LEVEL: Record<number, BuildLevel> = { 0: 3, 9: 2, 19: 
 
 export const RING_SIZE = 32;
 
+/**
+ * 商圈分档真源（M20.6 D51）：商家格（含起点 0，共 18 格）的板块归属。
+ * 与 `PROPOSED_TILE_TIER` 同值（该常量改为 re-export 本表，避免两处漂移），
+ * 本轮只用于「板块新闻租金系数」（`scope:'sector'`）；**基础租金 / 建造价仍全局按级**。
+ */
+export const TILE_TIER: Record<number, TileTier> = {
+  0: 'core', 1: 'core', 3: 'core', 4: 'tourism', 6: 'tourism', 8: 'core', 10: 'tourism',
+  11: 'core', 13: 'core', 15: 'core', 16: 'town', 18: 'core', 20: 'tourism', 22: 'core',
+  24: 'town', 26: 'tourism', 28: 'town', 30: 'tourism',
+};
+
+/** 格号 → 商圈（非商家格 / 未登记 → null） */
+export function tierOf(index: number): TileTier | null {
+  return TILE_TIER[index] ?? null;
+}
+
+/** 商圈中文名（UI 前缀用） */
+export const TIER_NAME: Record<TileTier, string> = {
+  core: '核心商圈', tourism: '文旅商圈', town: '乡镇商圈',
+};
+
 export const TILES: TileDef[] = TILE_NAMES.map((name, i) => ({
   index: i,
   name,
@@ -87,6 +112,7 @@ export const TILES: TileDef[] = TILE_NAMES.map((name, i) => ({
   brand: TILE_BRAND[i],
   type: TILE_TYPES[i],
   level: TILE_LEVEL[i],
+  tier: TILE_TIER[i] ?? null,
 }));
 
 /** v5 样张 line 66–73：外圈 32 格路径 */
@@ -171,8 +197,8 @@ export const PRICE_BY_LEVEL = [0, 60, 180, 420, 860, 1600];
  * 给出建议乘数与价目，供业主与策划平衡后拍板。
  *
  * 接入方式（属**功能变更**，另立任务；本次**不**实施，以免静默改平衡）：
- *   1) 给 `TileDef` 增 `tier` 字段（值见 `PROPOSED_TILE_TIER`）；
- *   2) `economy.ts` 的 `rentOf / buyPrice` 改为 `(index, level)` 口径，按 `tier` 查表；
+ *   1) ~~给 `TileDef` 增 `tier` 字段~~（**M20.6 D51 已完成**，真源见 `TILE_TIER` / `tierOf`）；
+ *   2) `economy.ts` 的 `rentOf / buyPrice` 改为 `(index, level)` 口径，按 `tier` 查表（**仍未接入**）；
  *   3) 同步橱窗 / 对照卡 / 结算等调用点。
  */
 export const PROPOSED_RENT_TIER_PLAN = {
@@ -186,12 +212,11 @@ export const PROPOSED_RENT_TIER_PLAN = {
   },
 } as const;
 
-/** 建议分档归属（格号 → `tier`）；与 `PROPOSED_RENT_TIER_PLAN` 配套，**未接入代码** */
-export const PROPOSED_TILE_TIER: Record<number, 'core' | 'tourism' | 'town'> = {
-  0: 'core', 1: 'core', 3: 'core', 4: 'tourism', 6: 'tourism', 8: 'core', 10: 'tourism',
-  11: 'core', 13: 'core', 15: 'core', 16: 'town', 18: 'core', 20: 'tourism', 22: 'core',
-  24: 'town', 26: 'tourism', 28: 'town', 30: 'tourism',
-};
+/**
+ * 建议分档归属（格号 → `tier`）。M20.6 D51 起**已接入代码**：本常量改为 re-export `TILE_TIER`
+ * （避免两处漂移），名字保留供历史注释与既有引用；实际真源见上方 `TILE_TIER` / `tierOf()`。
+ */
+export const PROPOSED_TILE_TIER: Record<number, TileTier> = TILE_TIER;
 
 /** 五级对照卡标签：`L{lv} {名} · ￥{价}`（v5 optC line 450–452；M4 接 i18n 后由字典取） */
 export function levelCaption(lv: number): string {

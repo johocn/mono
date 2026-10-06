@@ -160,6 +160,9 @@
     "ui.keyWide": { "kind": "proc", "preset": "uiKey", "params": {} },
     "ui.handBar": { "kind": "proc", "preset": "uiHandBar", "params": {} },
     "ui.newsTicker": { "kind": "proc", "preset": "uiNewsTicker", "params": {} },
+    "ui.endgameBadge": { "kind": "proc", "preset": "uiEndgameBadge", "params": {} },
+    "ui.endgameBar": { "kind": "proc", "preset": "uiEndgameBar", "params": {} },
+    "ui.sectorTag": { "kind": "proc", "preset": "uiSectorTag", "params": {} },
 
     "ui.dock": { "kind": "proc", "preset": "uiDock", "params": {} },
     "ui.panel": { "kind": "proc", "preset": "uiPanel", "params": {} },

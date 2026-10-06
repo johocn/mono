@@ -7,9 +7,11 @@ import type { Dice } from '../../src/core/dice';
 /** 固定点数骰：让走位完全可预期 */
 const fixed = (d1: number, d2: number): Dice => ({ roll: () => ({ d1, d2, total: d1 + d2 }) });
 
-/** 摘掉免罚（默认手牌含它，会自动抵消租金，挡住租金减免的验证） */
+/** 摘掉免罚（默认手牌含它，会自动抵消租金，挡住租金减免的验证）并去除当期新闻
+（M20.6 起板块新闻会按商圈改租金，租金口径用例需与新闻解耦 ⇒ 置 null） */
 const dropPardon = (g: Game, i: number): void => {
   g.state.hands[i] = g.state.hands[i].filter((k) => k !== 'pardon');
+  g.state.news = null;
 };
 
 /** 把某玩家摆到「落在指定格、已移动未结算」的局面 */

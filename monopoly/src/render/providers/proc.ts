@@ -50,6 +50,8 @@ export interface ProcCtx {
   asset?: (rel: string) => Texture | null;
   /** 图片输出通道：与 text 同级的「唯一出图口」 */
   sprite?: (req: SpriteRequest) => void;
+  /** 自定义显示对象通道（如 Spine 棋子）：Graphics 画不了的动态对象，由 Scene 统一 addChild（叠在图形之上） */
+  custom?: (obj: import('pixi.js').Container) => void;
 }
 
 export type ProcPreset = (g: Graphics, ctx: ProcCtx) => void;
@@ -127,13 +129,13 @@ import { showcaseGround, showcaseHud, showcaseMini, showcasePanel, showcaseSky, 
 import {
   lanternString, moonDisc, ridgeSilhouette, skyGradient, starField, streetBand, streetLamp,
 } from './proc-atmosphere';
-import { diceBody, diceFace, uiButton, uiDock, uiLabel, uiPanel, uiPlayerBar } from './proc-hud';
+import { diceBody, diceFace, uiButton, uiDock, uiEndgameBadge, uiEndgameBar, uiLabel, uiPanel, uiPlayerBar } from './proc-hud';
 import { uiMusicOff, uiMusicOn, uiSoundOff, uiSoundOn } from './proc-audio';
 import {
   tileCard, uiAmount, uiBadge, uiBankRow, uiBid, uiBidDebt, uiCard, uiCardBack, uiDebtBar, uiHandBar,
   uiHandSlot, uiKey,
   uiNewsTicker,
-  uiPreview, uiSettleRow, uiStockChart, uiStockRow,
+  uiPreview, uiSectorTag, uiSettleRow, uiStockChart, uiStockRow,
 } from './proc-panel';
 import { fxCoin, fxDust, fxPulse, fxRubble, fxScaffold, fxShard, fxShine, fxSpark, fxStamp } from './proc-fx';
 
@@ -210,6 +212,9 @@ export const PROC_PRESETS: Record<string, ProcPreset> = {
   uiKey,
   uiHandBar,
   uiNewsTicker,
+  uiEndgameBadge,
+  uiEndgameBar,
+  uiSectorTag,
   fxCoin,
   fxStamp,
   fxDust,

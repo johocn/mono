@@ -53,6 +53,18 @@ describe('decideTurn 性格差异', () => {
     expect(decideTurn(g.state, 'conservative').some((s) => s.kind === 'buy')).toBe(true);
   });
 
+  /* M20.6（spec §5.4 D56）：终局加速期放宽保留线 ⇒ 同一现金下从「不敢买」变「敢买」 */
+  it('终局：round ≥ 40 保留线下调（激进），同现金下由不买变买', () => {
+    const g = createGame({ seed: 3 });
+    const me = currentPlayer(g.state);
+    me.pos = 1; me.cash = 300;              // 空地 + 现金 300
+    g.state.phase = 'settled';
+    g.state.round = 39;                     // 段外：300 < reserve 400 → 不买
+    expect(decideTurn(g.state, 'conservative').some((s) => s.kind === 'buy')).toBe(false);
+    g.state.round = 54;                     // 终局：reserve = round(400 / 2.4) = 167 ≤ 300 → 敢买
+    expect(decideTurn(g.state, 'conservative').some((s) => s.kind === 'buy')).toBe(true);
+  });
+
   it('激进：手牌目标选净资产最高者（领先者）', () => {
     const g = createGame({ seed: 3 });
     const me = currentPlayer(g.state);

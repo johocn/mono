@@ -1,6 +1,7 @@
 import type { Graphics } from 'pixi.js';
 import { arr, c, fb } from './proc-base';
 import type { ProcCtx } from './proc';
+import { createWukongPawn } from '../spine-wukong';
 
 type P = Record<string, unknown>;
 
@@ -179,6 +180,17 @@ export function pawn(g: Graphics, ctx: ProcCtx): void {
   if (st.active === true) ell('glow', col('glowFill'), n('glowA'));
   /* ② 地面投影 */
   ell('sh', col('shFill'), n('shA'));
+
+  /* Spine 悟空：骨骼动画版接管（mood→idle 循环；本地原点≈脚底，脚底贴 cy）。
+     数据未就绪时 createWukongPawn 返回 null，继续往下走矢量绘制兜底。 */
+  if (style === 'wukong') {
+    const skel = createWukongPawn(mood, n('designH') * u);
+    if (skel) {
+      skel.position.set(cx, cy);
+      ctx.custom?.(skel);
+      return;
+    }
+  }
 
   /* ③ 角色后层（须被身躯压住的部分：只有猴尾） */
   if (style === 'wukong') line('wuTail', hair, 'strokeW');

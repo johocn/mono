@@ -81,3 +81,40 @@ export const AUDIT_RATE = 0.3;
 export const SUBSIDY_AMOUNT = 300;
 /** `boom` 景气度抬升量 */
 export const BOOM_DELTA = 0.2;
+
+/* —— M20.6 设施现金流分成强化（spec §4.3 D53）—— */
+/** 现金流通过系数：`flow = cashflow × shares / shares_total × 本系数`（大股东直接吃设施现金流） */
+export const FACILITY_FLOW_MULT = 2;
+/** 控股权溢价：单一玩家持股 > 50% 时额外得 `round(price × shares × 本系数)` */
+export const FACILITY_CONTROL_BONUS = 0.02;
+/** 基础分红率（每股 / 轮）：5% → 6%（≈17 轮回本，仍高于存款 3%） */
+export const FACILITY_DIV_RATE_NEW = 0.06;
+
+/* —— M20.6 终局加速（spec §4.3 D54）—— */
+/** 终局加速起始轮（≈20 分钟，按每轮 ~30s、ROUND_LIMIT=60 全程 ≈30min 估算） */
+export const ENDGAME_START_ROUND = 40;
+
+/** 一段加速档：`rentMult / volMult / newsMult` 用于放大「偏离 1 的部分」（见 `amplify`） */
+export interface EndgameStage {
+  from: number;
+  to: number;
+  label: string;
+  /** 地租放大倍数 */
+  rentMult: number;
+  /** 股市波动放大倍数 */
+  volMult: number;
+  /** 新闻力度放大倍数（红利 / 板块 / 景气偏置） */
+  newsMult: number;
+}
+
+/** 终局三段（Ⅰ 40–46 / Ⅱ 47–53 / Ⅲ 54–60）：系数逐段递增，给玩家观察与反应窗口 */
+export const ENDGAME_STAGES: readonly EndgameStage[] = [
+  { from: 40, to: 46, label: '加速 Ⅰ', rentMult: 1.4, volMult: 1.3, newsMult: 1.3 },
+  { from: 47, to: 53, label: '加速 Ⅱ', rentMult: 1.8, volMult: 1.6, newsMult: 1.6 },
+  { from: 54, to: 60, label: '终局', rentMult: 2.4, volMult: 2.0, newsMult: 2.0 },
+];
+
+/** 段外（未进入终局）中性档：全 1 ⇒ `amplify` 恒等、逐值回旧口径 */
+export const ENDGAME_NEUTRAL: EndgameStage = {
+  from: 0, to: 0, label: '', rentMult: 1, volMult: 1, newsMult: 1,
+};

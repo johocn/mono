@@ -2,23 +2,27 @@ import { describe, it, expect } from 'vitest';
 import {
   FACILITIES, FACILITY_DIV_RATE, FACILITY_SHARES, facilityAtTile, facilityOf,
 } from '../../src/data/facilities';
-import { ECONOMY_TARGET, NEWS_COEF, NEWS_TABLE, newsTargetsValid } from '../../src/data/news';
+import {
+  ECONOMY_TARGET, NEWS_COEF, NEWS_TABLE, SECTOR_RENT_COEF, SECTOR_TARGETS, newsTargetsValid,
+} from '../../src/data/news';
 import { STOCKS } from '../../src/data/stocks';
+import { FACILITY_DIV_RATE_NEW } from '../../src/data/economy';
 
 describe('公共设施数据（M20.4 spec §4.1 / D25–D26）', () => {
-  it('5 处设施逐值：id / name / tiles / price / shares / rate 与 D26 一致', () => {
+  it('5 处设施逐值：id / name / tiles / price / shares / rate 与 D26 一致（M20.6 D53 分红率 6%）', () => {
     expect(FACILITIES.map((f) => f.id)).toEqual(['bank', 'exchange', 'hospital', 'lottery', 'welfare']);
     const byId = Object.fromEntries(FACILITIES.map((f) => [f.id, f]));
-    expect(byId.bank).toMatchObject({ name: '鹿乡银行', tiles: [9], price: 200, shares: 20, rate: 0.05 });
-    expect(byId.exchange).toMatchObject({ name: '股票交易所', tiles: [19], price: 180, shares: 20, rate: 0.05 });
-    expect(byId.hospital).toMatchObject({ name: '医院', tiles: [25], price: 150, shares: 20, rate: 0.05 });
-    expect(byId.lottery).toMatchObject({ name: '乐透彩', tiles: [21], price: 120, shares: 20, rate: 0.05 });
-    expect(byId.welfare).toMatchObject({ name: '福利中心', tiles: [7, 27], price: 100, shares: 20, rate: 0.05 });
+    expect(byId.bank).toMatchObject({ name: '鹿乡银行', tiles: [9], price: 200, shares: 20, rate: 0.06 });
+    expect(byId.exchange).toMatchObject({ name: '股票交易所', tiles: [19], price: 180, shares: 20, rate: 0.06 });
+    expect(byId.hospital).toMatchObject({ name: '医院', tiles: [25], price: 150, shares: 20, rate: 0.06 });
+    expect(byId.lottery).toMatchObject({ name: '乐透彩', tiles: [21], price: 120, shares: 20, rate: 0.06 });
+    expect(byId.welfare).toMatchObject({ name: '福利中心', tiles: [7, 27], price: 100, shares: 20, rate: 0.06 });
   });
 
-  it('总股本与基础分红率为全表唯一口径（D26：20 股 / 5%）', () => {
+  it('总股本与基础分红率为全表唯一口径（D26：20 股 5% → M20.6 6%）', () => {
     expect(FACILITY_SHARES).toBe(20);
-    expect(FACILITY_DIV_RATE).toBe(0.05);
+    expect(FACILITY_DIV_RATE).toBe(0.06);
+    expect(FACILITY_DIV_RATE).toBe(FACILITY_DIV_RATE_NEW);
     for (const f of FACILITIES) {
       expect(f.shares).toBe(FACILITY_SHARES);
       expect(f.rate).toBe(FACILITY_DIV_RATE);
@@ -49,31 +53,38 @@ describe('公共设施数据（M20.4 spec §4.1 / D25–D26）', () => {
   });
 });
 
-describe('新闻表数据（M20.4 spec §4.2 / D28）', () => {
-  it('12 条：设施 6 + 个股 4 + 大盘 2，id 唯一', () => {
-    expect(NEWS_TABLE.length).toBe(12);
-    expect(new Set(NEWS_TABLE.map((n) => n.id)).size).toBe(12);
+describe('新闻表数据（M20.4 spec §4.2 / D28；M20.6 D52 追加板块）', () => {
+  it('18 条：设施 6 + 个股 4 + 大盘 2 + 板块 6，id 唯一', () => {
+    expect(NEWS_TABLE.length).toBe(18);
+    expect(new Set(NEWS_TABLE.map((n) => n.id)).size).toBe(18);
     expect(NEWS_TABLE.filter((n) => n.scope === 'facility').length).toBe(6);
     expect(NEWS_TABLE.filter((n) => n.scope === 'stock').length).toBe(4);
     /* M20.5 D48：大盘新闻一利好一利空，target 恒为 market */
     expect(NEWS_TABLE.filter((n) => n.scope === 'economy').length).toBe(2);
     expect(NEWS_TABLE.filter((n) => n.scope === 'economy').map((n) => n.target)).toEqual(['market', 'market']);
+    /* M20.6 D52：3 板块 × 利好 / 利空 各一条 */
+    expect(NEWS_TABLE.filter((n) => n.scope === 'sector').length).toBe(6);
+    expect(new Set(NEWS_TABLE.filter((n) => n.scope === 'sector').map((n) => n.target)).size).toBe(3);
   });
 
-  it('每条 magnitude 与 sentiment 自洽（利好 1.5 / 利空 0.5）', () => {
-    for (const n of NEWS_TABLE) {
-      expect(n.magnitude).toBe(NEWS_COEF[n.sentiment]);
-    }
+  it('magnitude 与 scope / sentiment 自洽（设施·大盘 1.5/0.5；板块 1.25/0.8）', () => {
     expect(NEWS_COEF).toEqual({ good: 1.5, bad: 0.5 });
+    expect(SECTOR_RENT_COEF).toEqual({ good: 1.25, bad: 0.8 });
+    for (const n of NEWS_TABLE) {
+      const coef = n.scope === 'sector' ? SECTOR_RENT_COEF : NEWS_COEF;
+      expect(n.magnitude).toBe(coef[n.sentiment]);
+    }
   });
 
-  it('target 落在对应真源内（设施 → FACILITIES / 个股 → STOCKS / 大盘 → market）', () => {
+  it('target 落在对应真源内（设施 → FACILITIES / 个股 → STOCKS / 大盘 → market / 板块 → TileTier）', () => {
     expect(newsTargetsValid()).toBe(true);
     for (const n of NEWS_TABLE) {
       if (n.scope === 'facility') {
         expect(FACILITIES.map((f) => f.id as string)).toContain(n.target);
       } else if (n.scope === 'stock') {
         expect(STOCKS.map((s) => s.code)).toContain(n.target);
+      } else if (n.scope === 'sector') {
+        expect(SECTOR_TARGETS as readonly string[]).toContain(n.target);
       } else {
         expect(n.target).toBe(ECONOMY_TARGET);
       }

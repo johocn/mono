@@ -21,9 +21,11 @@ const playTurn = (g: Game): void => {
 /**
  * M5 起开局手牌含「免罚」，落在他人地块会自动抵消租金。
  * 租金/破产口径的用例先摘掉免罚，验证的是「无免罚时必须付租」的 M4 数学。
+ * M20.6：一并去除当期新闻（板块新闻会按商圈改租金，租金口径须与新闻解耦）。
  */
 const dropPardon = (g: Game): void => {
   g.state.hands[0] = g.state.hands[0].filter((k) => k !== 'pardon');
+  g.state.news = null;
 };
 
 describe('game 开局与阶段门槛（spec §5.1）', () => {

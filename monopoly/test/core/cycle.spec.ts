@@ -81,4 +81,25 @@ describe('M20.5 景气度与查税纯函数（spec §4.3）', () => {
     expect(auditTaxOf(333)).toBe(100);   // 99.9 → 100
     expect(auditTaxOf(15)).toBe(5);      // 4.5 → 5
   });
+
+  /* —— M20.6 D54：newsMult 放大新闻偏置 —— */
+  it('nextEconomyIndex：newsMult 缺省 1 时逐值回旧口径', () => {
+    for (const r of [0, 0.5, 1]) {
+      for (const n of [null, news('economy', 'good'), news('economy', 'bad')]) {
+        expect(nextEconomyIndex(1.0, () => r, n)).toBe(nextEconomyIndex(1.0, () => r, n, 1));
+      }
+    }
+  });
+
+  it('nextEconomyIndex：newsMult 放大偏置（大盘 +0.15 × 2 = +0.3）', () => {
+    expect(nextEconomyIndex(1.0, () => 0.5, news('economy', 'good'), 2)).toBeCloseTo(1.3, 10);
+    expect(nextEconomyIndex(1.0, () => 0.5, news('economy', 'bad'), 2)).toBeCloseTo(0.7, 10);
+    /* 无新闻 → 偏置 0，newsMult 无影响 */
+    expect(nextEconomyIndex(1.0, () => 0, null, 2)).toBeCloseTo(0.92, 10);
+  });
+
+  it('nextEconomyIndex：newsMult 放大后仍被夹在域内', () => {
+    expect(nextEconomyIndex(1.3, () => 1, news('economy', 'good'), 2)).toBe(ECON_INDEX_MAX);
+    expect(nextEconomyIndex(0.7, () => 0, news('economy', 'bad'), 2)).toBe(ECON_INDEX_MIN);
+  });
 });

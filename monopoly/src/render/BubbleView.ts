@@ -1,7 +1,10 @@
 import type { ElementSpec } from '../skin/instantiate';
 import { PAWN_BOX } from '../skin/registry';
-import { BUBBLE_DEPTH, BUBBLE_EDGE_PAD, BUBBLE_GAP, BUBBLE_W, STAGE_W } from '../skin/layout';
+import {
+  BUBBLE_DEPTH, BUBBLE_EDGE_PAD, BUBBLE_GAP, BUBBLE_TAG_GAP, BUBBLE_TAG_H, BUBBLE_W, STAGE_W,
+} from '../skin/layout';
 import { resolvePlacement, type PlacementOpts } from './Scene';
+import { bubbleHeightOf } from './providers/proc-bubble';
 import { pawnPlaces, type PawnState } from './PieceView';
 
 /** 五态主色键（spec §6.7 + 前进播报）：买地 / 收租 / 抽卡 / 进监狱 / 前进 —— 具体色值在 `proc-bubble.ts` 的 L4 兜底里 */
@@ -80,16 +83,25 @@ export function bubbleOfStep(
   return null;
 }
 
+/** M20.6 板块小标内容（`ui.sectorTag`，spec §6.1 D52）：当前地块受板块新闻影响时挂在气泡顶边之上 */
+export interface SectorTag {
+  text: string;
+  sentiment: 'good' | 'bad';
+}
+
 /**
  * 生成气泡 spec（spec §6.7）：锚在当前行动棋子**头顶上方 `BUBBLE_GAP`**、水平居中，
  * 台位借 `resolvePlacement`（与棋子同一份落位算法）算出后走 `fixed` 定格；
  * 属覆盖层（pass 4）⇒ 压在棋子与楼体之上；**不进任何命中区**（无 DOM 按钮），不吞点击。
+ * `sector` 非空时追加一条 `ui.sectorTag`（M20.6 D52）：贴在气泡**顶边之上** `BUBBLE_TAG_GAP`，
+ * 台位由 `bubbleHeightOf`（与 `proc-bubble` 同源公式）算出，`r` 与气泡同深度（后插入 ⇒ 压在其上）。
  */
 export function bubbleSpecs(
   pawns: PawnState[],
   content: BubbleContent | null,
   geo: { hw: number; hh: number; ox: number; oy: number },
   placement: PlacementOpts,
+  sector: SectorTag | null = null,
 ): ElementSpec[] {
   if (!content) return [];
   const active = pawnPlaces(pawns).find((pl) => pl.pw.active === true);
@@ -108,9 +120,20 @@ export function bubbleSpecs(
     Math.max(at.cx, BUBBLE_W / 2 + BUBBLE_EDGE_PAD),
     STAGE_W - BUBBLE_W / 2 - BUBBLE_EDGE_PAD,
   );
-  return [{
+  /* 气泡台位 = 三角尖端；体顶边 = tipY − 体高（bubbleHeightOf 与 proc-bubble 同式） */
+  const tipY = at.cy - PAWN_BOX.h * at.s - BUBBLE_GAP;
+  const out: ElementSpec[] = [{
     id: 'ui.bubble', slot: null, c: 0, r: BUBBLE_DEPTH, pass: 4,
-    fixed: { cx, cy: at.cy - PAWN_BOX.h * at.s - BUBBLE_GAP, s: 1 },
+    fixed: { cx, cy: tipY, s: 1 },
     state: { title: content.title, amount: content.amount, tone: content.tone, quote: content.quote ?? '' },
   }];
+  if (sector) {
+    out.push({
+      id: 'ui.sectorTag', slot: null, c: 0, r: BUBBLE_DEPTH, pass: 4,
+      /* 气泡本身以 1 倍定格（`fixed.s`），故高度也按 s = 1 算 */
+      fixed: { cx, cy: tipY - bubbleHeightOf(content.quote ?? null, 1) - BUBBLE_TAG_GAP - BUBBLE_TAG_H / 2, s: 1 },
+      state: { text: sector.text, sentiment: sector.sentiment },
+    });
+  }
+  return out;
 }

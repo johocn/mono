@@ -7,6 +7,7 @@
  */
 import { FACILITIES, facilityOf, type FacilityDef, type FacilityId } from '../data/facilities';
 import { NEWS_COEF, type NewsItem } from '../data/news';
+import { FACILITY_CONTROL_BONUS, FACILITY_FLOW_MULT } from '../data/economy';
 import type { StockForce } from './stocks';
 
 /** 认购失败原因（spec §5.3） */
@@ -68,17 +69,31 @@ export function canSubscribe(
 }
 
 /**
- * 单笔分红（spec F-D3 / D27）：
- *   `round((shares × price × rate + cashflow × shares / shares_total) × coef)`
- * 即「基础分红 + 该设施本轮现金流按持股比例分成」再乘当期新闻系数。
+ * 单笔分红（spec F-D3 / D27；M20.6 D53 强化）：
+ *   base    = shares × price × rate
+ *   flow    = cashflow × shares / shares_total × FACILITY_FLOW_MULT
+ *   control = controlling ? round(price × shares × FACILITY_CONTROL_BONUS) : 0
+ *   return round((base + flow) × coef) + control
+ * 即「基础分红 + 该设施本轮现金流按持股比例分成 × 通过系数」再乘当期新闻系数，控股者额外吃控股权溢价。
+ * `controlling` 缺省 false ⇒ 不控股口径（既有调用逐值可对照）。
  */
-export function dividendOf(def: FacilityDef, shares: number, cashflow: number, coef: number): number {
+export function dividendOf(
+  def: FacilityDef, shares: number, cashflow: number, coef: number, controlling = false,
+): number {
   const base = shares * def.price * def.rate;
-  const flow = (cashflow * shares) / def.shares;
-  return Math.round((base + flow) * coef);
+  const flow = (cashflow * shares * FACILITY_FLOW_MULT) / def.shares;
+  const control = controlling ? Math.round(def.price * shares * FACILITY_CONTROL_BONUS) : 0;
+  return Math.round((base + flow) * coef) + control;
 }
 
-/** 预估下轮分红（UI 用；与 `dividendOf` 同式，`?? 0` 只是取默认设施防御） */
-export function estimateDividend(id: FacilityId, shares: number, cashflow: number, coef: number): number {
-  return dividendOf(facilityOf(id), shares, cashflow, coef);
+/** 单一玩家是否**控股**该设施：持股 > 50% 总股本（20 股中 ≥ 11 股，D53） */
+export function isControlling(def: FacilityDef, shares: number): boolean {
+  return shares * 2 > def.shares;
+}
+
+/** 预估下轮分红（UI 用；与 `dividendOf` 同式，`controlling` 透传 ⇒ 控股玩家能看到含溢价的预估值） */
+export function estimateDividend(
+  id: FacilityId, shares: number, cashflow: number, coef: number, controlling = false,
+): number {
+  return dividendOf(facilityOf(id), shares, cashflow, coef, controlling);
 }

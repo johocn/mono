@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { bubbleOfStep, bubbleSpecs } from '../../src/render/BubbleView';
-import { bubble } from '../../src/render/providers/proc-bubble';
+import { bubble, bubbleHeightOf } from '../../src/render/providers/proc-bubble';
 import { PROC_PRESETS } from '../../src/render/providers/proc';
 import { PAWN_BOX } from '../../src/skin/registry';
-import { BUBBLE_GAP } from '../../src/skin/layout';
+import { BUBBLE_GAP, BUBBLE_TAG_GAP, BUBBLE_TAG_H } from '../../src/skin/layout';
 import { resolvePlacement, type PlacementOpts } from '../../src/render/Scene';
 import { getEntry } from '../../src/skin/registry';
 import { hudSpecs } from '../../src/ui/Hud';
@@ -133,6 +133,38 @@ describe('停留事件气泡 · 台位与分遍', () => {
     expect(top).toBe(23);
     expect(bubbleSpecs(pawns, { title: '监狱', amount: '停留 1 回合', tone: 'jail' }, GEO, PLACEMENT)[0].r)
       .toBeGreaterThan(top);
+  });
+});
+
+/* M20.6（spec §6.1 D52）：板块新闻命中当前格时，气泡顶边之上再挂一条 `ui.sectorTag` 小标 */
+describe('停留事件气泡 · 板块小标（M20.6）', () => {
+  const pawns = [{ index: 1, c: 5, r: 9, active: true }, { index: 3, c: 5, r: 9 }];
+  const content = { title: '长峰特产', amount: '买地 ￥180', tone: 'buy' as const };
+
+  it('不传 / null → 与既有单例产出逐值一致（只出气泡）', () => {
+    const base = bubbleSpecs(pawns, content, GEO, PLACEMENT);
+    expect(base).toHaveLength(1);
+    expect(bubbleSpecs(pawns, content, GEO, PLACEMENT, null)).toEqual(base);
+  });
+
+  it('传入板块小标 → 追加 1 条 ui.sectorTag，贴在气泡顶边之上', () => {
+    const tag = { text: '板块利好 ×1.25', sentiment: 'good' as const };
+    const out = bubbleSpecs(pawns, content, GEO, PLACEMENT, tag);
+    expect(out.map((s) => s.id)).toEqual(['ui.bubble', 'ui.sectorTag']);
+    const bubbleSpec = out[0];
+    const tagSpec = out[1];
+    expect(tagSpec.pass).toBe(4);
+    expect(tagSpec.r).toBe(bubbleSpec.r);                    // 同深度：后插入 ⇒ 压在其上
+    expect(tagSpec.fixed!.cx).toBe(bubbleSpec.fixed!.cx);     // 与气泡同心
+    expect(tagSpec.state).toEqual(tag);
+    /* 小标中心 = 气泡顶边（tip − 体高）再上移 GAP + 半个小标高 ⇒ 恰好贴在其上、不重叠 */
+    const bodyH = bubbleSpec.fixed!.cy - (tagSpec.fixed!.cy + BUBBLE_TAG_GAP + BUBBLE_TAG_H / 2);
+    expect(bodyH).toBeCloseTo(bubbleHeightOf(null, 1), 6);   // 无引文 ⇒ 体高与 preset 同源公式一致（含三角）
+    expect(tagSpec.fixed!.cy + BUBBLE_TAG_H / 2).toBeLessThan(bubbleSpec.fixed!.cy - bodyH);  // 小标底边压在气泡顶边之上
+  });
+
+  it('无内容时：即便传了板块小标也不出（整体空）', () => {
+    expect(bubbleSpecs(pawns, null, GEO, PLACEMENT, { text: '板块利空 ×0.8', sentiment: 'bad' })).toEqual([]);
   });
 });
 

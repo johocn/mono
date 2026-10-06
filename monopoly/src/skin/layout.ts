@@ -101,6 +101,27 @@ export const NEWS_TICKER_Y = 474;
 export const NEWS_TICKER_W = 370;
 export const NEWS_TICKER_H = 26;
 
+/* —— M20.6 终局加速（spec §6.1 D54）：落在棋盘底（≈406）与新闻条（474）之间的空带。
+   角标 = 段标签 + 三项系数（如「加速 Ⅱ · 租×1.8 市×1.6 讯×1.6」，单行居中）；
+   进度条 = Ⅰ/Ⅱ/Ⅲ 三段（当前段高亮）。二者都是**信息元素**（不吃事件）⇒ 不进任何命中区；
+   `r = 0`（与 `ui.newsTicker` 同「信息带」约定）⇒ 浮层（r 更大 / 同深度后插入）自然盖住，
+   且不参与 `BUBBLE_DEPTH` 复算；段外（round < 40）整段隐藏 ⇒ 既有对局零回归。 —— */
+export const HUD_ENDGAME_BADGE_X = 55;           // 左上（280 宽居中于 195）
+export const HUD_ENDGAME_BADGE_Y = 414;
+export const HUD_ENDGAME_BADGE_W = 280;
+export const HUD_ENDGAME_BADGE_H = 24;
+export const HUD_ENDGAME_BAR_X = 55;             // 左上
+export const HUD_ENDGAME_BAR_Y = 446;
+export const HUD_ENDGAME_BAR_W = 280;
+export const HUD_ENDGAME_BAR_H = 8;
+export const HUD_ENDGAME_BAR_GAP = 6;
+
+/* —— M20.6 板块利好小标（spec §6.1 D52）：复用气泡框，挂在气泡**顶边之上**；
+   气泡高度随引文行数变化，故台位由 `BubbleView` 依 `bubbleHeightOf`（proc-bubble 同源公式）给出 —— */
+export const BUBBLE_TAG_W = 96;
+export const BUBBLE_TAG_H = 16;
+export const BUBBLE_TAG_GAP = 3;
+
 /* —— 落地地块卡（spec §7.3）：位于棋盘（底 ≈312）与底坞（顶 606）之间 —— */
 export const TILE_CARD_X = 8;
 export const TILE_CARD_Y = 508;

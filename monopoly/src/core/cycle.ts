@@ -26,9 +26,11 @@ export function econBiasOf(news: NewsItem | null): number {
   return news.sentiment === 'good' ? mag : -mag;
 }
 
-/** 轮末景气游走：`clampIndex(cur + (2·rng()−1) × ECON_VOL + bias)`（D42） */
-export function nextEconomyIndex(cur: number, rng: () => number, news: NewsItem | null): number {
-  return clampIndex(cur + (2 * rng() - 1) * ECON_VOL + econBiasOf(news));
+/** 轮末景气游走：`clampIndex(cur + (2·rng()−1) × ECON_VOL + bias × newsMult)`（D42；M20.6 D54） */
+export function nextEconomyIndex(
+  cur: number, rng: () => number, news: NewsItem | null, newsMult = 1,
+): number {
+  return clampIndex(cur + (2 * rng() - 1) * ECON_VOL + econBiasOf(news) * newsMult);
 }
 
 /** 被查概率：`clamp(roundRent × AUDIT_PER_RENT, 0, AUDIT_MAX)`（每 ￥100 租金 +2%，上限 40%） */

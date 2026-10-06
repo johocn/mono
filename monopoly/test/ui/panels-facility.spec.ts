@@ -70,7 +70,7 @@ describe('panels：设施左列与右列详情', () => {
     const d = facilityDetail(g.state, 'bank');
     expect(d.lines).toHaveLength(5);
     expect(d.lines[0]).toBe('鹿乡银行 · 每股 ￥200');
-    expect(d.lines[1]).toBe('已售 0/20 股 · 基础分红 5%/轮');
+    expect(d.lines[1]).toBe('已售 0/20 股 · 基础分红 6%/轮');
     expect(d.lines[2]).toBe('你的持股 0 股');
     expect(d.lines[3]).toBe('预估分红 ￥0/轮');
     expect(d.lines[4]).toBe(`现金 ￥${g.state.players[0].cash}`);
@@ -97,7 +97,7 @@ describe('panels：设施左列与右列详情', () => {
     const d = facilityDetail(g.state, 'welfare');
     expect(d.primary.enabled).toBe(false);
     expect(d.secondary.enabled).toBe(false);
-    expect(d.lines[1]).toBe('已售 20/20 股 · 基础分红 5%/轮');
+    expect(d.lines[1]).toBe('已售 20/20 股 · 基础分红 6%/轮');
   });
 
   it('新闻命中该设施 → 预估值乘系数并在行内提示（利好 ×1.5）', () => {
@@ -105,7 +105,9 @@ describe('panels：设施左列与右列详情', () => {
     g.state.players[0].facilities = { bank: 20 };
     g.state.news = { id: 'n-bank-good', title: '银行加息', sentiment: 'good', scope: 'facility', target: 'bank', magnitude: 1.5 };
     const d = facilityDetail(g.state, 'bank');
-    expect(d.lines[3]).toBe('预估分红 ￥300/轮 · 新闻 ×1.5');
+    /* M20.6 D53：基础 6% ⇒ 20 × 200 × 0.06 = 240，×1.5 = 360；持股 20/20 ⇒ 控股溢价 round(200×20×0.02)=80 ⇒ 440 */
+    expect(d.lines[2]).toBe('你的持股 20 股 · 控股溢价');
+    expect(d.lines[3]).toBe('预估分红 ￥440/轮 · 新闻 ×1.5');
   });
 });
 
@@ -212,5 +214,16 @@ describe('panels：新闻条（spec §6.2）', () => {
     expect(newsTickerSpecOf(g.state)!.state!.coef).toBe(0.5);
     g.state.news = { id: 'y', title: '个股利好', sentiment: 'good', scope: 'stock', target: 'JX', magnitude: 1.5 };
     expect(newsTickerSpecOf(g.state)!.state!.coef).toBe(1);
+  });
+
+  /* M20.6（spec §6.1 D52）：板块新闻时景气度前缀换成商圈系数摘要 */
+  it('板块新闻 → prefix 改为「板块·<商圈名> ×系数」；非板块 → 仍为景气度', () => {
+    const g = createGame({ dice: fixed(1, 1) });
+    g.state.news = { id: 's1', title: '核心商圈人潮涌动', sentiment: 'good', scope: 'sector', target: 'core', magnitude: 1.25 };
+    expect(newsTickerSpecOf(g.state)!.state!.prefix).toBe('板块·核心商圈 ×1.25');
+    g.state.news = { id: 's2', title: '文旅商圈遇冷', sentiment: 'bad', scope: 'sector', target: 'tourism', magnitude: 0.8 };
+    expect(newsTickerSpecOf(g.state)!.state!.prefix).toBe('板块·文旅商圈 ×0.8');
+    g.state.news = { id: 'f1', title: '银行加息', sentiment: 'good', scope: 'facility', target: 'bank', magnitude: 1.5 };
+    expect(newsTickerSpecOf(g.state)!.state!.prefix).toBe(`景气 ${Math.round(g.state.economyIndex * 100)}%`);
   });
 });

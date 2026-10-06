@@ -5,6 +5,7 @@
  * 建模粒度：**按设施 id**（`FacilityId`）而非按格号——福利中心占 7 与 27 **两格**，
  * 但 D25 算**一处**，按格号建模会出现「同设施两份股本」的错账（spec F-D1）。
  */
+import { FACILITY_DIV_RATE_NEW } from './economy';
 
 /** 5 处可入股设施（D25；监狱 12 / 税务局 23 / 起点 0 不入股） */
 export type FacilityId = 'bank' | 'exchange' | 'hospital' | 'lottery' | 'welfare';
@@ -22,19 +23,19 @@ export interface FacilityDef {
   rate: number;
 }
 
-/** 五处设施逐值（spec §4.1；表序即 AI 认购优先级 F-D2 / §7） */
+/** 五处设施逐值（spec §4.1；表序即 AI 认购优先级 F-D2 / §7）；分红率 6%（M20.6 D53） */
 export const FACILITIES: FacilityDef[] = [
-  { id: 'bank', name: '鹿乡银行', tiles: [9], price: 200, shares: 20, rate: 0.05 },
-  { id: 'exchange', name: '股票交易所', tiles: [19], price: 180, shares: 20, rate: 0.05 },
-  { id: 'hospital', name: '医院', tiles: [25], price: 150, shares: 20, rate: 0.05 },
-  { id: 'lottery', name: '乐透彩', tiles: [21], price: 120, shares: 20, rate: 0.05 },
-  { id: 'welfare', name: '福利中心', tiles: [7, 27], price: 100, shares: 20, rate: 0.05 },
+  { id: 'bank', name: '鹿乡银行', tiles: [9], price: 200, shares: 20, rate: FACILITY_DIV_RATE_NEW },
+  { id: 'exchange', name: '股票交易所', tiles: [19], price: 180, shares: 20, rate: FACILITY_DIV_RATE_NEW },
+  { id: 'hospital', name: '医院', tiles: [25], price: 150, shares: 20, rate: FACILITY_DIV_RATE_NEW },
+  { id: 'lottery', name: '乐透彩', tiles: [21], price: 120, shares: 20, rate: FACILITY_DIV_RATE_NEW },
+  { id: 'welfare', name: '福利中心', tiles: [7, 27], price: 100, shares: 20, rate: FACILITY_DIV_RATE_NEW },
 ];
 
-/** 每处总股本（D26：20 股 ⇒ 基础分红 5%/轮，20 轮回本、高于存款 3%） */
+/** 每处总股本（D26：20 股 ⇒ 基础分红 6%/轮，≈17 轮回本、高于存款 3%） */
 export const FACILITY_SHARES = 20;
-/** 基础分红率（每股 / 轮，D26） */
-export const FACILITY_DIV_RATE = 0.05;
+/** 基础分红率（每股 / 轮，D26；M20.6 D53 由 5% 提至 6%） */
+export const FACILITY_DIV_RATE = FACILITY_DIV_RATE_NEW;
 
 /** 按 id 取设施定义（未知名 → 抛错：id 由类型约束，越界即程序错误） */
 export function facilityOf(id: FacilityId): FacilityDef {

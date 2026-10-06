@@ -46,8 +46,11 @@ import { NEWS_COOLDOWN, type NewsItem } from '../data/news';
 /* M20.5：景气度 / 查税纯函数 + 公平抽取（均独立于引擎运行时） */
 import { auditChanceOf, auditTaxOf, clampIndex, nextEconomyIndex } from './cycle';
 import { rollNews } from './news';
+/* M20.6：终局加速 / 板块租金纯函数（均独立于引擎运行时） */
+import { amplify, endgameAiParams, endgameStageOf } from './endgame';
+import { sectorRentCoefOf } from './sector';
 import {
-  canSubscribe, dividendOf, newsCoefOf, newsForceOf, type FacilityFail,
+  canSubscribe, dividendOf, isControlling, newsCoefOf, newsForceOf, type FacilityFail,
 } from './facility';
 
 /** 回合阶段机（spec §5.1）：idle → rolled → moved → settled → (endTurn) → idle */
@@ -157,6 +160,32 @@ export interface PendingAuction {
   sellAll?: boolean;
 }
 
+/**
+ * M20.6 D50 · 多收款人分账的可恢复状态机（`tribute` / `harvest` / `collect`）。
+ *
+ * 三条路径原走 `settleDebtAuto` 静默贱卖；现改走 `settleDebt`（含拍卖）。
+ * 当某位付款人清算挂起（真人出价）时，本结构暂存剩余队列；拍卖收尾后由 `pumpMulti` 续跑，
+ * 避免「一次性多人转账」在挂起后丢失进度。
+ */
+export interface PendingMulti {
+  kind: 'tribute' | 'harvest' | 'collect';
+  /** 触发格号（供 `lastEvent` 的 fate / chance 结果） */
+  index: number;
+  /** 触发卡面 id（供 `lastEvent`） */
+  cardId: string;
+  amount: number;
+  /** `tribute` = 付款人；`harvest` / `collect` = 收款人 */
+  actorId: number;
+  /** 尚未处理的对手 id（升序；队首 = 当前待结算） */
+  queue: number[];
+  /** 已累计：`tribute` = 已付出总额；`harvest` / `collect` = 已收总额 */
+  paid: number;
+  /** `tribute` 专用：付款人是否因付不起而破产 */
+  bankrupt: boolean;
+  /** `tribute` 应收总额 = `amount × 初始对手数`（`harvest` / `collect` 不使用，取 `paid`） */
+  total: number;
+}
+
 export interface GameState {
   players: Player[];
   /** `players` 的下标（0 起），不是 id */
@@ -207,6 +236,8 @@ export interface GameState {
   economyIndex: number;
   /** 新闻抽取历史（由新到旧，最多 `NEWS_COOLDOWN` 条；D47） */
   newsHistory: string[];
+  /** 多收款人分账挂起态（null = 无；D50） */
+  pendingMulti: PendingMulti | null;
 }
 
 export interface GameOptions {
@@ -481,6 +512,8 @@ export function createGame(opts: GameOptions = {}): Game {
     /* M20.5：景气度开局 1.0（零回归：单轮租金逐值不变）；新闻历史记首条以便冷却去重 */
     economyIndex: ECON_INDEX_START,
     newsHistory: [],
+    /* M20.6：多人分账挂起态（缺省 null ⇒ 既有回归零影响） */
+    pendingMulti: null,
   };
   state.newsHistory = state.news ? [state.news.id] : [];
 
@@ -529,8 +562,13 @@ export function createGame(opts: GameOptions = {}): Game {
   /* 当前拍品的起拍价口径（M20.2）：抵押中地块用「借款额」，其余用变卖价；每场拍卖开始时重置 */
   let lotPriceOf: (index: number) => number = (i) => sellAt(state.estates, i);
 
-  /** 某席位的 AI 参数（真人席位在补算时也按默认保守档，见 autoResolveAuction） */
-  const aiParamsOf = (id: number): AiParams => personaParams(state.seats[id - 1] ?? 'conservative');
+  /**
+   * 某席位的 AI 参数（真人席位在补算时也按默认保守档，见 autoResolveAuction）。
+   * M20.6 D56：终局加速期（`round ≥ 40`）按阶段激进化——出价上限 `bidMult` 上调、
+   * 保留线 `reserve` 下调（同源加压，避免玩家单向承压）；段外原样返回基准对象（零回归）。
+   */
+  const aiParamsOf = (id: number): AiParams =>
+    endgameAiParams(personaParams(state.seats[id - 1] ?? 'conservative'), state.round);
 
   /** 竞拍人 = 除破产者与原主外的所有玩家（`state.players` 天然升序） */
   const biddersFor = (payerId: number): Player[] =>
@@ -626,6 +664,9 @@ export function createGame(opts: GameOptions = {}): Game {
       const last = a.results[a.results.length - 1];
       state.lastEvent = { kind: 'auctionDone', index: last.index, winner: last.winner, price: last.price };
     }
+    /* M20.6 D50 续跑钩子：本场拍卖（含破产清算二级拍卖）已彻底收尾且仍有多人分账 ⇒ 继续泵。
+       若 `liquidateMortgages` 又开了新拍卖，则由那场收尾时再续跑（此处 `state.auction` 非空，跳过）。 */
+    if (!state.auction && state.pendingMulti) pumpMulti();
     return { paid, sold, bankrupt };
   };
 
@@ -750,6 +791,52 @@ export function createGame(opts: GameOptions = {}): Game {
     return { paid, sold, bankrupt };
   };
 
+  /** 多收款人分账完成时构造的 `lastEvent`（fate / chance 结果，spec D50） */
+  const multiResultOf = (m: PendingMulti): FateSettle | ChanceSettle => {
+    if (m.kind === 'collect') {
+      return { kind: 'chance', index: m.index, cardId: m.cardId, effect: { kind: 'collect', amount: m.amount, total: m.paid } };
+    }
+    if (m.kind === 'harvest') {
+      return { kind: 'fate', index: m.index, cardId: m.cardId, effect: { kind: 'harvest', amount: m.amount, total: m.paid } };
+    }
+    return {
+      kind: 'fate', index: m.index, cardId: m.cardId,
+      effect: { kind: 'tribute', amount: m.amount, total: m.total, paid: m.paid, bankrupt: m.bankrupt },
+    };
+  };
+
+  /**
+   * 多收款人分账泵（D50）：逐位 `settleDebt`（含拍卖）；某位付款人清算挂起 → 保留队首、返回 `'suspended'`，
+   * 待拍卖收尾后由续跑钩子再次调用。全部完成 → 清 `pendingMulti`、写 `lastEvent`、返回该结果。
+   * 破产者跳过（补队列时已过滤，续跑时二次防御）；`tribute` 付款人破产则剩余队列不再产生实付。
+   */
+  const pumpMulti = (): FateSettle | ChanceSettle | 'suspended' | null => {
+    const m = state.pendingMulti;
+    if (!m) return null;
+    const actor = playerById(state, m.actorId);
+    while (m.queue.length > 0) {
+      const otherId = m.queue[0];
+      const other = playerById(state, otherId);
+      if (!other || other.bankrupt) { m.queue.shift(); continue; }
+      const payer = m.kind === 'tribute' ? actor : other;
+      const receiver = m.kind === 'tribute' ? other : actor;
+      if (!payer || payer.bankrupt) {
+        /* `tribute` 付款人已破产：其余对手收不到实付，清空队列直接收尾 */
+        m.queue.length = 0;
+        break;
+      }
+      const debt = settleDebt(payer, m.amount, receiver);
+      if (debt === 'suspended') return 'suspended';
+      m.paid += debt.paid;
+      if (m.kind === 'tribute' && debt.bankrupt) m.bankrupt = true;
+      m.queue.shift();
+    }
+    state.pendingMulti = null;
+    const result = multiResultOf(m);
+    state.lastEvent = result;
+    return result;
+  };
+
   /** 挂起时对外呈现的结算结果（供 `settleCurrent` 包装） */
   const auctionSettle = (index: number): SettleResult => {
     const a = state.auction;
@@ -809,8 +896,14 @@ export function createGame(opts: GameOptions = {}): Game {
         result = { kind: 'own', index, level: e.level };
       } else {
         const owner = playerById(state, e.owner);
-        /* M20.5 D42：租金随景气度浮动（`economyIndex = 1.0` 时逐值回旧口径） */
-        const base = Math.round(rentAt(state.estates, index) * state.economyIndex);
+        /* M20.5 D42：租金随景气度浮动；M20.6 D52/D54：再乘板块系数（按 newsMult 放大偏离量）与终局租金倍率。
+           段外（中性档）+ 无板块新闻 ⇒ 逐值回旧口径（`economyIndex = 1.0` 时同基线）。 */
+        const st = endgameStageOf(state.round);
+        const base = Math.round(
+          rentAt(state.estates, index) * state.economyIndex
+          * amplify(sectorRentCoefOf(state.news, index), st.newsMult)
+          * st.rentMult,
+        );
         const doubled = owner !== null && state.doubleRent[owner.id - 1];
         /* 技能「慈悲为怀」：应付租金按比例减免（未启用 → 比例 0，逐值回旧口径） */
         const relief = rentReliefOf(state, p.id);
@@ -860,7 +953,8 @@ export function createGame(opts: GameOptions = {}): Game {
       const r = resolveFate(p, index);
       result = r === 'suspended' ? auctionSettle(index) : r;
     } else if (typeAt(index) === 'chance') {
-      result = resolveChance(p, index);
+      const r = resolveChance(p, index);
+      result = r === 'suspended' ? auctionSettle(index) : r;
     } else {
       result = { kind: 'start', index };
     }
@@ -1040,26 +1134,27 @@ export function createGame(opts: GameOptions = {}): Game {
         break;
       }
       case 'tribute': {
-        /* 多人分账（M20.1-D6）：保持既有自动变卖，本轮不改走拍卖 */
+        /* 多人分账（M20.6-D50）：改走 `settleDebt`（含拍卖），挂起时暂存 `pendingMulti` 由 `pumpMulti` 续跑 */
         const amount = card.amount ?? 0;
         const others = state.players.filter((o) => o.id !== p.id && !o.bankrupt);
-        let paid = 0;
-        let bankrupt = false;
-        for (const o of others) {
-          const debt = settleDebtAuto(p, amount, o);
-          paid += debt.paid;
-          if (debt.bankrupt) bankrupt = true;
-        }
-        effect = { kind: 'tribute', amount, total: amount * others.length, paid, bankrupt };
-        break;
+        state.pendingMulti = {
+          kind: 'tribute', index, cardId: card.id, amount, actorId: p.id,
+          queue: others.map((o) => o.id), paid: 0, bankrupt: false, total: amount * others.length,
+        };
+        const pumped = pumpMulti();
+        if (pumped === 'suspended') return 'suspended';
+        return pumped as FateSettle;
       }
       case 'harvest': {
         const amount = card.amount ?? 0;
         const others = state.players.filter((o) => o.id !== p.id && !o.bankrupt);
-        let total = 0;
-        for (const o of others) total += settleDebtAuto(o, amount, p).paid;
-        effect = { kind: 'harvest', amount, total };
-        break;
+        state.pendingMulti = {
+          kind: 'harvest', index, cardId: card.id, amount, actorId: p.id,
+          queue: others.map((o) => o.id), paid: 0, bankrupt: false, total: 0,
+        };
+        const pumped = pumpMulti();
+        if (pumped === 'suspended') return 'suspended';
+        return pumped as FateSettle;
       }
       case 'lockup': {
         if (has(state.hands[i], 'pardon')) {
@@ -1091,7 +1186,7 @@ export function createGame(opts: GameOptions = {}): Game {
     return result;
   };
 
-  const resolveChance = (p: Player, index: number): ChanceSettle => {
+  const resolveChance = (p: Player, index: number): ChanceSettle | 'suspended' => {
     const i = p.id - 1;
     const card = drawFrom('chance') as ChanceCardDef;
     let effect: ChanceEffect;
@@ -1158,12 +1253,16 @@ export function createGame(opts: GameOptions = {}): Game {
         break;
       }
       case 'collect': {
+        /* 多人分账（M20.6-D50）：改走 `settleDebt`（含拍卖），挂起时暂存 `pendingMulti` 由 `pumpMulti` 续跑 */
         const amount = card.amount ?? 0;
         const others = state.players.filter((o) => o.id !== p.id && !o.bankrupt);
-        let total = 0;
-        for (const o of others) total += settleDebtAuto(o, amount, p).paid;
-        effect = { kind: 'collect', amount, total };
-        break;
+        state.pendingMulti = {
+          kind: 'collect', index, cardId: card.id, amount, actorId: p.id,
+          queue: others.map((o) => o.id), paid: 0, bankrupt: false, total: 0,
+        };
+        const pumped = pumpMulti();
+        if (pumped === 'suspended') return 'suspended';
+        return pumped as ChanceSettle;
       }
       default: {
         const code = STOCKS[Math.floor(cardRng() * STOCKS.length)].code;
@@ -1577,7 +1676,8 @@ export function createGame(opts: GameOptions = {}): Game {
         if (p.bankrupt) continue;
         const shares = p.facilities[def.id] ?? 0;
         if (shares <= 0) continue;
-        p.cash += dividendOf(def, shares, cashflow, coef);
+        /* M20.6 D53：过半持股（>50%）⇒ 追加控股权溢价（不动现金流、不改持股） */
+        p.cash += dividendOf(def, shares, cashflow, coef, isControlling(def, shares));
       }
       state.facilityCashflow[def.id] = 0;
     }
@@ -1624,7 +1724,9 @@ export function createGame(opts: GameOptions = {}): Game {
     const force = state.stockForce.filter((f): f is StockForce => f !== null);
     const nf = newsForceOf(state.news);
     if (nf) force.push(nf);
-    state.quotes = market.tick(force);
+    /* M20.6 D54：终局按阶段放大股市波动（段外 volMult = 1 ⇒ 逐值回旧口径） */
+    const st = endgameStageOf(state.round);
+    state.quotes = market.tick(force, st.volMult);
     state.priceHistory = market.history();
     for (const p of state.players) {
       if (p.bankrupt || !p.margin) continue;
@@ -1633,7 +1735,8 @@ export function createGame(opts: GameOptions = {}): Game {
     }
     payFacilityDividends();
     settleAudits();
-    state.economyIndex = nextEconomyIndex(state.economyIndex, econRng, state.news);
+    /* M20.6 D54：终局放大新闻偏置（段外 newsMult = 1 ⇒ 逐值回旧口径） */
+    state.economyIndex = nextEconomyIndex(state.economyIndex, econRng, state.news, st.newsMult);
     const next = rollNews(newsRng, state.newsHistory);
     state.newsHistory = [next.id, ...state.newsHistory].slice(0, NEWS_COOLDOWN);
     state.news = next;
