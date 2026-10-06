@@ -264,6 +264,7 @@ def build_animations():
     att("idle_happy", "arm_r", [(0, "arm_r_fist")])
     att("idle_happy", "arm_l", [(0, "arm_l_fist")])
     att("idle_happy", "head", [(0, "head_laugh")])
+    tra("idle_happy", "head", [(0, 0, -7), (T, 0, -7)])  # 头整体下移 7（用户校准）
     att("idle_happy", "headband", [(0, "headband_hair")])  # 金箍头发一体件：补头发，头发层在金箍上
     att("idle_happy", "legs", [(0, "legs_tiptoe_l"), (T / 2, "legs_walk1"), (T, "legs_tiptoe_l")])
     tra("idle_happy", "hips", [(0, 0, 0), (T / 4, 0, 18), (T / 2, 0, 0),
