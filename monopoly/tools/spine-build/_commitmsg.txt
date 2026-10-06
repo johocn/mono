@@ -1,1 +1,1 @@
-fix(mono-spine): 下垂臂原图重处理;金箍再缩至头宽x0.8;happy头-18/sad头-12;sad头三层构成(委屈头+金箍头发+金箍,新增band_hair槽)
+fix(mono-spine): 下垂臂重新抠图透明化(修处理件写位错误);happy头-21/sad头-15;金箍头发放大至头宽x0.9

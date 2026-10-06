@@ -154,7 +154,7 @@ def build_skeleton():
     SIZE_SCALE["skirt"] = round(torso_w * 1.05 / D["skirt"][0], 3)
     # 金箍缩放贴合头部轮廓：宽 = 头宽×0.9（动态，用户校准）
     SIZE_SCALE["headband"] = round(D["head"][0] * 0.8 / D["headband"][0], 3)
-    SIZE_SCALE["headband_hair"] = SIZE_SCALE["headband"]
+    SIZE_SCALE["headband_hair"] = round(D["head"][0] * 0.9 / D["headband"][0], 3)  # 头发金箍放大贴合
     # 足部缩小至能被裙覆盖：腿宽 = 裙宽×0.9（动态）
     leg_fit = round(D["skirt"][0] * SIZE_SCALE["skirt"] * 0.9 / D["legs_walk1"][0], 3)
     for k in ("legs_walk1", "legs_walk2", "legs_right", "legs_tiptoe_l"):
@@ -259,7 +259,7 @@ def build_animations():
     att("idle_happy", "arm_r", [(0, "arm_r_raise")])
     att("idle_happy", "arm_l", [(0, "arm_l_raise")])
     att("idle_happy", "head", [(0, "head_laugh")])
-    tra("idle_happy", "head", [(0, 0, -18), (T, 0, -18)])  # 头整体下移 18（用户校准：15再下移3）
+    tra("idle_happy", "head", [(0, 0, -21), (T, 0, -21)])  # 头整体下移 21（用户校准：18再下移3）
     att("idle_happy", "headband", [(0, "headband_hair")])  # 金箍头发一体件：补头发，头发层在金箍上
     att("idle_happy", "legs", [(0, "legs_tiptoe_l"), (T / 2, "legs_walk1"), (T, "legs_tiptoe_l")])
     tra("idle_happy", "hips", [(0, 0, 0), (T / 4, 0, 18), (T / 2, 0, 0),
@@ -270,7 +270,7 @@ def build_animations():
     # —— idle_sad：委屈头 + 双垂臂 + 低头塌胸 ——
     T = 3.0
     att("idle_sad", "head", [(0, "head_sad")])
-    tra("idle_sad", "head", [(0, 0, -12), (T, 0, -12)])  # 头整体下移 12（用户校准：7再下移5）
+    tra("idle_sad", "head", [(0, 0, -15), (T, 0, -15)])  # 头整体下移 15（用户校准：12再下移3）
     att("idle_sad", "band_hair", [(0, "headband_hair")])  # 头三层构成：委屈头+金箍头发+金箍
     att("idle_sad", "headband", [(0, "headband")])
     att("idle_sad", "arm_r", [(0, "arm_r_down")])
