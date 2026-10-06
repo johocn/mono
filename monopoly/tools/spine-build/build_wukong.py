@@ -314,6 +314,14 @@ def build_animations():
     tra("walk", "hips", [(0, 0, 0), (T / 4, 0, 8), (T / 2, 0, 0),
                          (3 * T / 4, 0, 8), (T, 0, 0)])
     rot("walk", "chest", [(0, 0), (T / 2, 1.5), (T, 0)])
+    # 图4 身体+虎皮裙放大、足部缩小（仅此动画，用户校准）
+    s_body, s_leg = 1.10, 0.88
+    scl("walk", "torso_b", [(0, s_body, s_body), (T, s_body, s_body)])
+    scl("walk", "skirt_b", [(0, s_body, s_body), (T, s_body, s_body)])
+    scl("walk", "legs", [(0, s_leg, s_leg), (T, s_leg, s_leg)])
+    leg_h_eff = img_size("legs_walk1")[1] * SCALE * SIZE_SCALE["legs_walk1"]
+    leg_dy = round(-leg_h_eff / 2 * (1 - s_leg))  # 缩小后脚底下移补偿贴地
+    tra("walk", "legs", [(0, 0, leg_dy), (T, 0, leg_dy)])
 
     # —— spin：棒 15/30/45 度帧切换 + 骨旋转 = 耍棒透视效果 ——
     T = 1.5
