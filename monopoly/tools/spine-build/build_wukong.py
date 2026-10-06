@@ -324,7 +324,7 @@ def build_animations():
     # —— walk：正面腿 1/2 交替 + 左右摆裙 + 双臂张开反相摆 ——
     T = 1.0
     att("walk", "legs", [(0, "legs_walk1"), (T / 2, "legs_walk2"), (T, "legs_walk1")])
-    att("walk", "skirt", [(0, "skirt_l"), (T / 2, "skirt_r"), (T, "skirt_l")])
+    att("walk", "skirt", [(0, "skirt_r")])  # 单张右摆裙，镜像翻转实现左右摆（用户指定，弃用左摆图）
     att("walk", "tassel", [(0, "blank")])  # 穗子静止遮挡摆动裙摆边缘，walk 中隐藏（用户反馈）
     att("walk", "arm_r", [(0, "arm_r_down")])
     att("walk", "arm_l", [(0, "arm_l_down")])
@@ -337,7 +337,10 @@ def build_animations():
     s_body, s_leg = 1.10, 0.80
     scl("walk", "torso_b", [(0, s_body, s_body), (T, s_body, s_body)])
     s_skirt = s_body * 1.10   # 裙在身体基础上再放大10%（用户校准，贴合腰部）
-    scl("walk", "skirt_b", [(0, s_skirt, s_skirt), (T, s_skirt, s_skirt)])
+    # 左右翻转摆动：半周期瞬间镜像（x -1 ↔ +1），附件腰带已居中补偿，翻转不跳
+    scl("walk", "skirt_b", [(0, -s_skirt, s_skirt), (T / 2 - 0.01, -s_skirt, s_skirt),
+                            (T / 2, s_skirt, s_skirt), (T - 0.01, s_skirt, s_skirt),
+                            (T, -s_skirt, s_skirt)])
     scl("walk", "legs", [(0, s_leg, s_leg), (T, s_leg, s_leg)])
     tra("walk", "legs", [(0, -5, 35), (T, -5, 35)])  # 上移35/左移5（用户校准）
     # 图4 金箍缩小0.80+下移20贴合头部（仅此动画，用户校准）
@@ -358,9 +361,9 @@ def build_animations():
     # 图5 金箍缩小0.80+下移20贴合头部（仅此动画，用户校准）
     scl("spin", "band_b", [(0, 0.80, 0.80), (T, 0.80, 0.80)])
     tra("spin", "band_b", [(0, 0, -20), (T, 0, -20)])
-    # 图5 足部上移15/缩小10%；裙整体上移20（仅此动画，用户校准）
+    # 图5 足部上移20/缩小10%；裙整体上移20（仅此动画，用户校准）
     scl("spin", "legs", [(0, 0.90, 0.90), (T, 0.90, 0.90)])
-    tra("spin", "legs", [(0, 0, 15), (T, 0, 15)])
+    tra("spin", "legs", [(0, 0, 20), (T, 0, 20)])
     tra("spin", "skirt_b", [(0, 0, 20), (T, 0, 20)])
 
     # —— throw_dice：左臂高举 + 向右抛出骰子特效 + 落地火花（用户方案试做） ——
@@ -375,9 +378,9 @@ def build_animations():
     tra("throw_dice", "fx", [(0, -50, 25), (1.2, -50, 25)])
     tra("throw_dice", "chest", [(0, 0, 0), (1.1, 0, 4), (1.3, 0, -4), (T, 0, 0)])
     rot("throw_dice", "head", [(0, 0), (1.1, -6), (1.3, 8), (T, 0)])
-    # 图6 足部上移15/缩小10%；裙整体上移20（仅此动画，用户校准）
+    # 图6 足部上移20/缩小10%；裙整体上移20（仅此动画，用户校准）
     scl("throw_dice", "legs", [(0, 0.90, 0.90), (T, 0.90, 0.90)])
-    tra("throw_dice", "legs", [(0, 0, 15), (T, 0, 15)])
+    tra("throw_dice", "legs", [(0, 0, 20), (T, 0, 20)])
     tra("throw_dice", "skirt_b", [(0, 0, 20), (T, 0, 20)])
     # 图6 金箍缩小0.80+下移20贴合头部（仅此动画，用户校准）
     scl("throw_dice", "band_b", [(0, 0.80, 0.80), (T, 0.80, 0.80)])
