@@ -121,7 +121,7 @@
 - [x] 冒烟：`POST https://h.joho.cn/api/zhao-studio/v1/analytics/page-view`，body `{data:{sessionId, abVariant, userAgent, language, screen}}` → browser-log 新增一条且 `abVariant` 有值。（✅ DB 确认 lnk 表关联到变体）
 - [x] 冒烟：`POST https://h.joho.cn/api/zhao-track/v1/zhao-track/click`，body `{sourceTagId, deviceFingerprint, abVariantId}`（无 couponId）→ click-event 新增一条 `abVariant` 有值、`coupon` 为空。（✅）
 - [x] 端到端：在 `game.yourbao.cn` 生成分享链接（带 `?camp=xxl-share-2026&v=<variantId>&st=<tag>`），用另一浏览器/隐身打开 → 确认 click-event 写入且 `abVariant` = 分享者展示的变体。（✅ Playwright 390×844 手机视口验证，pick/identify/page-view/click 全 200，DB 归因闭环；截图见 `docs/manual/shots/2026-10-07-xxl-ab-e2e/` 与方案文档第五节）
-- [ ] 报表：`GET https://h.joho.cn/api/zhao-studio/v1/channel-report?channelCode=<渠道code>&groupBy=variant` 返回各变体的 `impressions/clicks/ctr/orders`。（⚠️ 该接口走 zhao-auth 鉴权，不能用 strapi admin token 直接调；留待 TAdmin/运营后台验证。服务端 groupBy:'variant' 逻辑已随关联 bug 修复实现）
+- [x] 报表：`GET https://h.joho.cn/api/zhao-studio/v1/admin/channel-report?channelCode=xxl-wechat&groupBy=variant` 返回各变体的 `impressions/clicks/ctr/orders`。（✅ 2026-10-07 已验证，见下方「报表鉴权验证」）
 
 ### P3 — 观察与回滚
 - [ ] 观察 3~7 天各文案变体 CTR，挑优。
@@ -169,6 +169,12 @@
 ### ⚠️ 录入方式的执行差异
 - 原计划经 TAdmin/Content-Manager API 录入，但 CM create/update 的 body 中名为 `status` 的字段与 D&P 发布状态校验撞名（400 "Invalid status"），**改用幂等 SQL 直插**（lnk 表关联 + published_at=now()）。后续在后台编辑这些记录不受影响。
 
-### 📌 遗留（唯一）
-- `channel-report?groupBy=variant` 报表输出需经 zhao-auth 鉴权（TAdmin 前端验证），服务端逻辑已就绪。
+### 📌 报表鉴权验证（2026-10-07 补验通过）
+- 接口：`GET /api/zhao-studio/v1/admin/channel-report`（Bearer JWT，策略链 is-authenticated → has-permission → has-channel-scope → has-tenant-access）。
+- 鉴权矩阵：无 token=401 / 伪 token=401 / admin(zhaoRoles)=200 / channel-admin（权限表含 `zhao-studio.channel-report.view`）=200（正确放行）/ 普通用户=403 PolicyError。
+- 数据自洽：温情版 impressions=3 / clicks=2 / CTR=66.67%（与 DB 一致），挑战版 0/0（测试期未曝光）。
+- 测试数据修正：两条 v1 bundle 时期的测试曝光补齐 `promo_channel_code=xxl-wechat`（v1 的 trackPageView 无渠道码解析，会被报表渠道过滤排除；v2 起新流量自动带渠道码，不受影响）。
+- TAdmin 前端只需带上登录 JWT 调该接口即可展示变体对比报表。
+
+### 📌 剩余事项（仅运营侧）
 - P3 观察期（3~7 天 CTR 对比挑优）由运营执行。

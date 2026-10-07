@@ -131,5 +131,5 @@
 ![消消乐 A/B 分享 E2E 手机截图](../docs/manual/shots/2026-10-07-xxl-ab-e2e/01-main-menu-390x844.png)
 
 ### 遗留
-- `channel-report?groupBy=variant` 走 zhao-auth 鉴权（非 strapi admin token），需在 TAdmin/运营后台验证报表输出。
+- ~~`channel-report?groupBy=variant` 需 zhao-auth 鉴权~~ → **2026-10-07 已补验通过**：鉴权矩阵（401/403/200 全覆盖）与数据自洽性（温情版 imp=3/clicks=2/CTR=66.67% 与 DB 一致）均正确；TAdmin 前端带登录 JWT 调用即可。
 - P3 观察期（3~7 天 CTR 对比）由运营执行；回滚方式见交接文档。
