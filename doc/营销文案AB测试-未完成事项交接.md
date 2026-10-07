@@ -176,5 +176,14 @@
 - 测试数据修正：两条 v1 bundle 时期的测试曝光补齐 `promo_channel_code=xxl-wechat`（v1 的 trackPageView 无渠道码解析，会被报表渠道过滤排除；v2 起新流量自动带渠道码，不受影响）。
 - TAdmin 前端只需带上登录 JWT 调该接口即可展示变体对比报表。
 
+### 📌 TAdmin 渠道报表界面上线（2026-10-07，strapi-backend 仓库 3c20c3b）
+- **Strapi 自带 admin 面板不使用**，报表界面落地在独立后台 TAdmin（`d:\zhao\strapi-backend`，UniApp Vue3 H5，部署于 h.joho.cn 站点根目录）。
+- 入口：控制台 → 内容创作模块 → **渠道报表**（🏆，`menu.studio-stats` 权限）。
+- 功能：「变体对比」Tab（领先标记 + CTR 相对条 + 订单/佣金）与「渠道总览」Tab（漏斗/收益与成本/ROI/关联活动）；渠道下拉默认选中**含活动**的渠道；日期范围 近7/30/90 天 + 自定义。
+- 手机视口截图（390×844 dpr=2）：`strapi-backend/docs/manual/shots/2026-10-07-tadmin-channel-report/`，已同步进《消消乐分享裂变测试手册》第三节。
+- 部署中发现并修复的两个问题：
+  1. **zhao-auth 插件服务器 dist 是旧的**（mtime 2026-08-30）——admin JWT 鉴权兼容的源码虽已提交（9bda4586b8），但插件 dist 从未重新编译部署。重新 `npm run build` 后 scp `dist/server/index.js` 并 pm2 restart，admin JWT 访问报表接口实测 200。
+  2. **报表日期边界**：后端对 timestamp 等字段按字符串比较（`<= endDate`），传 `endDate=今天` 会把当天带时间分量的记录排除；TAdmin 页面已统一 endDate+1 天（直接调接口时同样注意，见手册接口示例）。
+
 ### 📌 剩余事项（仅运营侧）
 - P3 观察期（3~7 天 CTR 对比挑优）由运营执行。
