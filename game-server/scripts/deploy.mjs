@@ -138,11 +138,103 @@ export function initServer() {
   console.log('✓ 服务器已迁移到 releases + current');
 }
 
+// ---------- 本地产物破坏（仅 --selftest-* 演练用） ----------
+function collectFiles(dir) {
+  const out = [];
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) out.push(...collectFiles(p));
+    else out.push(p);
+  }
+  return out;
+}
+function corruptPackage() {
+  // 必须覆盖 dist 全部文本文件（.js/.js.map/.d.ts/tsbuildinfo）：
+  // sourcemap/声明文件内嵌 TS 源码仍含 sso-exchange 字样，服务端 grep -rq 全文件预检会放行
+  for (const f of collectFiles(path.join(ROOT, 'dist'))) {
+    const t = fs.readFileSync(f, 'utf8');
+    // 注意：替换目标不能包含 'sso-exchange' 子串（sso-exchanged 仍会被 grep 命中）
+    if (t.includes('sso-exchange')) fs.writeFileSync(f, t.split('sso-exchange').join('sso-exch4nged'));
+  }
+}
+function corruptRuntime() {
+  const mainJs = path.join(ROOT, 'dist', 'src', 'main.js');
+  fs.writeFileSync(mainJs, 'process.exit(1);\n' + fs.readFileSync(mainJs, 'utf8'));
+}
+
+const REMOTE_DEPLOY = `#!/usr/bin/env bash
+set -euo pipefail
+ROOT=/opt/game-server
+PREV=$(readlink -f "$ROOT/current" 2>/dev/null || true)
+TS=$(date +%Y%m%d-%H%M%S)
+RELEASE=$ROOT/releases/$TS
+rollback() {
+  echo "↩ 探针未过，自动回滚 -> $PREV"
+  [ -z "$PREV" ] && { echo "✗ 无上一版可回滚"; exit 2; }
+  ln -sfn "$PREV" "$ROOT/current"
+  systemctl restart game-server
+  for i in $(seq 1 20); do
+    sleep 2
+    RC=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/health || true)
+    echo "revert-probe#$i health=$RC"
+    if [ "$RC" = "200" ]; then break; fi
+  done
+  curl -s -o /dev/null -w "revert-health=%{http_code}\\n" http://127.0.0.1:3000/health
+}
+echo "$PREV" | grep -q releases || { echo "✗ current 未指向 releases（先 init-server）"; exit 2; }
+mkdir -p "$RELEASE"
+tar -xzf /tmp/gs-dist.tgz -C "$RELEASE"
+HASH=$(cat "$RELEASE/.deps-hash")
+OLD=$(cat "$ROOT/.deps-hash" 2>/dev/null || true)
+if [ "$HASH" != "$OLD" ]; then
+  echo "▶ 依赖变更 -> npm ci --omit=dev"
+  ( cd "$ROOT" && npm ci --omit=dev --no-audit --no-fund )
+  echo "$HASH" > "$ROOT/.deps-hash"
+fi
+grep -rq sso-exchange "$RELEASE/dist/src" || { echo "✗ 预检:缺 sso-exchange（疑似旧包），未切换"; exit 1; }
+grep -rq health "$RELEASE/dist/src" || { echo "✗ 预检:缺 health，未切换"; exit 1; }
+( cd "$RELEASE/dist/src" && node -e "require.resolve('@nestjs/core')" ) || { echo "✗ 预检:共享 node_modules 不可达"; exit 1; }
+ln -sfn "$RELEASE" "$ROOT/current"
+systemctl restart game-server
+H=000; S=000
+for i in $(seq 1 20); do
+  sleep 2
+  H=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3000/health || true)
+  S=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:3000/api/client/v1/auth/sso-exchange || true)
+  echo "probe#$i health=$H sso=$S"
+  if [ "$H" = "200" ] && [ "$S" = "400" ]; then break; fi
+done
+echo "health=$H sso=$S"
+if [ "$H" != "200" ] || [ "$S" != "400" ]; then rollback; exit 1; fi
+cd "$ROOT/releases" && ls -1d */ 2>/dev/null | sed 's:/$::' | sort | head -n -5 | xargs -r rm -rf
+echo "DEPLOY_OK release=$TS"
+`;
+
+export function deploy(kind = null) {
+  fs.mkdirSync(path.join(ROOT, '.deploy'), { recursive: true });
+  console.log('▶ nest build'); mustRun('npm run build');
+  const c = checkDist(path.join(ROOT, 'dist'));
+  if (!c.ok) { console.error(`✗ 本地自检失败，缺: ${c.missing.join(',')}`); process.exit(1); }
+  console.log('✓ 本地自检通过（sso-exchange / health）');
+  if (kind === 'package') { corruptPackage(); console.log('⚠ selftest 包已破坏（预期服务端预检拦截）'); }
+  if (kind === 'runtime') { corruptRuntime(); console.log('⚠ selftest 运行时已破坏（预期探针失败自动回滚）'); }
+  fs.writeFileSync(path.join(ROOT, '.deps-hash'), depsHash());
+  console.log('▶ tar 打包'); mustRun('tar -czf .deploy/gs-dist.tgz dist seeds .deps-hash');
+  fs.rmSync(path.join(ROOT, '.deps-hash'));
+  console.log('▶ scp 上传'); mustRun('scp .deploy/gs-dist.tgz odoo:/tmp/gs-dist.tgz');
+  fs.writeFileSync(path.join(ROOT, '.deploy', 'remote.sh'), REMOTE_DEPLOY);
+  mustRun('scp .deploy/remote.sh odoo:/tmp/gs-remote.sh');
+  console.log('▶ 服务器: 解压/预检/切换/重启/探针');
+  const r = spawnSync('ssh odoo "bash /tmp/gs-remote.sh"', { shell: true, stdio: 'inherit', cwd: ROOT });
+  if (r.status !== 0) { console.error('✗ 发布失败（服务端已自动回滚或未切换）'); process.exit(1); }
+}
+
 // ---------- 以下为执行入口（测试导入不触发） ----------
 const isMain = process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 if (isMain) {
   const argv = process.argv.slice(2);
   const cmd = argv.find((a) => !a.startsWith('--')) || 'deploy';
   if (cmd === 'init-server') initServer();
-  else { console.error('deploy 子命令在 Task 3 实现'); process.exit(1); }
+  else if (cmd === 'deploy') deploy(argv.includes('--selftest-bad-package') ? 'package' : argv.includes('--selftest-bad-runtime') ? 'runtime' : null);
+  else { console.error('用法: node scripts/deploy.mjs [deploy|init-server] [--selftest-bad-package|--selftest-bad-runtime]'); process.exit(1); }
 }
