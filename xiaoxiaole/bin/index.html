@@ -34,6 +34,9 @@
       // VENDURE_CHANNEL_TOKEN: "",
       // 消消乐后端（换装花园：模板中心 / AI 生成 / 素材上传 / 积分同步）
       // GAME_SERVER_API_URL: "http://localhost:3000",
+      // 营销 A/B 分享统计（值同步自构建期 .env；置空串即可回滚旧分享逻辑，无需重新构建）
+      MARKETING_API_BASE: "https://h.joho.cn",
+      MARKETING_CAMPAIGN_CODE: "xxl-share-2026",
     };
   </script>
   <!-- 相对路径兼容三种入口：本地 `npm run serve`、线上目录 /tour/xxl/（./bundle.js 直接命中）、
