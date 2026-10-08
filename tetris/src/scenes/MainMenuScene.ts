@@ -26,8 +26,10 @@ export class MainMenuScene {
     private onShop: () => void,
     private onSkin: () => void,
   ) {
-    this.maybeDailyGift();
+    // 必须先绑定菜单自身 handler，再弹每日礼包：NoticeScene 构造会接管点击用于关闭弹层，
+    // 若先弹礼包再 bind() 会覆盖掉关闭弹层的 handler，导致弹层无法关闭、整页无法点击。
     this.bind();
+    this.maybeDailyGift();
   }
 
   private bind(): void {

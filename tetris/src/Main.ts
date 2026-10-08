@@ -84,43 +84,49 @@ function globalUpdate(): void {
 }
 
 async function bootstrap(): Promise<void> {
-  safety.load();
-  progress.load();
-  skinManager.restore();
-  authStore.load();
+  try {
+    safety.load();
+    progress.load();
+    skinManager.restore();
+    authStore.load();
 
-  const { token, refreshToken, expiresIn } = consumeUrlParams();
-  if (token) {
-    const res = await handleSsoCallback(token, refreshToken ?? undefined, expiresIn ?? undefined);
-    if (!res.ok) console.warn("[tetris] SSO 登录未完成:", res.error);
+    const { token, refreshToken, expiresIn } = consumeUrlParams();
+    if (token) {
+      const res = await handleSsoCallback(token, refreshToken ?? undefined, expiresIn ?? undefined);
+      if (!res.ok) console.warn("[tetris] SSO 登录未完成:", res.error);
+    }
+
+    // 后端可用且本机无正式会话：静默游客登录，获取服务端身份（同设备持久化）
+    if (ENV.gameServerEnabled && !authStore.isLoggedIn()) {
+      await authStore.loginGuest();
+    }
+
+    // 已登录（游客或 SSO）：拉取服务端进度/积分/皮肤，跨设备同步
+    if (authStore.isLoggedIn()) {
+      await authStore.ensureToken();
+      await syncPull();
+    }
+
+    // 分享裂变 A/B：尽早初始化（拉取文案变体 + 打标 + 回传曝光/打开）
+    void initMarketingShare();
+  } catch (e) {
+    // 任何启动异常都降级为本地模式，绝不让首页卡在加载态 / 不可点击
+    console.error("[tetris] bootstrap 出错，已降级为本地模式:", e);
+  } finally {
+    // 无论如何都进入主菜单并移除加载遮罩，保证首页可交互
+    gameCanvas.setUpdateCallback(globalUpdate);
+
+    exitGuard.install({
+      onConfirm: showExitConfirm,
+      onInternalBack: () => { /* 非首页：交给场景自身返回逻辑 */ },
+    });
+
+    goMenu();
+
+    // 隐藏首屏加载遮罩（"方块正在就位…"），交还画布交互
+    const loadingEl = document.getElementById("Loading");
+    if (loadingEl) loadingEl.remove();
   }
-
-  // 后端可用且本机无正式会话：静默游客登录，获取服务端身份（同设备持久化）
-  if (ENV.gameServerEnabled && !authStore.isLoggedIn()) {
-    await authStore.loginGuest();
-  }
-
-  // 已登录（游客或 SSO）：拉取服务端进度/积分/皮肤，跨设备同步
-  if (authStore.isLoggedIn()) {
-    await authStore.ensureToken();
-    await syncPull();
-  }
-
-  // 分享裂变 A/B：尽早初始化（拉取文案变体 + 打标 + 回传曝光/打开）
-  void initMarketingShare();
-
-  gameCanvas.setUpdateCallback(globalUpdate);
-
-  exitGuard.install({
-    onConfirm: showExitConfirm,
-    onInternalBack: () => { /* 非首页：交给场景自身返回逻辑 */ },
-  });
-
-  goMenu();
-
-  // 隐藏首屏加载遮罩（"方块正在就位…"），交还画布交互
-  const loadingEl = document.getElementById("Loading");
-  if (loadingEl) loadingEl.remove();
 }
 
 void bootstrap();
