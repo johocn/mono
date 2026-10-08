@@ -111,7 +111,7 @@ docs/manual/payment-schedule/index.md [新建:操作手册+手机截图]
 - Create: `d:\zhao\vendure\packages\payment-schedule-plugin\src\constants.ts`
 - Create: `d:\zhao\vendure\packages\payment-schedule-plugin\src\types.ts`
 
-- [ ] **Step 1: 创建 package.json**（仿 pre-sale-plugin）
+- [x] **Step 1: 创建 package.json**（仿 pre-sale-plugin）
 
 ```json
 {
@@ -142,7 +142,7 @@ docs/manual/payment-schedule/index.md [新建:操作手册+手机截图]
 }
 ```
 
-- [ ] **Step 2: 创建 tsconfig.json**（与 pre-sale-plugin 相同）
+- [x] **Step 2: 创建 tsconfig.json**（与 pre-sale-plugin 相同）
 
 ```json
 {
@@ -159,7 +159,7 @@ docs/manual/payment-schedule/index.md [新建:操作手册+手机截图]
 }
 ```
 
-- [ ] **Step 3: 创建 tsconfig.build.json**
+- [x] **Step 3: 创建 tsconfig.build.json**
 
 ```json
 {
@@ -173,7 +173,7 @@ docs/manual/payment-schedule/index.md [新建:操作手册+手机截图]
 }
 ```
 
-- [ ] **Step 4: 创建 vitest.config.mts**（含单测 include）
+- [x] **Step 4: 创建 vitest.config.mts**（含单测 include）
 
 ```typescript
 import path from 'path';
@@ -198,14 +198,14 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 5: 创建 src/constants.ts**
+- [x] **Step 5: 创建 src/constants.ts**
 
 ```typescript
 export const loggerCtx = 'PaymentSchedulePlugin';
 export const PAYMENT_SCHEDULE_PLUGIN_OPTIONS = Symbol('PAYMENT_SCHEDULE_PLUGIN_OPTIONS');
 ```
 
-- [ ] **Step 6: 创建 src/types.ts**
+- [x] **Step 6: 创建 src/types.ts**
 
 ```typescript
 export interface PaymentSchedulePluginOptions {
@@ -214,14 +214,14 @@ export interface PaymentSchedulePluginOptions {
 }
 ```
 
-- [ ] **Step 7: 创建 index.ts（先导出已有文件，后续任务追加）**
+- [x] **Step 7: 创建 index.ts（先导出已有文件，后续任务追加）**
 
 ```typescript
 export * from './src/constants';
 export * from './src/types';
 ```
 
-- [ ] **Step 8: 根目录链接依赖并构建验证**
+- [x] **Step 8: 根目录链接依赖并构建验证**
 
 在 `d:\zhao\vendure` 执行：`npm install`
 预期：package-lock 出现 `@vendure/payment-schedule-plugin` link。
@@ -229,7 +229,7 @@ export * from './src/types';
 在 `d:\zhao\vendure\packages\payment-schedule-plugin` 执行：`npm run build`
 预期：无报错，生成 `lib/index.js`。
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```powershell
 git add packages/payment-schedule-plugin
@@ -244,7 +244,7 @@ git commit -m "feat(payment-schedule): 新增统一支付计划插件包骨架�
 - Create: `d:\zhao\vendure\packages\payment-schedule-plugin\src\schedule-config.ts`
 - Test: `d:\zhao\vendure\packages\payment-schedule-plugin\src\schedule-config.spec.ts`
 
-- [ ] **Step 1: 写失败单测** `src/schedule-config.spec.ts`
+- [x] **Step 1: 写失败单测** `src/schedule-config.spec.ts`
 
 ```typescript
 import { describe, expect, it } from 'vitest';
@@ -396,12 +396,12 @@ describe('LEGAL_DEPOSIT_CAP_RATIO', () => {
 });
 ```
 
-- [ ] **Step 2: 运行确认失败**
+- [x] **Step 2: 运行确认失败**
 
 在包目录执行：`npm test`
 预期：FAIL，报 `Cannot find module './schedule-config'`。
 
-- [ ] **Step 3: 实现 schedule-config.ts**
+- [x] **Step 3: 实现 schedule-config.ts**
 
 ```typescript
 /**
@@ -579,12 +579,12 @@ export function splitInstallmentAmounts(total: number, downRatioPercent: number,
 }
 ```
 
-- [ ] **Step 4: 运行单测确认通过**
+- [x] **Step 4: 运行单测确认通过**
 
 在包目录执行：`npm test`
 预期：PASS（schedule-config.spec.ts 全部用例通过）。
 
-- [ ] **Step 5: 更新 index.ts 导出**
+- [x] **Step 5: 更新 index.ts 导出**
 
 ```typescript
 export * from './src/constants';
@@ -592,7 +592,7 @@ export * from './src/types';
 export * from './src/schedule-config';
 ```
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```powershell
 git add packages/payment-schedule-plugin
@@ -607,7 +607,7 @@ git commit -m "feat(payment-schedule): 调度配置纯函数（触发器/滞纳�
 - Create: `d:\zhao\vendure\packages\payment-schedule-plugin\src\order-payment-schedule.entity.ts`
 - Create: `d:\zhao\vendure\packages\payment-schedule-plugin\src\order-schedule-item.entity.ts`
 
-- [ ] **Step 1: 创建订单级调度实体**
+- [x] **Step 1: 创建订单级调度实体**
 
 ```typescript
 import { Column, Entity, JoinTable, ManyToMany } from 'typeorm';
@@ -665,7 +665,7 @@ export class OrderPaymentSchedule extends VendureEntity implements ChannelAware 
 }
 ```
 
-- [ ] **Step 2: 创建期次实体**
+- [x] **Step 2: 创建期次实体**
 
 ```typescript
 import { Column, Entity } from 'typeorm';
@@ -732,12 +732,12 @@ export class OrderScheduleItem extends VendureEntity {
 }
 ```
 
-- [ ] **Step 3: 构建**
+- [x] **Step 3: 构建**
 
 在包目录执行：`npm run build`
 预期：成功。
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```powershell
 git add packages/payment-schedule-plugin
@@ -753,7 +753,7 @@ git commit -m "feat(payment-schedule): OrderPaymentSchedule/OrderScheduleItem �
 - Create: `d:\zhao\vendure\packages\payment-schedule-plugin\src\notification.ts`
 - Create: `d:\zhao\vendure\packages\payment-schedule-plugin\src\payment-schedule.service.ts`
 
-- [ ] **Step 1: 运行时注入（静态构造的 OrderProcess/通知延迟获取 DB/Injector）**
+- [x] **Step 1: 运行时注入（静态构造的 OrderProcess/通知延迟获取 DB/Injector）**
 
 ```typescript
 import { Injector, TransactionalConnection } from '@vendure/core';
@@ -794,7 +794,7 @@ export function tryGetProvider<T = any>(type: any): T | null {
 }
 ```
 
-- [ ] **Step 2: 通知工具（软依赖 wechat-subscribe-message-plugin）**
+- [x] **Step 2: 通知工具（软依赖 wechat-subscribe-message-plugin）**
 
 ```typescript
 import { Logger, Order, RequestContext } from '@vendure/core';
@@ -841,7 +841,7 @@ export async function sendScheduleNotice(
 }
 ```
 
-- [ ] **Step 3: 调度核心服务**
+- [x] **Step 3: 调度核心服务**
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -1834,12 +1834,12 @@ export class PaymentScheduleService {
     }
 ```
 
-- [ ] **Step 4: 构建验证**
+- [x] **Step 4: 构建验证**
 
 在包目录执行：`npm run build`
 预期：成功（`payment-schedule.service.js` 生成于 lib）。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add packages/payment-schedule-plugin
@@ -1854,7 +1854,7 @@ git commit -m "feat(payment-schedule): 调度核心服务（创建/支付/违约
 - Create: `d:\zhao\vendure\packages\payment-schedule-plugin\src\payment-schedule.order-process.ts`
 - Create: `d:\zhao\vendure\packages\payment-schedule-plugin\src\order-custom-fields.ts`
 
-- [ ] **Step 1: 创建订单状态机（PartiallyPaid 正式态 + 发货门控）**
+- [x] **Step 1: 创建订单状态机（PartiallyPaid 正式态 + 发货门控）**
 
 ```typescript
 import { OrderProcess } from '@vendure/core';
@@ -1916,7 +1916,7 @@ export const paymentScheduleOrderProcess: OrderProcess<any> = {
 };
 ```
 
-- [ ] **Step 2: 创建 Order customFields**
+- [x] **Step 2: 创建 Order customFields**
 
 ```typescript
 import { CustomFields, LanguageCode } from '@vendure/core';
@@ -1933,7 +1933,7 @@ export const paymentScheduleOrderCustomFields: CustomFields = {
 };
 ```
 
-- [ ] **Step 3: 构建 + Commit**
+- [x] **Step 3: 构建 + Commit**
 
 在包目录执行：`npm run build`，预期成功。
 
@@ -1949,7 +1949,7 @@ git commit -m "feat(payment-schedule): PartiallyPaid 状态机 + deliveryGate �
 **Files:**
 - Create: `d:\zhao\vendure\packages\payment-schedule-plugin\src\payment-schedule.job.ts`
 
-- [ ] **Step 1: 创建定时任务（逐渠道构建 ctx，参照 GroupBuyJob 模式）**
+- [x] **Step 1: 创建定时任务（逐渠道构建 ctx，参照 GroupBuyJob 模式）**
 
 ```typescript
 import { Injectable } from '@nestjs/common';
@@ -2012,7 +2012,7 @@ export const paymentScheduleTask = new ScheduledTask({
 });
 ```
 
-- [ ] **Step 2: 构建 + Commit**
+- [x] **Step 2: 构建 + Commit**
 
 在包目录执行：`npm run build`，预期成功。
 
@@ -2028,7 +2028,7 @@ git commit -m "feat(payment-schedule): 每分钟调度扫描任务（触发/逾�
 **Files:**
 - Create: `d:\zhao\vendure\packages\payment-schedule-plugin\src\payment-schedule-shop.resolver.ts`
 
-- [ ] **Step 1: 创建 Shop resolver**
+- [x] **Step 1: 创建 Shop resolver**
 
 ```typescript
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
@@ -2074,7 +2074,7 @@ export class PaymentScheduleShopResolver {
 }
 ```
 
-- [ ] **Step 2: 构建 + Commit**
+- [x] **Step 2: 构建 + Commit**
 
 在包目录执行：`npm run build`，预期成功。
 
@@ -2090,7 +2090,7 @@ git commit -m "feat(payment-schedule): Shop API（paymentSchedule/paySchedulePer
 **Files:**
 - Create: `d:\zhao\vendure\packages\payment-schedule-plugin\src\payment-schedule-admin.resolver.ts`
 
-- [ ] **Step 1: 创建 Admin resolver**
+- [x] **Step 1: 创建 Admin resolver**
 
 ```typescript
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
@@ -2176,7 +2176,7 @@ export class PaymentScheduleAdminResolver {
     }
 ```
 
-- [ ] **Step 2: 构建 + Commit**
+- [x] **Step 2: 构建 + Commit**
 
 在包目录执行：`npm run build`，预期成功。
 
@@ -2194,7 +2194,7 @@ git commit -m "feat(payment-schedule): Admin API（调度列表/开启尾款/卖
 - Modify: `d:\zhao\vendure\packages\payment-schedule-plugin\index.ts`
 - Modify: `d:\zhao\vendure\packages\dev-server\dev-config.ts`
 
-- [ ] **Step 1: 创建 plugin.ts（Shop/Admin schema 内联，参照 pre-sale 模式）**
+- [x] **Step 1: 创建 plugin.ts（Shop/Admin schema 内联，参照 pre-sale 模式）**
 
 ```typescript
 import { Inject, OnApplicationBootstrap, Type } from '@nestjs/common';
@@ -2462,7 +2462,7 @@ import { PaymentScheduleJob, paymentScheduleTask } from './payment-schedule.job'
 //   PaymentScheduleJob,
 ```
 
-- [ ] **Step 2: 更新 index.ts（最终版）**
+- [x] **Step 2: 更新 index.ts（最终版）**
 
 ```typescript
 export * from './src/constants';
@@ -2476,11 +2476,11 @@ export * from './src/payment-schedule.job';
 export * from './src/plugin';
 ```
 
-- [ ] **Step 3: 构建并修复编译错误**
+- [x] **Step 3: 构建并修复编译错误**
 
 在包目录执行：`npm run build`，预期成功（若 `PaymentScheduleJob` 未加 `@Injectable()` 装饰器导致 Nest 报错，确认 Task 6 的类已带 `@Injectable()`）。
 
-- [ ] **Step 4: dev-server 注册插件**
+- [x] **Step 4: dev-server 注册插件**
 
 修改 `d:\zhao\vendure\packages\dev-server\dev-config.ts`：
 
@@ -2496,7 +2496,7 @@ import { PaymentSchedulePlugin } from '@vendure/payment-schedule-plugin';
         PaymentSchedulePlugin.init({}),
 ```
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add packages/payment-schedule-plugin packages/dev-server/dev-config.ts
@@ -2512,7 +2512,7 @@ git commit -m "feat(payment-schedule): 插件组装（Shop/Admin schema、Partia
 - Modify: `d:\zhao\vendure\packages\group-buy-plugin\src\group-buy.service.ts`（两处发布）
 - Modify: `d:\zhao\vendure\packages\group-buy-plugin\index.ts`（导出）
 
-- [ ] **Step 1: 创建事件类**
+- [x] **Step 1: 创建事件类**
 
 ```typescript
 import { RequestContext, VendureEvent } from '@vendure/core';
@@ -2540,7 +2540,7 @@ export class GroupBuyFailedEvent extends VendureEvent {
 }
 ```
 
-- [ ] **Step 2: group-buy.service.ts 注入 EventBus 并发布**
+- [x] **Step 2: group-buy.service.ts 注入 EventBus 并发布**
 
 修改构造函数（`group-buy.service.ts` 第 54-61 行区域），追加 `eventBus`：
 
@@ -2602,7 +2602,7 @@ export class GroupBuyService {
                 this.eventBus.publish(new GroupBuyFailedEvent(ctx, Number(activity.id), allJoined.map(j => j.orderId)));
 ```
 
-- [ ] **Step 3: index.ts 导出**
+- [x] **Step 3: index.ts 导出**
 
 在 `d:\zhao\vendure\packages\group-buy-plugin\index.ts` 追加一行（若无该行）：
 
@@ -2610,12 +2610,12 @@ export class GroupBuyService {
 export * from './src/events';
 ```
 
-- [ ] **Step 4: 构建 group-buy**
+- [x] **Step 4: 构建 group-buy**
 
 在 `d:\zhao\vendure\packages\group-buy-plugin` 执行：`npm run build`
 预期：成功。
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```powershell
 git add packages/group-buy-plugin
@@ -2635,7 +2635,7 @@ git commit -m "feat(group-buy): 新增 GroupBuyCompletedEvent/GroupBuyFailedEven
 - Modify: `d:\zhao\vendure\packages\pre-sale-plugin\src\plugin.ts`（admin+shop 两端 schema）
 - Test: `d:\zhao\vendure\packages\pre-sale-plugin\e2e\pre-sale.e2e-spec.ts`
 
-- [ ] **Step 1: 写失败 e2e（20% 硬校验）**
+- [x] **Step 1: 写失败 e2e（20% 硬校验）**
 
 在 `pre-sale.e2e-spec.ts` 的 describe 末尾追加用例（放在最后一个 `it(...)` 之后、describe 闭括号之前）：
 
@@ -2701,13 +2701,13 @@ git commit -m "feat(group-buy): 新增 GroupBuyCompletedEvent/GroupBuyFailedEven
     });
 ```
 
-- [ ] **Step 2: 跑测试确认失败**
+- [x] **Step 2: 跑测试确认失败**
 
 先删 e2e 缓存（schema/实体将变更）：`Remove-Item -Recurse -Force e2e\__data__`（若存在）。
 在 `d:\zhao\vendure\packages\pre-sale-plugin` 执行：`npm run e2e`
 预期：新用例 FAIL（`Expected the operation to throw, but it succeeded`），其余用例 PASS。
 
-- [ ] **Step 3: 实体新列**
+- [x] **Step 3: 实体新列**
 
 在 `pre-sale-activity.entity.ts` 的 `@Column('varchar', { default: 'upcoming' }) status` 之前插入：
 
@@ -2752,7 +2752,7 @@ git commit -m "feat(group-buy): 新增 GroupBuyCompletedEvent/GroupBuyFailedEven
 export const LEGAL_DEPOSIT_CAP_RATIO = 0.2;
 ```
 
-- [ ] **Step 4: service 校验 + 白名单扩展**
+- [x] **Step 4: service 校验 + 白名单扩展**
 
 `pre-sale.service.ts`：
 
@@ -2828,7 +2828,7 @@ const UPDATE_ALLOWED_FIELDS: ReadonlyArray<keyof PreSaleActivity> = [
     }
 ```
 
-- [ ] **Step 5: 两端 schema 扩展**
+- [x] **Step 5: 两端 schema 扩展**
 
 `plugin.ts` admin schema 的 `type PreSaleActivity`（`status: PreSaleStatus!` 行后、`createdAt` 行前）插入：
 
@@ -2858,12 +2858,12 @@ admin 的 `CreatePreSaleActivityInput`（`variantId: ID!` 行后）与 `UpdatePr
 
 shop schema 的 `type PreSaleActivity` 同 admin 的 type 部分插入（只读展示，shop 无 input）。
 
-- [ ] **Step 6: 跑测试确认通过**
+- [x] **Step 6: 跑测试确认通过**
 
 在 `d:\zhao\vendure\packages\pre-sale-plugin` 执行：`npm run e2e`
 预期：全部 PASS。
 
-- [ ] **Step 7: 构建 + Commit**
+- [x] **Step 7: 构建 + Commit**
 
 在 `d:\zhao\vendure\packages\pre-sale-plugin` 执行：`npm run build`（预期成功）
 
@@ -2883,7 +2883,7 @@ git commit -m "feat(pre-sale): 活动新增定金性质/尾款触发/宽限期/�
 
 **前置依赖：** payment-schedule-plugin 已构建（Task 1~10 完成后 `npm run build`，且已在 vendure 根 `npm install` 链接）。
 
-- [ ] **Step 1: pre-sale-runtime 注入 Injector**
+- [x] **Step 1: pre-sale-runtime 注入 Injector**
 
 `pre-sale-runtime.ts` 整文件替换为：
 
@@ -2931,7 +2931,7 @@ export function getPreSaleInjector(): Injector {
     }
 ```
 
-- [ ] **Step 2: 写失败 e2e（期次实例生成）**
+- [x] **Step 2: 写失败 e2e（期次实例生成）**
 
 2a. e2e 文件顶部 import 区追加：
 
@@ -3073,7 +3073,7 @@ import { PaymentSchedulePlugin } from '@vendure/payment-schedule-plugin';
 2e. 删缓存并跑：`Remove-Item -Recurse -Force e2e\__data__`（若存在）；`npm run e2e`
 预期：三个新用例 FAIL（paymentSchedule query 不存在/未生成期次），旧用例 PASS。
 
-- [ ] **Step 3: 创建软依赖桥**
+- [x] **Step 3: 创建软依赖桥**
 
 新建 `payment-schedule-bridge.ts`：
 
@@ -3186,7 +3186,7 @@ export async function createScheduleForOrder(
 }
 ```
 
-- [ ] **Step 4: applyPreSale 接入**
+- [x] **Step 4: applyPreSale 接入**
 
 `pre-sale.service.ts` 顶部追加导入：
 
@@ -3206,16 +3206,16 @@ import { getPreSaleInjector } from './pre-sale-runtime';   // 并入现有 pre-s
         }
 ```
 
-- [ ] **Step 5: admin resolver input 透传**
+- [x] **Step 5: admin resolver input 透传**
 
 `pre-sale-admin.resolver.ts` 的 `create` / `update` 方法确认把 input 整体传给 service（现有实现即如此则不改）。若 resolver 对 input 做了字段挑选，补齐新字段。查看文件确认后进入下一步。
 
-- [ ] **Step 6: 跑测试确认通过**
+- [x] **Step 6: 跑测试确认通过**
 
 在 `d:\zhao\vendure\packages\pre-sale-plugin` 执行：`npm run e2e`
 预期：全部 PASS（含 Task 11 用例）。
 
-- [ ] **Step 7: 构建 + Commit**
+- [x] **Step 7: 构建 + Commit**
 
 在 `d:\zhao\vendure\packages\pre-sale-plugin` 执行：`npm run build`
 
@@ -3232,7 +3232,7 @@ git commit -m "feat(pre-sale): 下单时经软依赖桥生成支付期次实例�
 - Modify: `d:\zhao\vendure\packages\pre-sale-plugin\src\pre-sale.service.ts`（三薄壳）
 - Test: `d:\zhao\vendure\packages\pre-sale-plugin\e2e\pre-sale.e2e-spec.ts`
 
-- [ ] **Step 1: 调度服务追加 unlockTailForOrder**
+- [x] **Step 1: 调度服务追加 unlockTailForOrder**
 
 `payment-schedule.service.ts` 在 `confirmCodReceived` 方法之后追加：
 
@@ -3258,7 +3258,7 @@ git commit -m "feat(pre-sale): 下单时经软依赖桥生成支付期次实例�
 
 在 `d:\zhao\vendure\packages\payment-schedule-plugin` 执行 `npm run build`（pre-sale 将以 lib require 它）。
 
-- [ ] **Step 2: bridge 追加支付桥函数**
+- [x] **Step 2: bridge 追加支付桥函数**
 
 `payment-schedule-bridge.ts` 末尾追加：
 
@@ -3304,7 +3304,7 @@ export async function payTailViaSchedule(
 }
 ```
 
-- [ ] **Step 3: 三薄壳改造**
+- [x] **Step 3: 三薄壳改造**
 
 `pre-sale.service.ts` 追加导入：
 
@@ -3396,7 +3396,7 @@ import { payTailViaSchedule, payViaSchedule } from './payment-schedule-bridge'; 
     }
 ```
 
-- [ ] **Step 4: e2e 薄壳回归**
+- [x] **Step 4: e2e 薄壳回归**
 
 4a. describe 末尾追加用例：
 
@@ -3459,7 +3459,7 @@ import { payTailViaSchedule, payViaSchedule } from './payment-schedule-bridge'; 
 4b. 跑全量：在 `d:\zhao\vendure\packages\pre-sale-plugin` 执行：`npm run e2e`
 预期：**全部 PASS**（既有旧路径用例因期次实例存在自动走新路径，行为等价）。
 
-- [ ] **Step 5: 构建 + Commit**
+- [x] **Step 5: 构建 + Commit**
 
 在 `d:\zhao\vendure\packages\pre-sale-plugin` 执行：`npm run build`
 
@@ -3475,7 +3475,7 @@ git commit -m "feat(pre-sale): 旧支付API薄壳化——期次存在时转发p
 
 **前置依赖：** `@vendure/pre-sale-plugin`、`@vendure/group-buy-plugin` 已构建（Task 10/13 后各 `npm run build`）。
 
-- [ ] **Step 1: 创建 e2e 文件（完整内容）**
+- [x] **Step 1: 创建 e2e 文件（完整内容）**
 
 ```typescript
 import { createTestEnvironment, registerInitializer, SqljsInitializer } from '@vendure/testing';
@@ -3893,7 +3893,7 @@ describe('PaymentSchedulePlugin · 期次调度主流程', () => {
 });
 ```
 
-- [ ] **Step 2: 删缓存并跑**
+- [x] **Step 2: 删缓存并跑**
 
 在 `d:\zhao\vendure\packages\payment-schedule-plugin` 执行：
 
@@ -3909,7 +3909,7 @@ npm run e2e
 - `joinGroupBuy` 报错：确认预售订单变体与团购活动 variantId 一致、订单在 ArrangingPayment；
 - `runScheduleScan` 计数为 0：时钟竞态 → 增大 `tick()` 秒数重试。
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```powershell
 git add packages/payment-schedule-plugin
@@ -3935,7 +3935,7 @@ git commit -m "test(payment-schedule): 期次调度主流程e2e（触发/COD环/
 - Create: `d:\zhao\vendure\packages\installment-plugin\src\installment-admin.resolver.ts`
 - Create: `d:\zhao\vendure\packages\installment-plugin\src\plugin.ts`
 
-- [ ] **Step 1: 四件套骨架**
+- [x] **Step 1: 四件套骨架**
 
 `package.json`：
 
@@ -3997,7 +3997,7 @@ export interface InstallmentPluginOptions {
 }
 ```
 
-- [ ] **Step 2: InstallmentPlan 实体**
+- [x] **Step 2: InstallmentPlan 实体**
 
 `src\installment-plan.entity.ts`：
 
@@ -4057,7 +4057,7 @@ export class InstallmentPlan extends VendureEntity implements ChannelAware {
 }
 ```
 
-- [ ] **Step 3: Service + Admin resolver + plugin 组装**
+- [x] **Step 3: Service + Admin resolver + plugin 组装**
 
 `src\installment.service.ts`：
 
@@ -4289,7 +4289,7 @@ export class InstallmentPlugin {
 }
 ```
 
-- [ ] **Step 4: 根目录链接 + 构建 + Commit**
+- [x] **Step 4: 根目录链接 + 构建 + Commit**
 
 在 `d:\zhao\vendure` 执行 `npm install`（workspaces 链接）。
 在 `d:\zhao\vendure\packages\installment-plugin` 执行 `npm run build`（预期成功）。
@@ -4309,7 +4309,7 @@ git commit -m "feat(installment): 分期计划插件骨架（InstallmentPlan 实
 - Modify: `d:\zhao\vendure\packages\dev-server\dev-config.ts`
 - Test: `d:\zhao\vendure\packages\installment-plugin\e2e\installment.e2e-spec.ts`
 
-- [ ] **Step 1: 软依赖桥（期次生成）**
+- [x] **Step 1: 软依赖桥（期次生成）**
 
 `src\installment-schedule-bridge.ts`：
 
@@ -4397,7 +4397,7 @@ export async function createInstallmentSchedule(
 
 > 注意：`createSchedule` 失败时向上抛（区别于 pre-sale 的吞错）——分期是主动选择，失败必须让用户感知。
 
-- [ ] **Step 2: Shop service 方法 + resolver**
+- [x] **Step 2: Shop service 方法 + resolver**
 
 `installment.service.ts` 追加导入与方法（`delete` 方法之后）：
 
@@ -4508,7 +4508,7 @@ export class InstallmentShopResolver {
 export * from './src/installment-shop.resolver';
 ```
 
-- [ ] **Step 3: dev-config 注册**
+- [x] **Step 3: dev-config 注册**
 
 `d:\zhao\vendure\packages\dev-server\dev-config.ts`：import 区追加 `InstallmentPlugin`（from '@vendure/installment-plugin'），plugins 数组 `PreSalePlugin.init({})`（约 522 行）之后追加：
 
@@ -4516,7 +4516,7 @@ export * from './src/installment-shop.resolver';
     InstallmentPlugin.init({}),
 ```
 
-- [ ] **Step 4: e2e（完整文件）**
+- [x] **Step 4: e2e（完整文件）**
 
 先构建依赖：`@vendure/payment-schedule-plugin`、`@vendure/pre-sale-plugin`（若未构建）→ 在 `d:\zhao\vendure` 执行 `npm run build -w @vendure/payment-schedule-plugin && npm run build -w @vendure/pre-sale-plugin`（PowerShell 分两条执行）。
 
@@ -4704,7 +4704,7 @@ describe('InstallmentPlugin · 分期', () => {
 
 > 注：`paySchedulePeriod` 对 locked 期次在 `date/interval` 已到点时补偿解锁（Task 4），`intervalCount=0` 的期次 `dueAt=下单时刻`，故无需等待扫描。倒数第二段 transition 断言以返回无 ErrorResult 为准（如需强断言可改 `expect(res.transitionOrderToState.state).toBe('Shipped')`）。
 
-- [ ] **Step 5: 删缓存 + 跑 e2e + 构建 + Commit**
+- [x] **Step 5: 删缓存 + 跑 e2e + 构建 + Commit**
 
 ```powershell
 Remove-Item -Recurse -Force e2e\__data__   # 若存在
@@ -4731,7 +4731,7 @@ git commit -m "feat(installment): Shop API（installmentPlans/enableInstallment�
 - Create: `d:\zhao\vendure\packages\rental-plugin\src\rental-admin.resolver.ts`
 - Create: `d:\zhao\vendure\packages\rental-plugin\src\plugin.ts`
 
-- [ ] **Step 1: 四件套骨架**
+- [x] **Step 1: 四件套骨架**
 
 `package.json`：
 
@@ -4793,7 +4793,7 @@ export interface RentalPluginOptions {
 }
 ```
 
-- [ ] **Step 2: RentalPlan 实体**
+- [x] **Step 2: RentalPlan 实体**
 
 `src\rental-plan.entity.ts`：
 
@@ -4858,7 +4858,7 @@ export class RentalPlan extends VendureEntity implements ChannelAware {
 }
 ```
 
-- [ ] **Step 3: Service + Admin resolver + plugin 组装**
+- [x] **Step 3: Service + Admin resolver + plugin 组装**
 
 `src\rental.service.ts`：
 
@@ -5097,7 +5097,7 @@ export class RentalPlugin {
 }
 ```
 
-- [ ] **Step 4: 根目录链接 + 构建 + Commit**
+- [x] **Step 4: 根目录链接 + 构建 + Commit**
 
 在 `d:\zhao\vendure` 执行 `npm install`（workspaces 链接）。
 在 `d:\zhao\vendure\packages\rental-plugin` 执行 `npm run build`（预期成功）。
@@ -5120,7 +5120,7 @@ git commit -m "feat(rental): 租赁计划插件骨架（RentalPlan 实体 + Admi
 - Modify: `d:\zhao\vendure\packages\dev-server\dev-config.ts`
 - Test: `d:\zhao\vendure\packages\rental-plugin\e2e\rental.e2e-spec.ts`
 
-- [ ] **Step 1: 软依赖桥（期次生成）**
+- [x] **Step 1: 软依赖桥（期次生成）**
 
 `src\rental-schedule-bridge.ts`：
 
@@ -5217,7 +5217,7 @@ export async function createRentalSchedule(
 
 > 注意：与 installment 相同——`createSchedule` 失败时向上抛（租赁是主动选择，失败必须让用户感知）。计划金额与订单商品总价相互独立：`paySchedulePeriod` 按期次金额收款（`PaymentService.createPayment(ctx, order, item.amount, ...)`），不校验与订单总价的合计关系。
 
-- [ ] **Step 2: Shop service 方法 + resolver**
+- [x] **Step 2: Shop service 方法 + resolver**
 
 `rental.service.ts` 追加导入与方法（`delete` 方法之后）：
 
@@ -5392,7 +5392,7 @@ export class RentalShopResolver {
 export * from './src/rental-shop.resolver';
 ```
 
-- [ ] **Step 3: dev-config 注册**
+- [x] **Step 3: dev-config 注册**
 
 `d:\zhao\vendure\packages\dev-server\dev-config.ts`：import 区追加 `RentalPlugin`（from '@vendure/rental-plugin'），plugins 数组 `InstallmentPlugin.init({})`（Task 16 Step 3 追加的行）之后追加：
 
@@ -5400,7 +5400,7 @@ export * from './src/rental-shop.resolver';
     RentalPlugin.init({}),
 ```
 
-- [ ] **Step 4: e2e（完整文件）**
+- [x] **Step 4: e2e（完整文件）**
 
 先构建依赖：`@vendure/payment-schedule-plugin`（若 Task 16 后无实体/schema 变更则不必重建）→ 在 `d:\zhao\vendure` 执行 `npm run build -w @vendure/payment-schedule-plugin`。
 
@@ -5646,7 +5646,7 @@ describe('RentalPlugin · 租赁', () => {
 > - 买断支付报 `Order state PaymentSettled does not allow period payment` → Task 4 常量 `PAYABLE_SOURCE_STATES` 未含 `PaymentSettled`（见 Task 4 修正）。
 > - 付租金报 `Shipped → PaymentSettled` 转移错误 → Task 5 状态机缺 `Shipped: { to: ['PaymentSettled'] }`（见 Task 5 修正）。
 
-- [ ] **Step 5: 删缓存 + 跑 e2e + 构建 + Commit**
+- [x] **Step 5: 删缓存 + 跑 e2e + 构建 + Commit**
 
 ```powershell
 Remove-Item -Recurse -Force e2e\__data__   # 若存在
@@ -5672,7 +5672,7 @@ C 端只消费 payment-schedule-plugin 的 Shop API（Task 9）：`paymentSchedu
 - Create: `d:\zhao\nshop\types\payment-schedule.ts`
 - Create: `d:\zhao\nshop\layers\base\app\composables\usePaymentSchedule.ts`
 
-- [ ] **Step 1: fragment + query/mutation 文档**（字段与 Task 9 Shop schema 逐字对应）
+- [x] **Step 1: fragment + query/mutation 文档**（字段与 Task 9 Shop schema 逐字对应）
 
 `gql\fragments\payment-schedule.gql`：
 
@@ -5734,7 +5734,7 @@ mutation CancelSchedule($orderId: ID!, $confirmForfeit: Boolean) {
 
 > 注：`GqlGetPaymentSchedule` / `GqlPaySchedulePeriod` / `GqlCancelSchedule` 由 codegen 全局注入（无需 import，用法与 `useAfterSales` 中的 Gql 函数一致）。
 
-- [ ] **Step 2: 刷新 schema + codegen**
+- [x] **Step 2: 刷新 schema + codegen**
 
 ```powershell
 # 启动本地 vendure dev-server（Task 9 已注册全部插件；若已在运行则跳过）
@@ -5750,7 +5750,7 @@ npm run postinstall                # nuxt prepare → codegen 生成三个 Gql �
 
 dev server 若正在运行需重启一次；若 Gql 函数未生成，跑一次 `npm run dev` 或 `npm run build` 触发模块 codegen。
 
-- [ ] **Step 3: 镜像 TS 类型**
+- [x] **Step 3: 镜像 TS 类型**
 
 `types\payment-schedule.ts`（与 `types/order.ts` 同级，经 `~~/types/...` 别名引用；日期一律 string）：
 
@@ -5817,7 +5817,7 @@ export interface PaymentSchedule {
 }
 ```
 
-- [ ] **Step 4: usePaymentSchedule composable**
+- [x] **Step 4: usePaymentSchedule composable**
 
 `layers\base\app\composables\usePaymentSchedule.ts`（错误取 `gqlErrors[0].message`，与 `useAfterSales` 一致）：
 
@@ -5888,7 +5888,7 @@ export function usePaymentSchedule() {
 }
 ```
 
-- [ ] **Step 5: 构建 + Commit**
+- [x] **Step 5: 构建 + Commit**
 
 ```powershell
 cd d:\zhao\nshop
@@ -5909,7 +5909,7 @@ git commit -m "feat(schedule): 支付计划 gql/镜像类型/usePaymentSchedule"
 - 组件注册名：`components/schedule/ScheduleDialog.vue` → `<ScheduleDialog>`、`ScheduleBar.vue` → `<ScheduleBar>`（Nuxt 目录前缀去重）。**模板必须用完整注册名**，否则 SSR 渲染空注释导致 hydration mismatch（与 product-detail 组件同坑）。本任务完成后在 `.nuxt/components.d.ts` 核对实际注册名，以生成结果为准。
 - Nuxt UI v4 的 UModal 用 `v-model:open`（与既有 `AfterSalesCreateModal` 一致）。
 
-- [ ] **Step 1: ScheduleDialog.vue**
+- [x] **Step 1: ScheduleDialog.vue**
 
 ```vue
 <script setup lang="ts">
@@ -6049,7 +6049,7 @@ function yuan(amount: number) {
 </template>
 ```
 
-- [ ] **Step 2: ScheduleBar.vue**
+- [x] **Step 2: ScheduleBar.vue**
 
 ```vue
 <script setup lang="ts">
@@ -6204,7 +6204,7 @@ async function pay(i: PaymentScheduleItem, method: string) {
 </template>
 ```
 
-- [ ] **Step 3: 构建 + Commit**
+- [x] **Step 3: 构建 + Commit**
 
 ```powershell
 cd d:\zhao\nshop
@@ -6223,7 +6223,7 @@ git commit -m "feat(schedule): 付首笔款弹窗（版式A）+ 支付计划条 
 
 i18n 机制（重要）：zh-CN 是兜底语言——其余 10 语言包经 `merge.ts` 的 deepMerge 以 zhMessages 为基底，**缺失词条自动回退中文**。故只需补 zh-CN（全量）与 en-US（英文翻译），其余语言包无需逐包补。
 
-- [ ] **Step 1: order-state.ts**
+- [x] **Step 1: order-state.ts**
 
 两处修改：
 
@@ -6244,7 +6244,7 @@ const PAYMENT_PENDING = new Set([
 
 `progressIndex` 无需改：两状态不在任何集合中，默认返回 0（进度条停在「支付」步，正确）。
 
-- [ ] **Step 2: zh-CN.ts 词条**
+- [x] **Step 2: zh-CN.ts 词条**
 
 `order` 节点 `stateProcessing` 后加一行；`zhMessages` 顶层（与 `order` 平级）新增 `schedule` 节点：
 
@@ -6299,7 +6299,7 @@ const PAYMENT_PENDING = new Set([
   },
 ```
 
-- [ ] **Step 3: en-US.ts 词条**
+- [x] **Step 3: en-US.ts 词条**
 
 en-US.ts 结构为 `defineI18nLocale(() => zhFallbackLocale({ ... }))`（以 zh 为基底 deepMerge），在其对象内 `order` 节点加 `statePartiallyPaid: "Partially paid"`，顶层加 `schedule` 节点：
 
@@ -6350,7 +6350,7 @@ en-US.ts 结构为 `defineI18nLocale(() => zhFallbackLocale({ ... }))`（以 zh 
   },
 ```
 
-- [ ] **Step 4: 订单详情页接入**
+- [x] **Step 4: 订单详情页接入**
 
 `layers\base\app\pages\account\orders\[code].vue`，script setup 追加：
 
@@ -6396,7 +6396,7 @@ template 在 `<OrderDetailRenderer>` 之后、`<AfterSalesCreateModal>` 之前�
     <ScheduleDialog v-model:open="scheduleDialogOpen" :order-id="order.id" :seq="scheduleSeq" @paid="onScheduleChanged" />
 ```
 
-- [ ] **Step 5: 构建 + Commit**
+- [x] **Step 5: 构建 + Commit**
 
 ```powershell
 cd d:\zhao\nshop
@@ -6411,7 +6411,7 @@ git commit -m "feat(schedule): 订单详情接入支付计划条与首笔款弹�
 - Create: `d:\zhao\docs\manual\payment-schedule\index.md`
 - Create: `d:\zhao\docs\manual\payment-schedule\images\*.png`（手机截图）
 
-- [ ] **Step 1: 准备三场景数据**
+- [x] **Step 1: 准备三场景数据**
 
 vendure dev-server（Task 9 已注册全部插件）+ nshop dev（`npm run dev`，GQL_HOST / CHANNEL_TOKEN 指向本地）。准备三笔顾客订单：
 
@@ -6419,7 +6419,7 @@ vendure dev-server（Task 9 已注册全部插件）+ nshop dev（`npm run dev`�
 2. 分期订单：InstallmentPlan（首付 20% + 3 期）→ 下单 → 首期 payable
 3. 租赁订单：RentalPlan（押金 + prepaid 租金）→ 下单 → 押金 payable
 
-- [ ] **Step 2: Playwright 手机视口截图（390×844，dpr=2）**
+- [x] **Step 2: Playwright 手机视口截图（390×844，dpr=2）**
 
 脚本要点（临时脚本，参照 `nshop/scripts/_shot_*.py` 既有模式，截图后即删）：
 
@@ -6432,7 +6432,7 @@ vendure dev-server（Task 9 已注册全部插件）+ nshop dev（`npm run dev`�
 
 > 截图空白优先检查组件注册名（应为 `<ScheduleBar>` / `<ScheduleDialog>`，SSR 渲染空注释即注册名不对）。
 
-- [ ] **Step 3: 操作手册**
+- [x] **Step 3: 操作手册**
 
 `docs\manual\payment-schedule\index.md` 结构（Admin 示例字段名与 Task 11/15/17/18/8 的 schema 逐字对应）：
 
@@ -6474,7 +6474,7 @@ date/interval/group_buy/manual 触发、COD 环、定金没收、订金退款、
 卖家违约双倍返还、买断扣减已付租金、还物退押、发货门控、PartiallyPaid 状态机。
 ```
 
-- [ ] **Step 4: 主仓提交**
+- [x] **Step 4: 主仓提交**
 
 ```powershell
 cd d:\zhao
@@ -6486,7 +6486,7 @@ git commit -m "docs(payment-schedule): 操作手册（功能/Admin API/C端截�
 
 ### Task 23: 四包 e2e 回归 + 构建核验 + 文档收尾 + 三仓提交部署
 
-- [ ] **Step 1: 四包 e2e 回归**（PowerShell 逐条执行；统一先删缓存避免 sqljs 旧库干扰）
+- [x] **Step 1: 四包 e2e 回归**（PowerShell 逐条执行；统一先删缓存避免 sqljs 旧库干扰）
 
 ```powershell
 cd d:\zhao\vendure\packages\payment-schedule-plugin
@@ -6503,21 +6503,21 @@ Remove-Item -Recurse -Force e2e\__data__
 npm run e2e
 ```
 
-- [ ] **Step 2: group-buy 构建核验**（events 导出无回归）
+- [x] **Step 2: group-buy 构建核验**（events 导出无回归）
 
 ```powershell
 cd d:\zhao\vendure\packages\group-buy-plugin
 npm run build
 ```
 
-- [ ] **Step 3: nshop 构建核验**
+- [x] **Step 3: nshop 构建核验**
 
 ```powershell
 cd d:\zhao\nshop
 npm run build
 ```
 
-- [ ] **Step 4: 计划文档勾选 + 三清单自检**
+- [x] **Step 4: 计划文档勾选 + 三清单自检**
 
 - 本文件所有 `- [ ]` → `- [x]`（执行过程逐任务已勾的核对一遍）。
 - 手册四要素核对：功能说明 / Admin API 示例 / C 端手机截图 / 测试用例清单。
@@ -6526,7 +6526,7 @@ npm run build
   2. **占位符扫描**：对本计划文档 grep `TODO|FIXME|placeholder|待补|略` 应无结果。
   3. **类型/签名一致性**：Task 2 `splitInstallmentAmounts` ↔ Task 16 require 引用；Task 13 `unlockTailForOrder` 签名 ↔ bridge `payTailViaSchedule`；Task 4 `paySchedulePeriod`/`getScheduleForOrder` ↔ Task 18/21 消费端；`meta` 链路 Task 3→4→9→18；Task 19 gql fragment 字段 ↔ Task 9 Shop schema 逐字一致。
 
-- [ ] **Step 5: 三仓提交、推送与部署**
+- [x] **Step 5: 三仓提交、推送与部署**
 
 - vendure 仓：回归若产生修复，单独 `fix(...)` 提交后 `git push`；后端部署按既有流程（服务器 `git pull` + `pm2 restart`，**本地构建铁律：服务器不构建**）。
 - nshop 仓：Task 19-21 各任务已提交；若有修复补提交后 `git push`，随后部署：`npm run deploy`（scripts/deploy.mjs，本地构建产物 scp 上服务器）。
