@@ -86,14 +86,33 @@ def main():
         page.wait_for_timeout(5000)  # 等 sso-exchange + 主菜单渲染
         shot(page, "3-main-menu")
 
-        # 5. 点「邀请」按钮（inviteRect: x=w-122..w-72, y=16..66 → 中心(293,41)）
-        page.mouse.click(293, 41)
+        # 5. 点「邀请」宫格——经 window.__xxlInviteRect 读取实时矩形（随布局/滚动更新，
+        #    避免硬编码坐标漂移）；若被滚出可视区则先轻滚回列表再点
+        rect = page.evaluate(
+            "() => (window.__xxlInviteRect && window.__xxlInviteRect()) || null"
+        )
+        assert rect, "未获取邀请按钮矩形（__xxlInviteRect 钩子缺失，检查 bundle 是否最新）"
+
+        def center(r):
+            return r["x"] + r["w"] / 2, r["y"] + r["h"] / 2
+
+        cx, cy = center(rect)
+        if cy < 0 or cy > 844:
+            page.mouse.wheel(0, cy - 400)
+            page.wait_for_timeout(600)
+            rect = page.evaluate(
+                "() => (window.__xxlInviteRect && window.__xxlInviteRect()) || null"
+            )
+            assert rect, "滚动后仍未获取邀请按钮矩形"
+            cx, cy = center(rect)
+        page.mouse.click(cx, cy)
+        print(f"[5] clicked invite at ({cx:.0f},{cy:.0f})")
         page.wait_for_timeout(1500)
         shot(page, "4-invite-dialog")
 
         # 6. 错误汇总
         real_errors = [e for e in errors if "favicon" not in e.lower()]
-        print(f"[5] console errors: {json.dumps(real_errors, ensure_ascii=False)[:800]}")
+        print(f"[6] console errors: {json.dumps(real_errors, ensure_ascii=False)[:800]}")
         browser.close()
         print("E2E_OK")
 
