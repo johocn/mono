@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <title>俄罗斯方块·典藏版</title>
+  <meta name="renderer" content="webkit" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="full-screen" content="true" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+  <link rel="icon" href="data:," />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #16213e;
+      font-family: "Microsoft YaHei","Noto Sans CJK SC","WenQuanYi Micro Hei",sans-serif; }
+    #GameCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; touch-action: none; }
+    #Loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+      color: #e0e0e0; font-size: 24px; z-index: 999; }
+  </style>
+</head>
+<body>
+  <div id="Loading">方块正在就位…</div>
+  <canvas id="GameCanvas"></canvas>
+  <!-- 生产环境配置：部署人按实际域名调整；改这里即可，无需重新构建 -->
+  <script>
+    window.__APP_ENV__ = {
+      VENDURE_API_URL: "",
+      GAME_SERVER_API_URL: "https://game.yourbao.cn",
+      SSO_LOGIN_URL: "https://h.joho.cn/#/pages/sso/login",
+      SSO_APP_CODE: "game-tetris",
+      SITE_URL: "https://game.yourbao.cn/tetris/",
+      MARKETING_API_BASE: "",
+      MARKETING_CAMPAIGN_CODE: ""
+    };
+  </script>
+  <script src="./wechat-share.js"></script>
+  <script src="./bundle.js"></script>
+</body>
+</html>

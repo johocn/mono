@@ -34,6 +34,7 @@ import { VipModule } from '@modules/vip/vip.module';
 import { MatchmakingModule } from '@modules/matchmaking/matchmaking.module';
 import { OfflineModule } from '@modules/offline/offline.module';
 import { XiaoxiaoleModule } from '@modules/xiaoxiaole/xiaoxiaole.module';
+import { TetrisModule } from '@modules/tetris/tetris.module';
 import { SchedulerModule } from '@scheduler/scheduler.module';
 import { HealthModule } from '@health/health.module';
 import { RequestIdMiddleware } from '@common/middleware/request-id.middleware';
@@ -81,6 +82,7 @@ import { RateLimitGuard } from '@common/guards/rate-limit.guard';
     MatchmakingModule,
     OfflineModule,
     XiaoxiaoleModule,
+    TetrisModule,
 
     // 定时任务
     SchedulerModule,

@@ -1,0 +1,17 @@
+{
+  "name": "tetris-classic-elder",
+  "version": "1.0.0",
+  "description": "俄罗斯方块·典藏版 - 适老化怀旧 H5 小游戏",
+  "scripts": {
+    "dev": "node scripts/build.mjs --watch",
+    "build": "npm run typecheck && node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "serve": "http-server bin -p 8080 -c-1 --cors"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "http-server": "^14.1.0",
+    "esbuild": "^0.21.0"
+  }
+}
