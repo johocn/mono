@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
+import { createHash } from 'crypto';
 import { AuthService } from './auth.service';
 import { AuthAccount } from './entities/auth-account.entity';
 import { AccountLoginLog } from './entities/account-login-log.entity';
@@ -150,5 +151,28 @@ describe('AuthService', () => {
     });
     const result = await service.validateToken({ accountId: '1', tokenVersion: 5, type: 'player' });
     expect(result).toBe(false);
+  });
+
+  it('should refresh access token with valid refresh token', async () => {
+    const plainRt = 'refresh-plain-token-0123456789abcdef';
+    const hash = createHash('sha256').update(plainRt).digest('hex');
+    mockAccountRepo.findOne.mockResolvedValue({
+      id: '1', tokenVersion: 3, status: AccountStatus.ACTIVE, refreshTokenHash: hash, banExpireAt: null,
+    });
+    mockPlayerService.getByAccountId.mockResolvedValue({ id: 'p1' });
+    const result = await service.refresh(plainRt, '127.0.0.1', 'device-1');
+    expect(result.token).toBe('mock-jwt-token');
+    expect(result.refreshToken).toBeDefined();
+    expect(result.refreshToken).not.toBe(plainRt);
+    expect(result.expiresIn).toBe(7 * 24 * 3600);
+    expect(mockAccountRepo.update).toHaveBeenCalledWith(
+      { id: '1' },
+      expect.objectContaining({ tokenVersion: 4, refreshTokenHash: expect.any(String) }),
+    );
+  });
+
+  it('should throw on refresh with invalid refresh token', async () => {
+    mockAccountRepo.findOne.mockResolvedValue(null);
+    await expect(service.refresh('bad-token', '127.0.0.1')).rejects.toThrow(GameException);
   });
 });

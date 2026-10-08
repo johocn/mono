@@ -41,6 +41,10 @@ export class AuthAccount {
   @Column({ name: 'token_version', type: 'int', default: 0 })
   tokenVersion: number;
 
+  /** 刷新令牌哈希（SHA-256）：登录/SSO 换会话/刷新时轮换，用于离线续期避免反复跳 SSO */
+  @Column({ name: 'refresh_token_hash', type: 'varchar', length: 255, nullable: true })
+  refreshTokenHash: string | null;
+
   /** SSO 用户唯一键（/v1/user/me 的 uuid 字段），SSO 登录对齐用 */
   @Column({ name: 'sso_uuid', type: 'varchar', length: 64, nullable: true })
   ssoUuid: string | null;

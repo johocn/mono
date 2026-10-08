@@ -4,6 +4,7 @@ import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { SsoExchangeDto } from './dto/sso-exchange.dto';
+import { RefreshDto } from './dto/refresh.dto';
 import { Public } from '@common/decorators/public.decorator';
 import { RateLimit } from '@common/decorators/rate-limit.decorator';
 
@@ -41,5 +42,13 @@ export class AuthController {
   @RateLimit({ windowSeconds: 60, maxRequests: 20 })
   async ssoExchange(@Body() dto: SsoExchangeDto, @Ip() ip: string, @Headers('user-agent') userAgent?: string) {
     return this.authService.ssoExchange(dto.accessToken, dto.claimAccountId, ip, dto.deviceId ?? userAgent);
+  }
+
+  @Public()
+  @Post('refresh')
+  @ApiOperation({ summary: '刷新访问令牌（refresh token 换发新 access token，并轮换 refresh token）' })
+  @RateLimit({ windowSeconds: 60, maxRequests: 30 })
+  async refresh(@Body() dto: RefreshDto, @Ip() ip: string, @Headers('user-agent') userAgent?: string) {
+    return this.authService.refresh(dto.refreshToken, ip, userAgent);
   }
 }

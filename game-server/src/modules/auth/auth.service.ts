@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { JwtService, JwtSignOptions } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes, createHash } from 'crypto';
 import { AuthAccount } from './entities/auth-account.entity';
 import { AccountLoginLog } from './entities/account-login-log.entity';
 import { PlayerService } from '@modules/player/player.service';
@@ -23,6 +23,10 @@ export interface AuthResult {
   token: string;
   accountId: string;
   playerId: string;
+  /** 刷新令牌（明文，仅本次返回一次；后续用它调 /auth/refresh 换发新 access token） */
+  refreshToken: string;
+  /** access token 有效期（秒），前端据此主动续期 */
+  expiresIn: number;
 }
 
 @Injectable()
@@ -47,6 +51,30 @@ export class AuthService {
     return v ? v.slice(0, 250) : null;
   }
 
+  /** access token 有效期（秒），供前端主动续期；由配置 expiresIn（如 '7d'）解析 */
+  private get expiresInSeconds(): number {
+    const m = /^(\d+)\s*(s|m|h|d)$/i.exec(String(this.jwtExpiresIn || ''));
+    if (!m) return 7 * 24 * 3600;
+    const n = parseInt(m[1], 10);
+    const unit = m[2].toLowerCase();
+    const mult = { s: 1, m: 60, h: 3600, d: 86400 }[unit] ?? 1;
+    return n * mult;
+  }
+
+  /** 生成刷新令牌：返回明文（下发客户端）与 SHA-256 哈希（落库） */
+  private generateRefreshToken(): { plain: string; hash: string } {
+    const plain = randomBytes(32).toString('hex');
+    const hash = createHash('sha256').update(plain).digest('hex');
+    return { plain, hash };
+  }
+
+  /** 为账号轮换刷新令牌（旧令牌随之失效），返回明文 */
+  private async rotateRefreshToken(accountId: string): Promise<string> {
+    const { plain, hash } = this.generateRefreshToken();
+    await this.accountRepo.update({ id: accountId }, { refreshTokenHash: hash });
+    return plain;
+  }
+
   async register(username: string, password: string, nickname: string, deviceId?: string): Promise<AuthResult> {
     const existing = await this.accountRepo.findOne({ where: { username } });
     if (existing) {
@@ -65,8 +93,9 @@ export class AuthService {
     const savedAccount = await this.accountRepo.save(account);
     const player = await this.playerService.createPlayer(savedAccount.id, nickname);
     const token = this.generateToken(savedAccount.id, player.id, savedAccount.tokenVersion);
+    const refreshToken = await this.rotateRefreshToken(savedAccount.id);
 
-    return { token, accountId: savedAccount.id, playerId: player.id };
+    return { token, accountId: savedAccount.id, playerId: player.id, refreshToken, expiresIn: this.expiresInSeconds };
   }
 
   async login(username: string, password: string, loginIp: string, deviceInfo?: string): Promise<AuthResult> {
@@ -102,7 +131,8 @@ export class AuthService {
     await this.recordLoginLog(account.id, loginIp, deviceInfo, 'success');
 
     const token = this.generateToken(account.id, player.id, newTokenVersion);
-    return { token, accountId: account.id, playerId: player.id };
+    const refreshToken = await this.rotateRefreshToken(account.id);
+    return { token, accountId: account.id, playerId: player.id, refreshToken, expiresIn: this.expiresInSeconds };
   }
 
   async createGuest(loginIp: string, deviceInfo?: string): Promise<AuthResult> {
@@ -119,8 +149,9 @@ export class AuthService {
     const player = await this.playerService.createPlayer(savedAccount.id, nickname);
     await this.recordLoginLog(savedAccount.id, loginIp, deviceInfo, 'success');
     const token = this.generateToken(savedAccount.id, player.id, savedAccount.tokenVersion);
+    const refreshToken = await this.rotateRefreshToken(savedAccount.id);
 
-    return { token, accountId: savedAccount.id, playerId: player.id };
+    return { token, accountId: savedAccount.id, playerId: player.id, refreshToken, expiresIn: this.expiresInSeconds };
   }
 
   async validateToken(payload: JwtPayload): Promise<boolean> {
@@ -129,6 +160,51 @@ export class AuthService {
     if (account.status === AccountStatus.BANNED) return false;
     if (account.tokenVersion !== payload.tokenVersion) return false;
     return true;
+  }
+
+  /**
+   * 刷新访问令牌：用 refreshToken 换发新 access token，并轮换 refresh token。
+   * - 成功：返回新 token / refreshToken / expiresIn，前端持久化后下次到期再用新 refreshToken 续期
+   * - 失败（refresh token 失效、账号封禁）：抛 GameException，前端应降级为重新 SSO
+   */
+  async refresh(refreshToken: string, loginIp: string, deviceInfo?: string): Promise<AuthResult> {
+    if (!refreshToken) {
+      throw new GameException(ErrorCodes.TOKEN_INVALID, 'refresh token 缺失');
+    }
+    const incomingHash = createHash('sha256').update(refreshToken).digest('hex');
+    const account = await this.accountRepo.findOne({ where: { refreshTokenHash: incomingHash } });
+    if (!account) {
+      throw new GameException(ErrorCodes.TOKEN_INVALID, 'refresh token 无效，请重新登录');
+    }
+    if (account.status === AccountStatus.BANNED) {
+      if (!account.banExpireAt || account.banExpireAt > new Date()) {
+        throw new GameException(ErrorCodes.ACCOUNT_BANNED, '账号已被封禁');
+      }
+      await this.accountRepo.update({ id: account.id }, { status: AccountStatus.ACTIVE, banReason: null, banExpireAt: null });
+      account.status = AccountStatus.ACTIVE;
+    }
+
+    const player = await this.playerService.getByAccountId(account.id);
+    if (!player) {
+      throw new GameException(ErrorCodes.PLAYER_NOT_FOUND, '玩家档案不存在');
+    }
+
+    const newTokenVersion = account.tokenVersion + 1;
+    const { plain, hash } = this.generateRefreshToken();
+    await this.accountRepo.update(
+      { id: account.id },
+      { tokenVersion: newTokenVersion, refreshTokenHash: hash, lastLoginAt: new Date() },
+    );
+    await this.recordLoginLog(account.id, loginIp, deviceInfo, 'success');
+
+    const token = this.generateToken(account.id, player.id, newTokenVersion);
+    return {
+      token,
+      accountId: account.id,
+      playerId: player.id,
+      refreshToken: plain,
+      expiresIn: this.expiresInSeconds,
+    };
   }
 
   /**
@@ -207,6 +283,7 @@ export class AuthService {
     await this.recordLoginLog(account.id, loginIp, deviceInfo, 'success');
 
     const token = this.generateToken(account.id, player.id, newTokenVersion);
+    const refreshToken = await this.rotateRefreshToken(account.id);
     return {
       token,
       accountId: account.id,
@@ -214,6 +291,8 @@ export class AuthService {
       ownInviteCode: account.inviteCode ?? ssoUser.ownInviteCode,
       nickname: ssoUser.nickname,
       claimed,
+      refreshToken,
+      expiresIn: this.expiresInSeconds,
     };
   }
 

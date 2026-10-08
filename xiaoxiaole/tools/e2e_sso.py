@@ -10,7 +10,7 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-BASE = "https://game.joho.cn"
+BASE = "https://game.yourbao.cn"
 SSO_USER = "gametest01"
 SSO_PASS = "a963963"
 SHOT_DIR = Path(r"d:\zhao\xiaoxiaole\design\e2e-sso")
