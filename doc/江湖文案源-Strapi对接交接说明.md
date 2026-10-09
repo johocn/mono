@@ -266,10 +266,10 @@ OK    段位阶梯 jianghuRankLadder      -> 9 档
 
 **因此「能不能玩」目前取决于两件与后台无关的事：**
 
-1. **玩法主体未播种**：事件 0、大厅任务 0、情报 0。需 admin 权限调 `jianghuCreateEvent` / `jianghuCreateTask`（权限 `CAMPUS_JIANGHU_PERMISSION`），缺 superadmin 凭据（生产 `.env` 中未发现）。
+1. **玩法主体未完整播种**：事件已播种 1 条（2026-10-09 DB 直插 id=1，见五.2），大厅任务 0、情报 0。任务/情报需 admin 权限调 `jianghuCreateTask` 等（权限 `CAMPUS_JIANGHU_PERMISSION`），缺 superadmin 凭据（生产 `.env` 中未发现）。
 2. **账号需为骑手**：`jianghuProfile` 要求「已成为骑手且审核通过」，测试账号 `jianghu-e2e@local.test` 不是骑手。这是玩法前置条件，不是缺陷。
 
-**新增工具**：`start-local-test.ps1 -Live`（直连线上）、`verify-jianghu-playable.mjs`（可玩性体检）。这两个尚未提交。
+**新增工具**：`start-local-test.ps1 -Live`（直连线上）、`verify-jianghu-playable.mjs`（可玩性体检）。已随联调工具收口提交（vendure baa60fd71），服务器已同步。
 
 **遗留事项**
 
