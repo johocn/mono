@@ -31,19 +31,22 @@ interface SceneLike {
 let active: SceneLike | null = null;
 let lastT = performance.now();
 
-function setScene(s: SceneLike): void {
+// 注意顺序：必须先销毁旧场景（其内部会 clearHandlers 清空 touch/drag handler），
+// 再构造并激活新场景（新场景构造函数里负责重新 setTouchHandler 等）。
+// 若先构造后销毁，新场景刚设好的 handler 会被旧场景的 destroy 清掉 → 整页按钮失效。
+function setScene(factory: () => SceneLike): void {
   active?.destroy?.();
-  active = s;
+  active = factory();
 }
 
 function goMenu(): void {
   exitGuard.setAtHome(true);
-  setScene(new MainMenuScene(startGame, goShop, goSkin));
+  setScene(() => new MainMenuScene(startGame, goShop, goSkin));
 }
 
 function startGame(): void {
   exitGuard.setAtHome(false);
-  setScene(new TetrisScene(TETRIS_CONFIG, {
+  setScene(() => new TetrisScene(TETRIS_CONFIG, {
     onComplete: (r: LevelResult) => showResult(r),
     onExit: goMenu,
     onRestart: startGame,
@@ -52,15 +55,15 @@ function startGame(): void {
 
 function showResult(r: LevelResult): void {
   exitGuard.setAtHome(false);
-  setScene(new ResultScene(r, startGame, goMenu, goShop));
+  setScene(() => new ResultScene(r, startGame, goMenu, goShop));
 }
 
 function goShop(): void {
-  setScene(new ShopScene(goMenu));
+  setScene(() => new ShopScene(goMenu));
 }
 
 function goSkin(): void {
-  setScene(new SkinScene(goMenu));
+  setScene(() => new SkinScene(goMenu));
 }
 
 function showExitConfirm(): void {
