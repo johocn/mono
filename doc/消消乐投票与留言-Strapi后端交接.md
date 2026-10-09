@@ -344,5 +344,10 @@ curl "https://h.joho.cn/api/zhao-website/v1/interactions/stats?domain=game.yourb
   重新部署 #2 后消失，判定为进程瞬态异常；控制器已保留 `[lead.track]` 成功/异常诊断日志备查。
 - E2E 期间唯一 console 错误为 `POST /api/client/v1/xiao/points/earn` 400（积分领取接口，
   与本次投票/留言功能无关的既有问题，待另查）。
+  **→ 后续已查明并修复**：前端 `AuthStore.authedFetch` 发 JSON body 未设 `Content-Type: application/json`，
+  浏览器默认 `text/plain` 导致 Nest 端 DTO 校验全挂恒 400（对照实验实证：
+  不带 CT=400、带 CT=201 入账成功）。已在 `authedFetch` 统一补头（对齐 tetris 既有修复），
+  同款缺陷波及 publish/redeem/gift/unlockRmb 一并解决，已随 bundle 上线并回归通过
+  （console errors 清零，`earn_daily` 真实入账 `balance 96`）。
 - 验收数据终态：投票/点赞全部 toggle 清理（活跃 0 条）；留言保留「联调测试」与「E2E验收」样例
   数条作为归属证据，运营可在后台「线索」中按 `sourceId=xiaoxiaole` 过滤查看。
