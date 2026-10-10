@@ -66,8 +66,8 @@
 
 ### Task 8: C 端方案选择
 - Create: `ProductDetailRatePlanChips.vue`；Modify: useHotelStay/useBuyActions 传 ratePlanCode；PricePreview 按方案重算
-- [ ] chips 切换重算逐晚价与合计（A/B 两版式共用）
-- [ ] i18n 12 语言；手机截图（chips 态）
+- [x] chips 切换重算逐晚价与合计（A/B 两版式共用）
+- [x] i18n 12 语言；手机截图（chips 态）
 
 ### Task 9: web-admin 方案管理
 - [ ] 商品编辑页「房价方案」卡：列表（名称/类型/调整/专属/启停）+ 新建/编辑表单 + 删除确认

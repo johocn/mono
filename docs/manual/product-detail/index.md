@@ -16,6 +16,7 @@
 - [7. 商品类型标记（2026-10-10）](#7-商品类型标记2026-10-10)
 - [8. 酒店房量日历（2026-10-10）](#8-酒店房量日历2026-10-10)
 - [9. 酒店房态余量展示（2026-10-10）](#9-酒店房态余量展示2026-10-10)
+- [10. 房价方案选择（2026-10-10）](#10-房价方案选择2026-10-10)
 
 ---
 
@@ -632,6 +633,44 @@ PASS fa-IR  渲染命中语言包 4/5 | 与中文同值键: 无 | 原始 key 泄
 - **含头不含尾**：`hotelAvailability` 返回 `checkIn` 起至 `checkOut` 前一晚的逐晚数据（离店当晚不计）；区间最紧一晚决定提示档位
 - **不限房**：某晚 `remaining = null` 表示不限房，不参与「最紧」比较；`closed = true` 当晚按 0 间计
 - **双保险**：前端拦截只是体验层；并发超卖由服务端 `OrderInterceptor` 最终校验——即便前端提示过期，下单时后端仍会返回 `HOTEL_SOLD_OUT: <date>`，C 端解析后转成同样的「{date} 已满房」toast（i18n 词条 `messages.hotel.roomsSoldOut`）
+- 文案已覆盖全部 12 语言包（zh-CN / en-US / ru-RU / pt-BR / ko-KR / ja-JP / it-IT / fr-FR / fa-IR / es-ES / bg-BG / de-DE）
+
+---
+
+## 10. 房价方案选择（2026-10-10）
+
+> 范围：nshop C 端酒店详情页在逐日计价上方新增 **房价方案 chips**（`ProductDetailRatePlanChips`），选中方案后逐日计价即时按方案重算；下单时订单行携带 `ratePlanCode`，由后端计价策略按同一方案口径出价。方案数据来自 P2 房价方案（`hotelRatePlans` shop API）。
+
+### 10.1 方案 chips
+
+- 首个 chip 固定为 **标准价**（清空选择，回退基线价）；其后为该房型启用的方案，按后台创建顺序排列
+- chip 文案 = 角标 + 名称 + 预估价：`特惠 早鸟9折 ¥295/晚`、`协议价 协议价 ¥258/晚`；预估价为后端 `avgNightlyEstimateCent`（按基价折算的每晚安估价，非精确总价）
+- 角标按类型自动标注：discount → `特惠`、fixed → `协议价`、surcharge → `节假日`、memberOnly → `会员`（另加成员专属描边样式）
+- **会员方案 fail-closed**：`memberOnly` 方案仅对会员等级达标的登录顾客可见——匿名请求不返回（下图匿名态只有 3 个 chip，VIP3 会员价不可见），接口异常时静默降级为不展示 chips
+
+![房价方案 chips 默认态（标准价选中）](../shots/2026-10-10-hotel-rate-plan/01-std-baseline.png)
+
+### 10.2 选中方案联动重算
+
+选中方案后，「逐日计价」标题旁显示方案名角标，逐晚价、预估总价、日均价全部按方案口径重算（与后端订单行计价同一语义）：
+
+| 方案 | 逐晚口径 | 连住优惠 | 示例（¥328 基价 × 周末 1.2 × 2 晚） |
+| --- | --- | --- | --- |
+| 标准价（基线） | 日类型段价 | 叠加 | ¥394/晚，总价 ¥787 |
+| 早鸟9折（discount 900） | 段价 ×0.9 | 继续叠加 | ¥354/晚，总价 ¥708 |
+| 协议价（fixed 25800） | 固定 ¥258/晚 | **不叠加** | ¥258/晚，总价 ¥516 |
+| 节假日（surcharge） | 段价 + 加价额 | 继续叠加 | 逐晚 +加价额 |
+
+![选中早鸟9折：总价 ¥708 / 日均价 ¥354](../shots/2026-10-10-hotel-rate-plan/02-select-disc900.png)
+
+![选中协议价：总价 ¥516 / 日均价 ¥258](../shots/2026-10-10-hotel-rate-plan/03-select-protocol.png)
+
+### 10.3 口径与兜底说明
+
+- **同源计价**：前端 `calcNightPrices(cfg, in, out, ratePlan)` 与后端 `rate-plan-logic.applyNightlyAdjustment` 同一语义（discount 千分比 / fixed 固定 / surcharge 加价；fixed 不叠连住折扣），前后端展示与订单行价格一致；订单行按 **含税挂牌价** 口径出价（`priceIncludesTax: true`），不再被渠道默认税率放大
+- **下单携带**：加入购物车 / 立即购买的订单行 `customFields.ratePlanCode` 记录所选方案（未选方案不带）；后端按 code + 入住日 + 会员等级校验可售后重算价格，方案失效自动回退基价
+- **失效自愈**：方案列表刷新后，已选方案若失效（停用/不可见/不在返回中）自动清空选择回标准价
+- **版式开关**：chips 区块受详情页版式配置 `blocks.ratePlans` 控制（默认开启），classic/floor/dualBuy 三版式共用同一组件
 - 文案已覆盖全部 12 语言包（zh-CN / en-US / ru-RU / pt-BR / ko-KR / ja-JP / it-IT / fr-FR / fa-IR / es-ES / bg-BG / de-DE）
 
 ---
