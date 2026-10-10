@@ -38,6 +38,26 @@ npm run serve                 # 启动 http-server，默认 http://localhost:808
 
 ---
 
+## 🚀 部署上线（唯一入口：`npm run deploy`）
+
+```bash
+npm run deploy       # 本地构建 → 服务器备份 .bak_<ts> → 成对上传 → 双域校验
+```
+
+- 目标：odoo 服务器 `/opt/1panel/apps/openresty/openresty/www/sites/game.joho.cn/tour/xxl/`
+  （game.yourbao.cn 的 `/tour/` 与 game.joho.cn 同源共享该目录），入口
+  `https://game.yourbao.cn/tour/xxl/` 与 `https://game.joho.cn/tour/xxl.html`
+- **铁律：bundle.js 与 index.html 必须成对部署**。本地 `.env` 处于预览模式时
+  （`GAME_SERVER_API_URL` / `FORCE_SSO_LOGIN` 置空），重构建的 bundle 里这些值为空，
+  线上配置全靠 `bin/index.html` 的 `window.__APP_ENV__` 运行时注入（优先级高于构建期
+  `.env`，见 `src/core/Env.ts`）——只换 bundle 不换 index.html 会丢 SSO 强制登录和后端连接。
+  `scripts/deploy.mjs` 永远成对上传并做双域版本戳校验，勿再手工单独 scp。
+- 本地预览要放行游客（不跳 SSO）：把 `bin/index.html` 里 `FORCE_SSO_LOGIN: "1"` 改为 `""`，
+  该文件手工维护、改动后会随下次部署带上，注意别把生产值改忘了还原。
+- 回滚：服务器同名目录内 `bundle.js.bak_deploy_<ts>` / `index.html.bak_deploy_<ts>` 成对拷回即可。
+
+---
+
 ## 目录结构
 
 ```
