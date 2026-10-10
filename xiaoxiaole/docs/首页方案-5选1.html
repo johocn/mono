@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>首页方案 5 选 1 · 脑力花园</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif;
+    background:#0f1226; color:#e9ecf5; padding:24px 16px 60px;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1 { font-size:20px; font-weight:700; text-align:center; margin-bottom:4px; }
+  .sub { text-align:center; color:#9aa3c7; font-size:13px; margin-bottom:18px; }
+  .tabs { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:22px; }
+  .tabs button {
+    border:none; cursor:pointer; padding:9px 14px; border-radius:999px;
+    font-size:13px; font-weight:600; background:#22264a; color:#c9cffb; transition:.2s;
+  }
+  .tabs button:hover { background:#2e3463; }
+  .tabs button.active { background:#6c8cff; color:#fff; box-shadow:0 6px 18px rgba(108,140,255,.45); }
+  .stage { display:flex; justify-content:center; }
+  .panel { display:none; }
+  .panel.active { display:block; animation:fade .35s ease; }
+  @keyframes fade { from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:none;} }
+  .desc { max-width:390px; margin:16px auto 0; background:#1a1e3c; border-radius:14px; padding:14px 16px; font-size:13px; line-height:1.7; color:#c7cdf0; }
+  .desc b { color:#fff; }
+  .pick { display:block; text-align:center; margin:12px auto 0; width:200px; padding:11px; border-radius:12px;
+          background:linear-gradient(90deg,#6c8cff,#9b6cff); color:#fff; font-weight:700; text-decoration:none; font-size:14px; }
+
+  /* ---------- 手机框 ---------- */
+  .phone { width:390px; height:780px; border-radius:42px; padding:12px;
+    background:linear-gradient(160deg,#2a2f55,#15182f); box-shadow:0 30px 60px rgba(0,0,0,.5),inset 0 0 0 2px #3a4070;
+    position:relative; }
+  .screen { width:100%; height:100%; border-radius:32px; overflow:hidden; position:relative; }
+
+  /* ========== 方案1 糖果梦幻 ========== */
+  .s1 { background:linear-gradient(170deg,#ffd6f0 0%,#ffb3e6 45%,#c9a7ff 100%); }
+  .s1 .sky { position:absolute; inset:0; background:
+      radial-gradient(circle at 80% 12%,rgba(255,255,255,.9) 0 6px,transparent 7px),
+      radial-gradient(circle at 20% 22%,rgba(255,255,255,.7) 0 4px,transparent 5px); }
+  .s1 .title { text-align:center; padding:64px 0 8px; font-size:30px; font-weight:800; color:#7a3fb0;
+    text-shadow:0 2px 0 #fff,0 4px 10px rgba(122,63,176,.25); letter-spacing:2px; }
+  .s1 .title small { display:block; font-size:13px; color:#a85fd0; font-weight:600; letter-spacing:4px; margin-top:4px; }
+  .s1 .hud { display:flex; gap:10px; justify-content:center; margin:14px 22px 0; }
+  .s1 .chip { flex:1; background:rgba(255,255,255,.65); border-radius:14px; padding:8px; text-align:center;
+    font-size:12px; color:#7a3fb0; font-weight:700; backdrop-filter:blur(4px); }
+  .s1 .chip span { display:block; font-size:16px; color:#5a2d8a; }
+  .s1 .hero { width:150px; height:150px; margin:22px auto 10px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#fff,#ffd0f0 60%,#ff9ee0);
+    box-shadow:0 12px 28px rgba(200,80,180,.4),inset 0 0 0 6px rgba(255,255,255,.6);
+    display:flex; align-items:center; justify-content:center; font-size:64px; }
+  .s1 .btns { position:absolute; bottom:0; left:0; right:0; padding:22px 26px 34px; display:flex; flex-direction:column; gap:12px; }
+  .s1 .b-primary { background:#fff; color:#c44cc4; font-weight:800; font-size:18px; border-radius:18px; padding:16px;
+    text-align:center; box-shadow:0 10px 22px rgba(196,76,196,.35); }
+  .s1 .b-row { display:flex; gap:12px; }
+  .s1 .b-sub { flex:1; background:rgba(255,255,255,.55); color:#8a3fb0; font-weight:700; border-radius:16px; padding:13px;
+    text-align:center; font-size:13px; backdrop-filter:blur(4px); }
+
+  /* ========== 方案2 清新自然 ========== */
+  .s2 { background:linear-gradient(180deg,#eafaf1 0%,#dff3ec 50%,#cdeede 100%); }
+  .s2 .title { text-align:center; padding:58px 0 6px; font-size:27px; font-weight:800; color:#2e8b6b; letter-spacing:3px; }
+  .s2 .title small { display:block; font-size:12px; color:#5fae8e; letter-spacing:5px; margin-top:4px; font-weight:600; }
+  .s2 .leaf { position:absolute; top:90px; right:26px; font-size:30px; opacity:.5; }
+  .s2 .hud { display:flex; gap:10px; justify-content:center; margin:18px 30px 0; }
+  .s2 .chip { flex:1; background:#fff; border-radius:14px; padding:10px; text-align:center; font-size:12px; color:#3f8f70;
+    box-shadow:0 6px 14px rgba(46,139,107,.12); font-weight:700; }
+  .s2 .chip span { display:block; font-size:16px; color:#2e8b6b; }
+  .s2 .hero { width:160px; height:120px; margin:24px auto 6px; border-radius:24px;
+    background:linear-gradient(135deg,#bde9d4,#9fe0c4); display:flex; align-items:center; justify-content:center; font-size:56px;
+    box-shadow:0 14px 30px rgba(46,139,107,.2); }
+  .s2 .btns { position:absolute; bottom:0; left:0; right:0; padding:24px 30px 38px; display:flex; flex-direction:column; gap:14px; }
+  .s2 .b-primary { background:#2e8b6b; color:#fff; font-weight:800; font-size:18px; border-radius:18px; padding:16px; text-align:center;
+    box-shadow:0 12px 24px rgba(46,139,107,.3); }
+  .s2 .b-row { display:flex; gap:12px; }
+  .s2 .b-sub { flex:1; background:#fff; color:#3f8f70; font-weight:700; border-radius:16px; padding:14px; text-align:center;
+    font-size:13px; box-shadow:0 6px 14px rgba(46,139,107,.1); }
+
+  /* ========== 方案3 暗夜霓虹 ========== */
+  .s3 { background:radial-gradient(circle at 50% 0%,#1b1f4a,#0a0c1f 70%); }
+  .s3 .title { text-align:center; padding:60px 0 6px; font-size:27px; font-weight:800; color:#fff;
+    text-shadow:0 0 12px #4be1ff,0 0 24px #c44bff; letter-spacing:3px; }
+  .s3 .title small { display:block; font-size:12px; color:#7fd4ff; letter-spacing:5px; margin-top:4px; font-weight:600; text-shadow:0 0 8px #4be1ff; }
+  .s3 .hud { display:flex; gap:10px; justify-content:center; margin:18px 26px 0; }
+  .s3 .chip { flex:1; background:rgba(255,255,255,.06); border:1px solid rgba(120,200,255,.35); border-radius:14px; padding:9px;
+    text-align:center; font-size:12px; color:#9fe0ff; font-weight:700; }
+  .s3 .chip span { display:block; font-size:16px; color:#fff; }
+  .s3 .hero { width:150px; height:150px; margin:22px auto 8px; border-radius:50%;
+    background:conic-gradient(from 0deg,#4be1ff,#c44bff,#ffd24b,#4be1ff);
+    display:flex; align-items:center; justify-content:center; font-size:60px;
+    box-shadow:0 0 30px rgba(120,200,255,.5); }
+  .s3 .btns { position:absolute; bottom:0; left:0; right:0; padding:24px 26px 36px; display:flex; flex-direction:column; gap:12px; }
+  .s3 .b-primary { background:linear-gradient(90deg,#4be1ff,#c44bff); color:#0a0c1f; font-weight:800; font-size:18px; border-radius:16px;
+    padding:16px; text-align:center; box-shadow:0 0 24px rgba(120,200,255,.5); }
+  .s3 .b-row { display:flex; gap:12px; }
+  .s3 .b-sub { flex:1; background:rgba(255,255,255,.06); border:1px solid rgba(120,200,255,.3); color:#bfe9ff; font-weight:700;
+    border-radius:14px; padding:13px; text-align:center; font-size:13px; }
+
+  /* ========== 方案4 国风雅韵 ========== */
+  .s4 { background:linear-gradient(180deg,#7a1f23 0%,#5e1519 60%,#3f0e12 100%); }
+  .s4 .title { text-align:center; padding:58px 0 6px; font-size:28px; font-weight:800; color:#f5c542;
+    letter-spacing:6px; text-shadow:0 2px 6px rgba(0,0,0,.4); font-family:"STKaiti","KaiTi","Microsoft YaHei",serif; }
+  .s4 .title small { display:block; font-size:12px; color:#e7b34a; letter-spacing:6px; margin-top:4px; font-weight:600; }
+  .s4 .seal { position:absolute; top:84px; right:30px; width:42px; height:42px; border-radius:8px; background:#c8302f;
+    color:#f5c542; font-size:20px; display:flex; align-items:center; justify-content:center; font-family:serif; transform:rotate(-6deg);
+    box-shadow:0 4px 10px rgba(0,0,0,.4); }
+  .s4 .hud { display:flex; gap:10px; justify-content:center; margin:18px 30px 0; }
+  .s4 .chip { flex:1; background:rgba(245,197,66,.12); border:1px solid rgba(245,197,66,.4); border-radius:12px; padding:9px;
+    text-align:center; font-size:12px; color:#f0c75a; font-weight:700; }
+  .s4 .chip span { display:block; font-size:16px; color:#fff; }
+  .s4 .hero { width:158px; height:120px; margin:22px auto 8px; border-radius:18px; border:1px solid rgba(245,197,66,.4);
+    background:radial-gradient(circle at 40% 35%,#a83232,#6e1a1d); display:flex; align-items:center; justify-content:center; font-size:56px;
+    box-shadow:0 12px 26px rgba(0,0,0,.4); }
+  .s4 .btns { position:absolute; bottom:0; left:0; right:0; padding:24px 30px 38px; display:flex; flex-direction:column; gap:14px; }
+  .s4 .b-primary { background:linear-gradient(90deg,#f5c542,#e0972f); color:#5e1519; font-weight:800; font-size:18px; border-radius:14px;
+    padding:16px; text-align:center; box-shadow:0 10px 22px rgba(0,0,0,.35); }
+  .s4 .b-row { display:flex; gap:12px; }
+  .s4 .b-sub { flex:1; background:rgba(245,197,66,.1); border:1px solid rgba(245,197,66,.35); color:#f0c75a; font-weight:700;
+    border-radius:12px; padding:14px; text-align:center; font-size:13px; }
+
+  /* ========== 方案5 活力几何 ========== */
+  .s5 { background:#fff7ec; }
+  .s5 .bar { height:14px; background:linear-gradient(90deg,#ff6b6b 0 25%,#4ecdc4 25% 50%,#ffd93d 50% 75%,#6c8cff 75% 100%); }
+  .s5 .title { text-align:center; padding:48px 0 4px; font-size:26px; font-weight:800; color:#222; letter-spacing:2px; }
+  .s5 .title small { display:block; font-size:12px; color:#888; letter-spacing:4px; margin-top:4px; font-weight:600; }
+  .s5 .hud { display:flex; gap:10px; justify-content:center; margin:18px 26px 0; }
+  .s5 .chip { flex:1; background:#fff; border:2px solid #222; border-radius:12px; padding:9px; text-align:center; font-size:12px;
+    color:#444; font-weight:700; }
+  .s5 .chip span { display:block; font-size:16px; color:#222; }
+  .s5 .hero { width:150px; height:150px; margin:22px auto 8px; border-radius:24px; background:#ffd93d;
+    display:flex; align-items:center; justify-content:center; font-size:62px; box-shadow:8px 8px 0 #4ecdc4; }
+  .s5 .btns { position:absolute; bottom:0; left:0; right:0; padding:24px 26px 34px; display:flex; flex-direction:column; gap:12px; }
+  .s5 .b-primary { background:#ff6b6b; color:#fff; font-weight:800; font-size:18px; border-radius:14px; padding:16px; text-align:center;
+    box-shadow:5px 5px 0 #222; }
+  .s5 .b-row { display:flex; gap:12px; }
+  .s5 .b-sub { flex:1; background:#4ecdc4; color:#103b36; font-weight:800; border-radius:14px; padding:14px; text-align:center; font-size:13px;
+    box-shadow:4px 4px 0 #222; }
+</style>
+</head>
+<body>
+  <h1>脑力花园 · 首页方案 5 选 1</h1>
+  <div class="sub">点击标签切换预览，每套含完整首页元素（标题 / 货币 HUD / 主按钮 / 次级入口）。选定后告知我，我再落地到真实页面。</div>
+
+  <div class="tabs">
+    <button class="active" data-p="1">① 糖果梦幻</button>
+    <button data-p="2">② 清新自然</button>
+    <button data-p="3">③ 暗夜霓虹</button>
+    <button data-p="4">④ 国风雅韵</button>
+    <button data-p="5">⑤ 活力几何</button>
+  </div>
+
+  <div class="stage">
+    <!-- 方案1 -->
+    <div class="panel active" id="p1">
+      <div class="phone"><div class="screen s1">
+        <div class="sky"></div>
+        <div class="title">脑力花园<small>岁月神偷</small></div>
+        <div class="hud">
+          <div class="chip">🌟 星星<span>1280</span></div>
+          <div class="chip">🍃 体力<span>25/30</span></div>
+        </div>
+        <div class="hero">🌸</div>
+        <div class="btns">
+          <div class="b-primary">▶ 开始游戏</div>
+          <div class="b-row">
+            <div class="b-sub">🗺 关卡</div>
+            <div class="b-sub">🛍 商店</div>
+          </div>
+          <div class="b-row">
+            <div class="b-sub">👥 邀请</div>
+            <div class="b-sub">⚙ 设置</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="desc"><b>糖果梦幻</b>：粉紫渐变 + 白色果冻按钮，圆润气泡质感，漂浮糖粒点缀。氛围甜美活泼，最贴合"消除+花园"的轻松调性，老少咸宜。</div>
+      <a class="pick" href="#" onclick="return sel('① 糖果梦幻')">选择此方案</a>
+    </div>
+
+    <!-- 方案2 -->
+    <div class="panel" id="p2">
+      <div class="phone"><div class="screen s2">
+        <div class="leaf">🍃</div>
+        <div class="title">脑力花园<small>岁月神偷</small></div>
+        <div class="hud">
+          <div class="chip">🌟 星星<span>1280</span></div>
+          <div class="chip">🍃 体力<span>25/30</span></div>
+        </div>
+        <div class="hero">🌿</div>
+        <div class="btns">
+          <div class="b-primary">▶ 开始游戏</div>
+          <div class="b-row">
+            <div class="b-sub">🗺 关卡</div>
+            <div class="b-sub">🛍 商店</div>
+          </div>
+          <div class="b-row">
+            <div class="b-sub">👥 邀请</div>
+            <div class="b-sub">⚙ 设置</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="desc"><b>清新自然</b>：薄荷绿 + 米白底，留白充足、卡片化 HUD，叶片点缀。干净治愈、低刺激，适合长线休闲与防疲劳设计（呼应现有 reduced-motion 理念）。</div>
+      <a class="pick" href="#" onclick="return sel('② 清新自然')">选择此方案</a>
+    </div>
+
+    <!-- 方案3 -->
+    <div class="panel" id="p3">
+      <div class="phone"><div class="screen s3">
+        <div class="title">脑力花园<small>岁月神偷</small></div>
+        <div class="hud">
+          <div class="chip">🌟 星星<span>1280</span></div>
+          <div class="chip">🍃 体力<span>25/30</span></div>
+        </div>
+        <div class="hero">💎</div>
+        <div class="btns">
+          <div class="b-primary">▶ 开始游戏</div>
+          <div class="b-row">
+            <div class="b-sub">🗺 关卡</div>
+            <div class="b-sub">🛍 商店</div>
+          </div>
+          <div class="b-row">
+            <div class="b-sub">👥 邀请</div>
+            <div class="b-sub">⚙ 设置</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="desc"><b>暗夜霓虹</b>：深空蓝底 + 青/品红霓虹光晕，玻璃拟态按钮，转盘光效。现代酷感、强对比，突出"高玩"调性，与现版深蓝底最易平滑过渡。</div>
+      <a class="pick" href="#" onclick="return sel('③ 暗夜霓虹')">选择此方案</a>
+    </div>
+
+    <!-- 方案4 -->
+    <div class="panel" id="p4">
+      <div class="phone"><div class="screen s4">
+        <div class="seal">園</div>
+        <div class="title">脑力花园<small>岁月神偷</small></div>
+        <div class="hud">
+          <div class="chip">🌟 星星<span>1280</span></div>
+          <div class="chip">🍃 体力<span>25/30</span></div>
+        </div>
+        <div class="hero">🏮</div>
+        <div class="btns">
+          <div class="b-primary">▶ 开始游戏</div>
+          <div class="b-row">
+            <div class="b-sub">🗺 关卡</div>
+            <div class="b-sub">🛍 商店</div>
+          </div>
+          <div class="b-row">
+            <div class="b-sub">👥 邀请</div>
+            <div class="b-sub">⚙ 设置</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="desc"><b>国风雅韵</b>：胭红底 + 鎏金标题与印章，衬线字 + 留白构图。文化底蕴重、辨识度高，契合"岁月神偷"怀旧叙事，差异化最强。</div>
+      <a class="pick" href="#" onclick="return sel('④ 国风雅韵')">选择此方案</a>
+    </div>
+
+    <!-- 方案5 -->
+    <div class="panel" id="p5">
+      <div class="phone"><div class="screen s5">
+        <div class="bar"></div>
+        <div class="title">脑力花园<small>岁月神偷</small></div>
+        <div class="hud">
+          <div class="chip">🌟 星星<span>1280</span></div>
+          <div class="chip">🍃 体力<span>25/30</span></div>
+        </div>
+        <div class="hero">⚡</div>
+        <div class="btns">
+          <div class="b-primary">▶ 开始游戏</div>
+          <div class="b-row">
+            <div class="b-sub">🗺 关卡</div>
+            <div class="b-sub">🛍 商店</div>
+          </div>
+          <div class="b-row">
+            <div class="b-sub">👥 邀请</div>
+            <div class="b-sub">⚙ 设置</div>
+          </div>
+        </div>
+      </div></div>
+      <div class="desc"><b>活力几何</b>：暖白底 + 顶部彩色条 + 硬阴影色块（红/青/黄/蓝），粗黑描边、扁平几何。年轻潮、强引导，按钮点击感明确，转化友好。</div>
+      <a class="pick" href="#" onclick="return sel('⑤ 活力几何')">选择此方案</a>
+    </div>
+  </div>
+
+<script>
+  const tabs = document.querySelectorAll('.tabs button');
+  const panels = document.querySelectorAll('.panel');
+  tabs.forEach(t => t.onclick = () => {
+    tabs.forEach(x => x.classList.remove('active'));
+    panels.forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('p' + t.dataset.p).classList.add('active');
+  });
+  function sel(name){ alert('已选择：' + name + '\n请告诉我，我会据此重构真实首页（标题、HUD、按钮样式与配色变量）。'); return false; }
+</script>
+</body>
+</html>

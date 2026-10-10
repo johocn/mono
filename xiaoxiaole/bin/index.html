@@ -32,8 +32,13 @@
       // VENDURE_API_URL: "https://your-vendure.example/shop-api",
       // VENDURE_STOREFRONT_URL: "https://shop.your-vendure.example",
       // VENDURE_CHANNEL_TOKEN: "",
-      // 消消乐后端（换装花园：模板中心 / AI 生成 / 素材上传 / 积分同步）
-      // GAME_SERVER_API_URL: "http://localhost:3000",
+      // 消消乐后端（换装花园：模板中心 / AI 生成 / 素材上传 / 积分同步 + SSO 换会话）
+      GAME_SERVER_API_URL: "https://game.yourbao.cn",
+      // 强制 SSO 登录：1 = 未登录/游客一律整页跳 h.joho.cn 登录页
+      // 本地自测要放行游客时，把本行改成 FORCE_SSO_LOGIN: "" 即可
+      FORCE_SSO_LOGIN: "1",
+      // SSO_LOGIN_URL / SSO_APP_CODE 未在此覆盖，沿用 Env.ts 内置默认：
+      //   https://h.joho.cn/#/pages/sso/login  +  app_code=game-xxl
       // 营销 A/B 分享统计（值同步自构建期 .env；置空串即可回滚旧分享逻辑，无需重新构建）
       MARKETING_API_BASE: "https://h.joho.cn",
       MARKETING_CAMPAIGN_CODE: "xxl-share-2026",
@@ -44,6 +49,6 @@
        首个 404 后自动兜底加载 ./xxl/bundle.js） -->
   <!-- 微信内 JS-SDK 分享（自定义转发卡片；非微信环境自动跳过） -->
   <script src="./wechat-share.js"></script>
-  <script src="./bundle.js" onerror="var s=document.createElement('script');s.src='./xxl/bundle.js';document.body.appendChild(s)"></script>
+  <script src="./bundle.js?v=mv2j5ch4" onerror="var s=document.createElement('script');s.src='./xxl/bundle.js';document.body.appendChild(s)"></script>
 </body>
 </html>

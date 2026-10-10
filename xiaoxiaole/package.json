@@ -1,0 +1,20 @@
+{
+  "name": "xiaoxiaole-braingarden",
+  "version": "1.1.0",
+  "description": "岁月神偷：脑力花园 - 认知训练数字疗法 H5 MVP",
+  "scripts": {
+    "dev": "node scripts/build.mjs --watch",
+    "build": "npm run typecheck && node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "esbuild tools/engine.test.ts --bundle --platform=node --format=cjs --outfile=tools/.engine.test.cjs && node --test tools/.engine.test.cjs",
+    "balance": "esbuild tools/balance-sim.ts --bundle --platform=node --format=cjs --outfile=tools/.balance-sim.cjs && node tools/.balance-sim.cjs",
+    "facebalance": "esbuild tools/face-sim.ts --bundle --platform=node --format=cjs --outfile=tools/.face-sim.cjs && node tools/.face-sim.cjs",
+    "serve": "http-server bin -p 8080 -c-1 --cors"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "http-server": "^14.1.0",
+    "esbuild": "^0.21.0"
+  }
+}

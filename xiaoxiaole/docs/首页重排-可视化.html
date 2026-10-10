@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>首页重排 + 5 风格可视化（保留底部导航）</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:"Microsoft YaHei","PingFang SC","Noto Sans CJK SC",sans-serif;
+    background:#0f1226; color:#e9ecf5; padding:22px 14px 60px; -webkit-font-smoothing:antialiased; }
+  h1 { font-size:19px; font-weight:700; text-align:center; margin-bottom:4px; }
+  .sub { text-align:center; color:#9aa3c7; font-size:12.5px; margin-bottom:16px; line-height:1.6; }
+  .switcher { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:20px; }
+  .switcher button { border:none; cursor:pointer; padding:10px 14px; border-radius:999px; font-size:13px; font-weight:700;
+    background:#22264a; color:#c9cffb; transition:.2s; }
+  .switcher button:hover { background:#2e3463; }
+  .switcher button.active { background:#6c8cff; color:#fff; box-shadow:0 6px 18px rgba(108,140,255,.45); }
+  .pickbar { text-align:center; margin:14px auto 0; font-size:13px; color:#9aa3c7; }
+  .pickbar b { color:#fff; }
+
+  /* 手机框 */
+  .phone { width:390px; height:800px; margin:0 auto; border-radius:42px; padding:12px;
+    background:linear-gradient(160deg,#2a2f55,#15182f); box-shadow:0 30px 60px rgba(0,0,0,.5),inset 0 0 0 2px #3a4070;
+    position:relative; }
+  .screen { width:100%; height:100%; border-radius:32px; overflow:hidden; position:relative;
+    transition:background .35s; display:flex; flex-direction:column; }
+
+  .screen { --bg:#fff; --title:#222; --chip-bg:#fff; --chip-text:#444; --btn-bg:#ff6b6b;
+    --btn-text:#fff; --sub-bg:#4ecdc4; --sub-text:#103b36; --accent:#ff6b6b; --muted:#888; --nav-bg:#222; }
+
+  .topstripe { height:0; transition:.3s; }
+  .screen.geometric .topstripe { height:14px;
+    background:linear-gradient(90deg,#ff6b6b 0 25%,#4ecdc4 25% 50%,#ffd93d 50% 75%,#6c8cff 75% 100%); }
+
+  .content { flex:1; overflow-y:auto; }
+  .hrow { display:flex; align-items:center; justify-content:space-between; padding:16px 20px 4px; }
+  .gear { width:44px; height:44px; border-radius:50%; background:var(--chip-bg); color:var(--chip-text);
+    display:flex; align-items:center; justify-content:center; font-size:22px; box-shadow:0 4px 10px rgba(0,0,0,.12); }
+  .title { text-align:center; font-size:33px; font-weight:800; color:var(--title); letter-spacing:3px;
+    padding-top:6px; text-shadow:var(--glow,0 0 0 transparent); }
+  .title small { display:block; font-size:13px; letter-spacing:6px; margin-top:6px; font-weight:600; opacity:.8; }
+
+  .hud { display:flex; gap:12px; justify-content:center; margin:14px 22px 4px; }
+  .chip { flex:1; background:var(--chip-bg); color:var(--chip-text); border-radius:16px; padding:12px;
+    text-align:center; font-size:15px; font-weight:800; box-shadow:0 6px 14px rgba(0,0,0,.1); }
+  .chip span { display:block; font-size:20px; }
+
+  .mainbtn { margin:16px 22px 4px; background:var(--btn-bg); color:var(--btn-text); font-weight:800;
+    font-size:25px; border-radius:20px; padding:21px; text-align:center; box-shadow:0 12px 26px rgba(0,0,0,.22); }
+
+  .seclabel { font-size:18px; font-weight:800; color:var(--title); padding:16px 24px 8px; opacity:.92; }
+  .tabs { display:flex; gap:10px; padding:0 20px; }
+  .tab { flex:1; background:var(--chip-bg); color:var(--chip-text); border-radius:14px; padding:13px 0;
+    text-align:center; font-size:16px; font-weight:800; box-shadow:0 4px 10px rgba(0,0,0,.08); }
+  .tab.on { background:var(--accent); color:#fff; }
+
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:12px 20px; }
+  .card { background:var(--chip-bg); border-radius:16px; padding:15px 12px; text-align:center;
+    box-shadow:0 6px 14px rgba(0,0,0,.08); }
+  .card .ic { font-size:32px; }
+  .card .nm { font-size:17px; font-weight:800; color:var(--title); margin-top:5px; }
+  .card .ds { font-size:12.5px; color:var(--muted); margin-top:3px; }
+
+  .tools { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:6px 20px 14px; }
+  .tool { background:var(--sub-bg); color:var(--sub-text); border-radius:14px; padding:14px 4px;
+    text-align:center; font-size:13px; font-weight:800; }
+  .tool .ti { font-size:24px; display:block; margin-bottom:4px; }
+  .daily { text-align:center; font-size:12px; color:var(--muted); padding:0 24px 16px; }
+
+  /* 底部导航（对应 SceneChrome 的 4 项） */
+  .nav { height:64px; flex:none; display:flex; background:var(--nav-bg); border-top:1px solid rgba(120,140,210,.28); }
+  .nav .ni { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#a7aecc; }
+  .nav .ni .ic { font-size:24px; }
+  .nav .ni .lb { font-size:13px; margin-top:3px; }
+  .nav .ni.on { color:#fff; background:rgba(255,255,255,.16); border-radius:14px; margin:5px 4px;
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.6); position:relative; }
+  .nav .ni.on .ic, .nav .ni.on .lb { color:#fff; }
+  .nav .ni.on .lb { font-weight:800; }
+  .nav .ni.on::before { content:""; position:absolute; top:0; left:24%; right:24%; height:3px;
+    border-radius:0 0 3px 3px; background:var(--accent); }
+</style>
+</head>
+<body>
+  <h1>首页重排 + 5 风格可视化（保留底部导航）</h1>
+  <div class="sub">功能按钮全部保留（可换位置）：继续训练 / 四域玩法 / 模式入口 / 6 项常用功能 / 设置 / 底部导航。<br/>
+    点击切换 5 套风格，默认②清新自然。确认后落地到 canvas 首页代码。</div>
+
+  <div class="switcher">
+    <button data-t="candy">① 糖果梦幻</button>
+    <button data-t="fresh" class="active">② 清新自然（默认）</button>
+    <button data-t="neon">③ 暗夜霓虹</button>
+    <button data-t="guofeng">④ 国风雅韵</button>
+    <button data-t="geometric">⑤ 活力几何</button>
+  </div>
+
+  <div class="phone"><div class="screen fresh" id="screen">
+    <div class="topstripe"></div>
+    <div class="content">
+      <div class="hrow">
+        <div style="width:44px"></div>
+        <div class="gear">⚙</div>
+      </div>
+      <div class="title">脑力花园<small>岁月神偷</small></div>
+
+      <div class="hud">
+        <div class="chip">🌟 星星<span>1280</span></div>
+        <div class="chip">🍃 体力<span>25/30</span></div>
+      </div>
+
+      <div class="mainbtn">▶ 继续训练</div>
+
+      <div class="seclabel">选择玩法</div>
+      <div class="tabs">
+        <div class="tab on">记忆</div>
+        <div class="tab">注意</div>
+        <div class="tab">生活</div>
+        <div class="tab">双阳</div>
+      </div>
+
+      <div class="grid">
+        <div class="card"><div class="ic">🌸</div><div class="nm">时光整理师</div><div class="ds">整理花园·练手眼</div></div>
+        <div class="card"><div class="ic">🎵</div><div class="nm">听音辨位</div><div class="ds">听声音·记位置</div></div>
+        <div class="card"><div class="ic">🧑</div><div class="nm">面孔记忆</div><div class="ds">记人脸·记名字</div></div>
+        <div class="card"><div class="ic">🟦</div><div class="nm">空间记忆</div><div class="ds">看顺序·再点</div></div>
+      </div>
+
+      <div class="seclabel">常用功能</div>
+      <div class="tools">
+        <div class="tool"><span class="ti">📅</span>签到</div>
+        <div class="tool"><span class="ti">🎡</span>转盘</div>
+        <div class="tool"><span class="ti">🏆</span>成就</div>
+        <div class="tool"><span class="ti">🎨</span>皮肤</div>
+        <div class="tool"><span class="ti">⭐</span>评价</div>
+        <div class="tool"><span class="ti">👥</span>邀请</div>
+      </div>
+      <div class="daily">今日登录礼：获得「提示」×1 · 🔨锤子×1 · 积分 +20</div>
+    </div>
+
+    <div class="nav">
+      <div class="ni on"><span class="ic">🏠</span><span class="lb">首页</span></div>
+      <div class="ni"><span class="ic">🗺️</span><span class="lb">关卡</span></div>
+      <div class="ni"><span class="ic">🧠</span><span class="lb">认知中心</span></div>
+      <div class="ni"><span class="ic">🎁</span><span class="lb">道具中心</span></div>
+    </div>
+  </div></div>
+
+  <div class="pickbar">当前风格：<b id="cur">② 清新自然</b> ｜ 底部导航常驻：首页 / 关卡 / 认知中心 / 道具中心</div>
+
+<script>
+  const PALETTES = {
+    candy: { bg:"linear-gradient(170deg,#ffd6f0,#ffb3e6 45%,#c9a7ff)", title:"#7a3fb0",
+      chipBg:"rgba(255,255,255,.65)", chipText:"#7a3fb0", btnBg:"#ffffff", btnText:"#c44cc4",
+      subBg:"rgba(255,255,255,.55)", subText:"#8a3fb0", accent:"#ff9ee0", muted:"#a85fd0", glow:"0 0 0 transparent",
+      navBg:"rgba(150,40,140,0.96)" },
+    fresh: { bg:"linear-gradient(180deg,#eafaf1,#dff3ec 50%,#cdeede)", title:"#2e8b6b",
+      chipBg:"#ffffff", chipText:"#3f8f70", btnBg:"#2e8b6b", btnText:"#ffffff",
+      subBg:"#ffffff", subText:"#3f8f70", accent:"#2e8b6b", muted:"#6fae93", glow:"0 0 0 transparent",
+      navBg:"rgba(26,112,86,0.96)" },
+    neon: { bg:"radial-gradient(circle at 50% 0%,#1b1f4a,#0a0c1f 70%)", title:"#ffffff",
+      chipBg:"rgba(255,255,255,.06)", chipText:"#9fe0ff", btnBg:"linear-gradient(90deg,#4be1ff,#c44bff)",
+      btnText:"#0a0c1f", subBg:"rgba(255,255,255,.06)", subText:"#bfe9ff", accent:"#4be1ff",
+      muted:"#7fb6e0", glow:"0 0 12px #4be1ff,0 0 24px #c44bff", navBg:"rgba(14,18,46,0.97)" },
+    guofeng: { bg:"linear-gradient(180deg,#7a1f23,#5e1519 60%,#3f0e12)", title:"#f5c542",
+      chipBg:"rgba(245,197,66,.12)", chipText:"#f0c75a", btnBg:"linear-gradient(90deg,#f5c542,#e0972f)",
+      btnText:"#5e1519", subBg:"rgba(245,197,66,.1)", subText:"#f0c75a", accent:"#f5c542",
+      muted:"#d9a94a", glow:"0 0 0 transparent", navBg:"rgba(86,18,22,0.97)" },
+    geometric: { bg:"#fff7ec", title:"#222222",
+      chipBg:"#ffffff", chipText:"#444444", btnBg:"#ff6b6b", btnText:"#ffffff",
+      subBg:"#4ecdc4", subText:"#103b36", accent:"#ff6b6b", muted:"#888888", glow:"0 0 0 transparent",
+      navBg:"rgba(24,26,40,0.96)" },
+  };
+  const NAMES = { candy:"① 糖果梦幻", fresh:"② 清新自然", neon:"③ 暗夜霓虹", guofeng:"④ 国风雅韵", geometric:"⑤ 活力几何" };
+
+  const screen = document.getElementById('screen');
+  const cur = document.getElementById('cur');
+  function apply(t){
+    const p = PALETTES[t];
+    screen.className = 'screen ' + t;
+    screen.style.background = p.bg;
+    const s = screen.style;
+    s.setProperty('--title', p.title);
+    s.setProperty('--chip-bg', p.chipBg);
+    s.setProperty('--chip-text', p.chipText);
+    s.setProperty('--btn-bg', p.btnBg);
+    s.setProperty('--btn-text', p.btnText);
+    s.setProperty('--sub-bg', p.subBg);
+    s.setProperty('--sub-text', p.subText);
+    s.setProperty('--accent', p.accent);
+    s.setProperty('--muted', p.muted);
+    s.setProperty('--glow', p.glow);
+    s.setProperty('--nav-bg', p.navBg);
+    cur.textContent = NAMES[t];
+  }
+  document.querySelectorAll('.switcher button').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.switcher button').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    apply(b.dataset.t);
+  });
+  apply('fresh'); // 默认②清新自然
+</script>
+</body>
+</html>

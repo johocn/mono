@@ -1,0 +1,24 @@
+node_modules/
+
+# 构建产物（部署时由 npm run build 生成）
+bin/bundle.js
+bin/bundle.js.map
+bin/js/
+
+# 环境变量（含敏感令牌，勿提交；.env.example 为模板可提交）
+.env
+.env.local
+
+# 工具临时产物
+tools/*.cjs
+tools/.engine.test.cjs
+tools/.balance-sim.cjs
+
+# 调试产物
+.playwright-cli/
+*.log
+/d[0-9]*.png
+xxl-deploy.tgz
+
+# 设计稿（体积大，不入库）
+design/
