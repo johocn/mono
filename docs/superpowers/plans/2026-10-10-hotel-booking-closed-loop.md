@@ -77,15 +77,15 @@
 
 ### Task 10: HotelBooking 实体与状态机
 - Create: `src/hotel/booking/booking.entity.ts`、`booking.service.ts`、`booking.spec.ts`
-- [ ] 实体（字段见 spec §3.4；bookingCode 唯一 8 位数字）
-- [ ] 状态机：pendingDeposit→confirmed（监听订单 PaymentSettled 事件：有支付计划=首期付清；无=订单付清；生成入住码+固化 cancelDeadlineAt+confirmLocks）→checkedIn（核销）→completed（离店日定时/手动）；cancelled/noShow 分支
-- [ ] 定时任务：离店日 completed 流转、noShow 标记
-- [ ] vitest 全流转
+- [x] 实体（字段见 spec §3.4；bookingCode 唯一 8 位数字，nullable——确认时才生成，pending 阶段不占码）
+- [x] 状态机：pendingDeposit→confirmed（handleOrderUpdated 按订单状态 PartiallyPaid=首期付清/PaymentSettled=全清 确认；生成入住码+固化 cancelDeadlineAt+confirmLocks）→checkedIn（核销）→completed（离店日定时/手动）；cancelled/noShow 分支（事件订阅在 Task 11 接通）
+- [x] 定时任务：hotel-booking-daily-transition（离店日 completed、过离店日 noShow 不动锁）
+- [x] vitest 全流转（27 用例绿；全包 383 不破；vendure f1b52861c）
 
 ### Task 11: GraphQL 与联动
-- [ ] Shop：`myHotelBookings`；Admin：`hotelBookings(filter)` / `hotelBookingCheckIn(code)` / `hotelBookingComplete` / `hotelBookingForceCancel`
-- [ ] 下单成功（含酒店行）自动建 booking(pendingDeposit) 并把 locks.bookingId 回填
-- [ ] e2e：下单→订金付清→自动确认→核销→完成 全链路
+- [x] Shop：`myHotelBookings`；Admin：`hotelBookings(filter)` / `hotelBookingCheckIn(code)` / `hotelBookingComplete` / `hotelBookingForceCancel`
+- [x] 下单成功（含酒店行）自动建 booking(pendingDeposit) 并把 locks.bookingId 回填（事件双路：OrderEvent 'updated' + OrderStateTransitionEvent，后者按 id 重取完整订单）
+- [x] e2e：下单→订金付清→自动确认→核销→完成 全链路（5 用例全绿：确认/核销完成/满房拦截/强制取消释放/未支付 pending；vendure e231d4d0e）
 
 ### Task 12: C 端订单预订卡
 - [ ] 订单详情/卡片：状态步骤条、入住码+政策倒计时、「联系酒店」；i18n 12 语言
