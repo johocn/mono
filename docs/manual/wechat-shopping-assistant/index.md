@@ -22,6 +22,8 @@
 
 ## 1. 功能总览
 
+> 下图为 vendure 侧功能编排（直连链路视角）；**生产回调入口已改道 strapi zhao-sso**，见 §1.1。sso 链路下第 5 步「组装客服消息」改为「返回结构化决策给 sso 组装被动回复」，其余编排（去重/意图/搜索/会话/下单）完全相同。
+
 ```
 用户在公众号发「买一瓶酱油」
    │ 微信回调 POST /wechat/message (text/xml)
@@ -43,6 +45,24 @@ wechat-shopping-assistant-plugin（异步编排）
 回复下单成功通知（订单号 + 明细 + 合计 + 支付链接 → H5 收银台确认页）
 ```
 
+### 1.1 生产回调链路（2026-10-14 起改道 strapi zhao-sso）
+
+公众号后台只能配**一个**回调 URL，生产已改指 strapi zhao-sso（其消息回复体系更完整：事件落库、绑定维护、关键字规则、被动回复 XML 多类型）：
+
+```
+公众号消息 → POST https://<strapi域名>/api/zhao-sso/v1/wechat/callback（明文模式验签）
+   ▼
+zhao-sso sso-wx-callback：验签 → 事件落库 → 管理员留言回复 → 关键字规则匹配
+   ▼ 关键字规则未命中（HTTP 内网直连 127.0.0.1）
+vendure 决策接口 POST http://127.0.0.1:3020/wechat-assistant/handle（WX_ASSISTANT_URL）
+   → 纯决策不发送：返回 { kind:'news', articles } / { kind:'text', content } / { handled:false }
+   ▼
+zhao-sso 用 buildReplyXml 组装被动回复 XML（news 最多 8 条 / text），受微信 5 秒窗口约束
+（转调超时 3.5s；超时/异常/不处理 → 回 success 静默）
+```
+
+vendure 直连链路（`POST /wechat/message` → WechatMessageEvent → 客服消息发送）保留为备选，客服消息受 48h 窗口限制；被动回复链路无此限制。
+
 ## 2. 架构与插件职责
 
 | 插件 | 本次改动 | 职责 |
@@ -50,6 +70,7 @@ wechat-shopping-assistant-plugin（异步编排）
 | `wechat-auth-plugin` | 补强 | 路由级 `express.text` 中间件（text/xml body）；`parseWechatXml` 零依赖解析；AES/明文双模式；发布 `WechatMessageEvent`；`sendCustomText` / `sendCustomNews` 客服消息（支持渠道覆盖凭证 cred 参数） |
 | `meilisearch-plugin` | 补强 | `MeiliService.search()`（filter：`type='product' AND status='published' AND channelId=…`，单引号转义）；商品投影新增 `thumbnail`（`PUBLIC_ASSET_URL` + featuredAsset preview） |
 | `wechat-shopping-assistant-plugin` | **新建** | 编排器：去重 → 意图 → 搜索 → 会话 → 卡片 → 下单 → 回复；两个实体；跨插件注入 MeiliSearchPlugin / WechatAuthPlugin 服务 |
+| strapi `zhao-sso` | 补强 | 公众号回调入口（验签/落库/关键字规则/被动回复 XML）；text 未命中关键字规则时经 `askShoppingAssistant` 转调 vendure 决策接口（3.5s 超时），组装被动回复 XML |
 
 跨插件依赖：`imports: [PluginCommonModule, MeiliSearchPlugin, WechatAuthPlugin]`，直接注入 `MeiliService` / `WechatAuthService`。
 
@@ -67,6 +88,14 @@ wechat-shopping-assistant-plugin（异步编排）
 | `PUBLIC_STOREFRONT_URL` | 商品卡片跳转 URL 前缀 + 绑定引导登录页 + 支付确认页前缀（`{storefront}/checkout/confirmation/{code}`） |
 | `PUBLIC_ASSET_URL` | 商品缩略图前缀（featuredAsset preview）；未配置时卡片省略图片（news 无图可接受） |
 | `WECHAT_ASSISTANT_OUTBOUND_MODE` | `api`（默认，真实发送客服消息）/ `echo`（仅日志，联调用） |
+| `ZHAO_SEARCH_SHARED_SECRET` | vendure 侧（`packages/dev-server/.env`，进程 cwd）；与 strapi 同值，`x-zhao-secret` 头服务间鉴权 |
+
+**strapi 侧 .env（/www/apps/strapi）：**
+
+| 变量 | 说明 |
+|------|------|
+| `WX_ASSISTANT_URL` | `http://127.0.0.1:3020/wechat-assistant/handle`（**根路径无 /shop-api 前缀**——Nest controller 挂根路径，/shop-api/* 下的 POST 会被 Apollo GraphQL 中间件拦截）；未配置时 sso 不转调 |
+| `ZHAO_SEARCH_SHARED_SECRET` | 与 vendure 同值 |
 
 ### 3.3 插件选项（dev-config.ts init）
 
@@ -75,8 +104,9 @@ wechat-shopping-assistant-plugin（异步编排）
 ### 3.4 微信侧要求
 
 - 公众号为**认证服务号**（客服消息接口权限），服务器 IP 在白名单
-- 回调 URL：`https://<api域名>/shop-api/wechat/message`（GET 验证 echostr + POST 收消息；AES 模式配 `WECHAT_AUTH_ENCODING_AES_KEY`）
-- 客服消息有 **48 小时窗口**限制：用户 48h 内互动过才可主动发卡片（用户发消息即刷新窗口，正常购物流不受影响）
+- **生产回调 URL（2026-10-14 起）**：`https://<strapi域名>/api/zhao-sso/v1/wechat/callback`（明文模式 + Token；Token 取 zhao-sso 后台「服务器配置」`sso-oauth-config(wechat/official_account).extraConfig.serverToken`，GET 验证 echostr）
+- vendure 直连备选回调 URL：`https://<api域名>/wechat/message`（**根路径**，nginx `location /wechat/message` 原样透传 3020；此前文档误记为 `/shop-api/wechat/message`——/shop-api/* 前缀下的 POST 会被 Apollo GraphQL 中间件拦截，勿配）
+- 客服消息有 **48 小时窗口**限制：用户 48h 内互动过才可主动发卡片（用户发消息即刷新窗口，正常购物流不受影响）；生产被动回复链路（sso）无此限制
 
 ## 4. 用户交互规则（意图表）
 
@@ -137,6 +167,15 @@ npx vitest run
 4. 后台核对：订单渠道正确、明细数量正确、库存已扣减
 5. 重复推送验证：日志出现 `Duplicated wechat message skipped`（可用微信重试机制或重放同 MsgId 报文）
 
+### 7.3 sso 转调链路验证（2026-10-14 已通过，改道后）
+
+模拟微信服务器（服务器内网，sha1(sort([token,ts,nonce])) 签名）：
+
+1. GET `/api/zhao-sso/v1/wechat/callback?...&echostr=SIM-ECHO-123` → 200 回显 echostr（验签通过，公众号接入验证同原理）
+2. POST text「买一瓶酱油」→ 200 text XML「没有找到…」（关键字未命中 → 转调 vendure 搜索 → 降级文案）
+3. POST text「DIY」→ 200 **news XML**（ArticleCount=1，Title/Description/Url 齐全）——搜索→卡片→被动回复完整闭环
+4. vendure handle 直测：`POST http://127.0.0.1:3020/wechat-assistant/handle` + `x-zhao-secret`（搜索 200 news/text、帮助 200 text、错误 secret 403）
+
 ## 8. 对话演示截图
 
 - [01-search-cards.png](../shots/2026-10-14-wechat-shopping-assistant/01-search-cards.png)：搜索 → news 图文卡片（编号 1/2/3）→ 降级文本列表样式
@@ -150,7 +189,8 @@ npx vitest run
 |------|------|
 | vendure | 本地构建（`npx tsc -p tsconfig.prod.json`，dev-server/dist 入库）→ git push → 服务器 `git pull` + `pm2 restart vendure`；**绝不服务器构建** |
 | MeiliSearch | 无改动（复用既有 kb-zh 索引与商品域同步） |
-| 微信回调配置 | 若此前未配消息回调：公众号后台配 URL/Token/AES Key（见 §3.4） |
+| strapi zhao-sso | 插件 dist 入库（vite bundle，git pull 即生效）；改 `.env` 需 `pm2 restart 44 --update-env` |
+| 微信回调配置 | 生产回调 URL 已改指 strapi `/api/zhao-sso/v1/wechat/callback`（明文 + serverToken，见 §3.4 / §1.1） |
 
 重启遵守 OOM 错峰铁律（vendure 与 strapi 绝不同时重启）。
 
@@ -162,3 +202,6 @@ npx vitest run
 - 中文数字数量（「一瓶」）不解析，仅阿拉伯数字（「2瓶」）进会话数量
 - 客服消息 48h 窗口外的主动触达不可用（微信平台限制）
 - 缩略图依赖 `PUBLIC_ASSET_URL` 配置与商品 featuredAsset；未配置时卡片无图（不影响下单）
+- **被动回复链路（sso）会话/下单说明**：vendure handle 为纯决策接口（不主动发送），下单成功通知由 assistant 服务层生成 text 回复经 sso 被动返回；客服消息 48h 窗口限制不适用于被动回复
+- **news 卡片 Url 为站内相对路径时**（如 `/diy-custom-carrier`），微信内点击无法跳转——需 storefrontUrl 前缀拼绝对地址（既有搜索组装行为，待优化为绝对 URL）→ P1
+- 搜索无命中排查：MeiliSearch kb-zh 索引（商品+内容统一索引）无对应商品时走降级文案，属正常行为非链路故障
