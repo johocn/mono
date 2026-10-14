@@ -157,7 +157,17 @@ WHERE "queueName" LIKE '%meili%' AND state='RUNNING';
 - 内容类型必须在映射表内（article/faq/tutorial/case/download，uid 前缀 `plugin::zhao-website.`）
 - 发布条件（三者同时满足）：`publishedAt` 非空 + `status='published'` + `deletedAt` 空 → 不满足会被移出索引
 - 排查：strapi 日志 `[zhao-search] 已同步 <docId>` / `增量同步失败`；或直接跑「重建内容域」
-- **软删场景兜底**：zhao-common 的全局软删过滤会让 db.update 收尾 findOne 读不到刚软删的行（`afterUpdate` 拿到 result=null），zhao-search 用 knex 按主键直查 documentId 兜底移除索引（bootstrap.ts `readDocumentIdRaw`，日志 `afterUpdate result 为空（软删过滤），按 documentId 移除索引 <docId>`）
+- **软删场景兜底**：zhao-common 的全局软删过滤会让 db.update 收尾 findOne 读不到刚软删的行（`afterUpdate` 拿到 result=null），zhao-search 用 knex 直查兜底移除索引（bootstrap.ts `readDocumentIdRaw`，日志 `afterUpdate result 为空（软删过滤），按 documentId 移除索引 <docId>`）
+- **document_id 匹配逻辑（易错点）**：`afterUpdate` 事件里 `event.params.where.id` 是**数字主键**（如 `6`），而表列 `document_id` 存的是字符串文档 ID（如 `bgkuluo2laen7oo7wh2w78o9`），两者语义不同、不可互配。raw 查询必须「主键列定位行 → 取 document_id 列」，表名/列名经 `strapi.db.metadata.get(uid)` 解析：
+
+  ```js
+  const meta = strapi.db.metadata.get(uid);                        // tableName + attributes 列名映射
+  const pkColumn  = meta?.attributes?.id?.columnName || "id";              // 主键列（匹配 where.id）
+  const docColumn = meta?.attributes?.documentId?.columnName || "document_id"; // 文档列（取值）
+  const row = await strapi.db.connection(meta.tableName).where(pkColumn, id).first(docColumn);
+  ```
+
+  若误写成 `.where("document_id", id)`（用字符串列匹配数字主键），恒返回 `row=undefined`、兜底静默失效——即 2026-10-14 断言 ③ 故障的实锤根因。排查时看日志是否出现 `afterUpdate result 为空（软删过滤），按 documentId 移除索引` 即可判断兜底是否生效；异常路径会打 `raw 查询异常` 错误日志
 
 ### 5.5 已知遗留与凭据
 
