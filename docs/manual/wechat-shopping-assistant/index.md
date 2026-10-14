@@ -1,7 +1,7 @@
 # 微信购物助手 · 操作手册
 
 > 微信公众号消息侧「搜商品 → 回卡片 → 回复编号下单」闭环
-> 交付日期：2026-10-14（P0：文本消息搜索 + news 卡片 + 编号下单 + 支付链接；2026-10-14 晚升级：绑定建档聊天内闭环——sso 绑定用户免输入自动建档 + 未绑定用户聊天内两步补录，见 §1.2；P1 剩余：短信验证码强实名、微信支付聊天内闭环、订单状态通知）
+> 交付日期：2026-10-14（P0：文本消息搜索 + news 卡片 + 编号下单 + 支付链接；2026-10-14 晚升级①：绑定建档聊天内闭环——sso 绑定用户免输入自动建档 + 未绑定用户聊天内两步补录，见 §1.2；**升级②：地址簿对话 CRUD + 下单选址（方案 B 列表式逐轮问答）+ 订单落收货地址含电话**，见 §4.1/§7.5；P1 剩余：短信验证码强实名、微信支付聊天内闭环、订单状态通知）
 
 ---
 
@@ -117,8 +117,9 @@ sso 转调 vendure 时若该 openid 已绑定 sso 用户（`sso-third-party-bind
 
 ```sql
 -- 列名为驼峰带引号（以 information_schema 为准）；createdAt/updatedAt 自动填充
-INSERT INTO job_record ("queueName", data, state, retries, "isSettled")
-VALUES ('meili-reindex-products', '{"all":true}', 'PENDING', 5, false);
+-- 注意：progress / attempts 为 NOT NULL，必须显式给值（2026-10-14 勘误）
+INSERT INTO job_record ("queueName", data, state, retries, "isSettled", progress, attempts)
+VALUES ('meili-reindex-products', '{"all":true}', 'PENDING', 5, false, 0, 0);
 ```
 
 > 完成后 `state='COMPLETED'`、progress=100；抽查：`curl http://127.0.0.1:7700/indexes/kb-zh/documents/product-73` 确认文档含 `thumbnail` 与绝对 `url`/`slug`。
@@ -146,9 +147,23 @@ VALUES ('meili-reindex-products', '{"all":true}', 'PENDING', 5, false);
 | `取消` / `退出` | 补录·退出 | 清除补录状态（state/draft），回到正常对话 |
 | `帮助` / `你好` / `help` | help | 使用说明 |
 | `绑定` / `登录` / `注册` | bind | 引导跳 H5 登录页（微信内打开自动 openid 绑定） |
+| `地址管理` / `地址簿` / `我的地址` | address_manage | **地址簿管理**（§4.1）：列全量地址（⭐默认置顶）→ 编号选地址 → 菜单（设默认/修改/删除） |
+| `新增地址` / `新增` / `添加` | address_add | **新增地址**（§4.1）：地址文本 → 电话询问 → 是否设默认 → 落库；下单选址中发「新增」保留下单上下文（落库后继续选址） |
 | 图片/语音/位置等非文本 | 忽略 | P0 仅处理文本 |
 
 规则引擎为纯函数（`intent.ts`），长词优先（`搜索|查询|想买|想要` → `买|要`），全角数字自动转半角。补录态优先级最高（state 命中直接进入对应分支，不做意图识别）。
+
+### 4.1 地址簿对话 CRUD + 下单选址（方案 B 列表式逐轮问答，2026-10-14 升级②）
+
+**下单选址**：回复「买N」→ 列全量地址（⭐默认置顶，`回复编号选择地址下单，回复 0 新增地址`）→ 选编号 → 二次确认卡（商品明细+合计+收货人⭐+电话打码+地址；`回复 1 确认下单，回复 0 重选地址`）→ 确认下单（**地址含收货人/电话写入订单 shippingAddress**，落库为真实值；确认卡仅展示打码）。无地址时直接进入新增流程。
+
+**地址管理**：回复「地址管理」→ 列表（`回复编号管理地址，回复「新增」添加，回复「退出」结束`）→ 选编号 → 操作菜单（1 设默认 / 2 修改 / 3 删除 / 0 返回列表）。
+
+- **修改**：1 改收货地址文本（长度 ≥8 校验）；2 改收货人+电话（「姓名 电话」一行，只发号码只改电话）
+- **删除**：确认卡 → 删默认地址后**剩余最早地址自动顶替**并提示（`默认地址已自动切换为「张三 · 地址」⭐`）；删光提示「您目前没有默认地址」
+- **新增**：地址文本（≥8 字符）→ 电话询问（有注册手机号时：回复 1 用注册号 / 回复 2 换新号码；无注册号直接要号码）→ 是否设默认（是/否）→ 落库；flow=order 时落库后续下单 / flow=manage 时落库后回列表
+
+**地址流程态指令放行（2026-10-14 修复）**：地址流程态（state 为 `addr_*`/`order_confirm`）下，「地址管理/新增地址」指令与**带引导词的显式「买N/下单N」**放行（不被当无效编号——重发指令、中途改下单、改编号均可直接生效）；**纯数字仍是地址流编号回复**（选地址/菜单项），不放行；补录态（awaiting_*）不放行。回复「取消/退出」随时清除流程态。
 
 ## 5. 边界与降级行为
 
@@ -168,6 +183,11 @@ VALUES ('meili-reindex-products', '{"all":true}', 'PENDING', 5, false);
 | 库存不足 / 无可用变体 | 「库存不足」文案（`addItemToOrder` 返回 `INSUFFICIENT_STOCK_ERROR` 时中止建单） |
 | 建单异常 | 「下单失败」文案 + 引导重试 |
 | 同一 MsgId 重试推送 | 幂等表唯一键挡住，只处理一次 |
+| 地址流中回复无效编号 | 引导提示（当前会话有效编号范围 + 「新增」入口） |
+| 删除默认地址 | vendure core `deleteAddress` 内置顶替（剩余 id 最小者自动成为默认）；回文案提示切换结果 |
+| 设默认地址 | vendure core `enforceSingleDefaultAddress` 自动清其他默认，恒唯一 |
+| 下单时选址地址已失效 | 自动回退默认地址落单 |
+| 搜索命中已删除商品（幽灵索引） | **已修复（2026-10-14）**：meili 同步过滤软删商品并清残留文档；下单侧 `resolveDefaultVariant` 过滤 `deletedAt`（此前会报 `entity-with-id-not-found`，现为「库存不足」降级文案） |
 | 非文本消息 / 其他事件 | 静默忽略（subscribe 事件回欢迎语） |
 | 回调处理超时 | 事件发布在异步链路吞异常，控制器恒回 `success` |
 
@@ -175,14 +195,14 @@ VALUES ('meili-reindex-products', '{"all":true}', 'PENDING', 5, false);
 
 | 表 | 用途 | 关键字段 |
 |----|------|---------|
-| `wechat_shopping_session` | openid 维度最近一次搜索结果（编号→商品），下单回查；**补录状态机**（2026-10-14 增） | openid（唯一）、channelId、results（simple-json，含 index/quantity）、query、expireAt、**state**（null/awaiting_phone/awaiting_address）、**draft**（simple-json：{phone, indices}） |
+| `wechat_shopping_session` | openid 维度最近一次搜索结果（编号→商品），下单回查；**补录 + 地址流状态机**（2026-10-14 增） | openid（唯一）、channelId、results（simple-json，含 index/quantity）、query、expireAt、**state**（null/awaiting_phone/awaiting_address + 地址流 13 态：addr_pick/addr_op/addr_edit_field/addr_edit_text/addr_edit_person/addr_del_confirm/addr_new_text/addr_new_phone/addr_new_phone_text/addr_new_default/order_confirm）、**draft**（simple-json，AssistantFlowDraft：{phone, indices, flow('order'|'manage'), pickIndex, pickAddressId, pendingText, pendingPhone}） |
 | `wechat_processed_message` | MsgId 幂等去重 | dedupKey（唯一，`mid:{MsgId}` 或 `evt:{from}:{createTime}:{event}`）、receivedAt |
 
 > 去重表只增不改；如需控制体量可定期清理 `receivedAt` 超 7 天记录（P1 可加定时任务）。
 
 ## 7. 测试与验证
 
-### 7.1 单测（三包 91 用例全绿，2026-10-14 更新）
+### 7.1 单测（三包 112 用例全绿，2026-10-14 更新）
 
 ```powershell
 # 各包目录下
@@ -191,7 +211,9 @@ npx vitest run
 
 - `wechat-auth-plugin`（17）：XML 解析 CDATA/纯文本/加密信封、crypto、official resolver
 - `meilisearch-plugin`（28）：mapper 投影含 thumbnail、search() filter 组装/channelId 转义/分页
-- `wechat-shopping-assistant-plugin`（46）：意图识别 10 例、卡片组装 10 例（含绑定引导/补录提示文案）、搜索 4 例、建档绑定 5 例（路径 A/B/防冒领/地址容错）、**全链路冒烟 17 例**（假件 DI：搜索命中→卡片→下单成功+幂等→数量传递→库存不足→无匹配→搜索异常→会话过期→无效编号→关注欢迎→补录状态机 await_phone/await_address→建档续单→取消→防冒领→路径 A boundPhone）
+- `wechat-shopping-assistant-plugin`（67）：意图识别 12 例（含 address_manage/address_add）、卡片组装 17 例（地址列表 order/manage 模式/操作菜单/下单确认卡打码/删除三态/电话询问两态/maskPhone）、搜索 4 例、建档绑定 5 例（路径 A/B/防冒领/地址容错/建档首地址设默认）、**全链路冒烟 29 例**（假件 DI：搜索命中→卡片→下单成功+幂等→数量传递→库存不足→无匹配→搜索异常→会话过期→无效编号→关注欢迎→补录状态机→建档续单→取消→防冒领→路径 A boundPhone→**地址簿管理/修改文本/修改收货人/删除默认顶替/新增电话询问/确认卡回 0/下单选址四步/流程态重发指令/管理流转下单/选址中改编号**）
+
+> 注意：vitest 不做类型检查（esbuild transform），测试全绿不代表编译通过——提交前必须 `npm run build`（**在插件目录跑**，monorepo 根目录会触发 dashboard 全量构建且不产出插件 lib）。
 
 ### 7.2 真机回归（P0 部署后）
 
@@ -228,6 +250,33 @@ npx vitest run
 3. **建档地址字段名**：本 fork 的 `CreateAddressInput` 字段为 `streetLine1`（上游 vendure 为 `streetLine`），旧字段名展开进 Address 实体被忽略、`streetLine1` 为 null 触发非空约束（被 catch 吞掉，日志 `Assistant bind: create address skipped`）；已对齐 fork schema。
 
 无头单转态说明：助手单（服务类商品无物流）标记 `orderKind='assistant'` 后跳过逐行 shippingLineId 校验（marketplace 进程豁免，对齐 campus `orderKind='errand'` 先例），且默认进程放宽 `arrangingPaymentRequiresCustomer/Shipping`；订单落 `ArrangingPayment` 态，用户点支付链接进 vshop 收银台（PAYABLE_STATES 含该态）直付。
+
+### 7.5 地址簿对话 CRUD + 下单选址验证（2026-10-14，PASS）
+
+服务器内网直测 vendure 决策接口（`POST /wechat-assistant/handle` + `x-zhao-secret`），测试数据 openid `oSIMTEST-ADDR1/ADDR2`（199 段手机号）：
+
+| # | 场景 | 结果 |
+|---|------|------|
+| T1 | 未绑定发「地址管理」 | ✓ 回绑定引导（未绑定拦截优先） |
+| T2 | 路径 B 建档（手机号 → 地址） | ✓ 建档成功，首地址自动设默认 |
+| T3 | 「地址管理」→ 列表 → 选编号 | ✓ ⭐默认置顶列表卡 + 操作菜单（设默认/修改/删除/返回） |
+| T4 | 修改收货人电话（「李四 19912340003」） | ✓ 回显更新后打码信息；只发号码只改电话 |
+| T4b | 修改收货地址文本 | ✓ 新地址回显 |
+| T5 | 新增第二地址（电话用注册号 + 设默认） | ✓ 三步问答（地址 → 电话选择 → 是否默认）落库 |
+| T6 | 删除默认地址 | ✓ 剩余地址自动顶替并提示「默认地址已自动切换为…⭐」 |
+| T7 | 下单选址全流程（搜「洗车」→ 买1 → 选地址 → 确认卡 → 确认下单） | ✓ 下单成功（订单 BJQGR72GLD3LQSL6，ArrangingPayment） |
+| T8 | 订单 shippingAddress 落库（psql） | ✓ `{"fullName":"李四","phoneNumber":"19912340003","streetLine1":"湖南省长沙市岳麓区麓谷大道66号","countryCode":"CN","country":"China"}`（确认卡打码、落库真实值） |
+| R1 | 地址流程态重发「地址管理/新增地址」 | ✓ 放行（不被当无效编号） |
+| R2 | 地址管理流中发「买1」 | ✓ 放行转下单（重新列地址，order 上下文） |
+| R3 | 下单选址流中改发「买2」 | ✓ 重新列地址并更新编号 |
+| R4 | 已删除商品下单 | ✓ 优雅降级「库存不足」（不再报 entity-with-id-not-found） |
+
+验证过程修复的问题（都已提交部署）：
+
+1. **会话 draft 列类型过窄（TS2339）**：entity draft 列 `{phone?, indices?}` 缺 flow 字段，`session.draft.flow` 编译失败 → 改为 `AssistantFlowDraft | null`。
+2. **地址流程态指令被状态机吞掉**：state 命中 addr_* 直接进分支不做意图识别 → 流程态重发「地址管理/新增地址/买N」全被当无效编号 → handleFlowStep 顶部对地址流程态放行显式指令（地址指令 + 带引导词的「买N」）；**纯数字不放行**（是编号回复——首版放行纯数字导致选址回复「1」被误转下单，回归测试全红后修正）。
+3. **已删除商品幽灵索引**：渠道下能搜到的商品多为软删旧测试商品（meili 同步只看 enabled 未看 deletedAt，且 upsert 语义残留旧文档）→ 下单 `resolveDefaultVariant` 未过滤 deletedAt，`addItemToOrder` 内核按 `deletedAt: IsNull()` 查 variant 抛 `entity-with-id-not-found` → 双侧修复：meili 同步（syncOne/projectAll/toProjection）排除软删商品并清残留文档；resolveDefaultVariant 过滤 `deletedAt`。重建索引后幽灵文档清除（job_record INSERT 需带 `progress`/`attempts` 非空列，手册旧 SQL 已过时）。
+4. **环境注记**：服务器 pm2 vendure 配置 `max_memory_restart=700MB`，启动初始化内存冲高会被杀重启（2026-10-14 曾致验证中断多次）；服务器仅 1.8GB 内存，部署验证需等 init 完成内存回落（~3 分钟）再跑脚本。另：公众号渠道（t2）搜索验证须用该渠道实际在售商品（如「洗车」），渠道 1 索引文档均为测试遗留幽灵数据。
 
 ## 8. 对话演示截图
 
