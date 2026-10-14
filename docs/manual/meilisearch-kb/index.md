@@ -191,7 +191,7 @@ WHERE "queueName" LIKE '%meili%' AND state='RUNNING';
 ### 5.5 已知遗留与凭据
 
 - **strapi admin 凭据**：`admin@example.com` / `a963963`（2026-10-14 落定）。e2e 断言 ③ 已实测通过：创建 FAQ → kb-en 搜到 → 软删 → 搜不到（软删兜底见 §5.4）
-- **生产 strapi i18n 仅配置 en locale**（暂无 zh-CN）：内容域 zh 文案待补 locale，e2e 断言 ③ 走 en 内容（归档 kb-en，链路等价）；后续补 zh-CN locale 无需改代码
+- ~~**生产 strapi i18n 仅配置 en locale**~~ **已修复（2026-10-14 晚）**：zh-CN locale 已通过 admin API `POST /i18n/locales` 添加（DB 层 `i18n_locale` 表，isDefault=false；config/plugins.ts 既有 `defaultLocale: "zh-CN"` 声明不回写 DB，需 API/后台手工加）；geo-article 已纳入 CONTENT_MAP，kb-zh 内容域 4 条 GEO 文章（详见 §9）
 - **FAQ 内容类型必填 site（关联 site-config）与 slug**：脚本/e2e 创建 FAQ 需先取 site-config 的 documentId 作为 site 关联
 - **无 worker 拓扑**：当前生产 vendure 未跑 worker 进程（2G 内存限制），`RUN_JOB_QUEUE=1` 由 server 进程消费全部队列。**定时任务（ScheduledTask，runTasksInWorkerOnly=true）因此不会运行**——预留单超时释放/订单超时补偿等既有缺口，属本任务之前的状态，非本次引入
 - **服务器 strapi 根 dist 的 plugins.js 注册段为手工注入**（服务器不 build 铁律的权宜）：下次本地全量 build 上传 strapi 根 dist 时自然带上 zhao-search 注册，届时此手工状态消失
@@ -242,7 +242,7 @@ WHERE "queueName" LIKE '%meili%' AND state='RUNNING';
 
 - 新增 `messages.search.*`（24 词条：placeholder/分段/chips/空态/加载更多/相关内容/类型徽标等）+ `messages.kb.*`（2 词条）
 - zh-CN / en-US 全译；其余 10 语言补英文文案（merge.ts zhFallbackLocale 深合并，缺失自动回退中文）
-- 已知稀疏：生产 strapi 仅 en 内容 → kb-zh 内容域 0 文档，zh 弹窗/搜索页只见商品组（设计预期，内容补齐后自动出现）
+- 已知稀疏：~~生产 strapi 仅 en 内容 → kb-zh 内容域 0 文档~~ **已修复（2026-10-14，见 §9）**：kb-zh 现有 4 条 GEO 文章，zh 弹窗/搜索页知识组正常出内容
 
 ### 8.4 验证与截图
 
@@ -263,3 +263,41 @@ WHERE "queueName" LIKE '%meili%' AND state='RUNNING';
 2. search key 随构建产物下发（本地 .env → runtimeConfig.public），**无需**服务器 .env
 3. nginx `/search-api/` location 已在 P1 配好（www.youshop.cn.conf 443 server 块，仅 GET/POST）
 4. 验证：`curl -X POST https://www.youshop.cn/search-api/indexes/kb-en/search -H "Authorization: Bearer <key>" --data-binary @body.json`（body 文件防 BOM：`[IO.File]::WriteAllText`，勿用 PS5.1 `Set-Content -Encoding utf8`）
+
+---
+
+## 9. kb-zh 内容域 0 文档修复（2026-10-14 晚）
+
+### 9.1 三层根因（与表象差异）
+
+表象「kb-zh 内容域 0 文档」，实际排查出**三层独立问题**：
+
+| 层 | 问题 | 修复 |
+|----|------|------|
+| ① 内容源 | 生产内容域真实数据 = 9 条**已软删的测试 FAQ**（en，P1/P2 开发过程产生）+ **4 条活的 zh-CN GEO 文章**；article/tutorial/case/download 全为空表 | 测试 FAQ 连同 lnk 关联行物理删除；GEO 文章为真实业务内容，保留 |
+| ② 映射缺口 | `zhao_website_geo_articles`（GEO 文章，zh-CN 原生）**不在 zhao-search 的 CONTENT_MAP**，从未入索引 | CONTENT_MAP 新增 `plugin::zhao-website.geo-article`（title/content/publishedAt/status/deletedAt/tags 全兼容，localized） |
+| ③ locale 缺失 | strapi i18n DB 层仅 en（config 里 `defaultLocale: "zh-CN"` 声明**不会**回写 DB） | admin API `POST /i18n/locales {"code":"zh-CN","name":"中文 (简体)","isDefault":false}`（isDefault 为必填字段） |
+
+修复后：**kb-zh = 78 商品 + 4 geo-article；kb-en = 78 商品（6 条测试 FAQ 索引残留同步清零）**。
+
+### 9.2 全量重建语义升级：权威快照
+
+原 `doFullReindex` 只 upsert 不删除——已软删/下架文档**永远滞留索引**（kb-en 里 6 条已删 FAQ 即此残留）。现改为**每类型先按 `type = "xxx"` filter 清空两索引旧文档再全量写入**（`POST /indexes/:uid/documents/delete`，Meili 异步 task 同索引 FIFO，「先删后写」语义成立）。重建即权威快照。
+
+### 9.3 附带事故：strapi OOM crash loop 与错峰铁律
+
+排查过程中 strapi 陷入 **OOM crash loop**（pm2 ↺ 6200+ 次，dmesg 连续 `Killed process (node) anon-rss ~460MB`）：1.87G 内存被 vendure(400MB)+nshop(147MB)+postgres(~400MB) 占满，strapi 启动到 ~460MB 必被 OOM killer 杀掉，且 strapi 启动 bootstrap 会自动跑一次 zhao-search 全量（内存雪上加霜），重启后再全量 → 恒死循环。
+
+**恢复方法（实测有效）**：`pm2 stop strapi && pm2 stop vendure` → `pm2 start strapi` → 等 ~100s（「Strapi started successfully」+ health 401=fail-closed 活着）→ `pm2 start vendure` → 稳态共存（available ~225MB，无新 OOM）。**教训：绝不在 vendure 运行中启动 strapi**；日后扩容服务器内存是治本方案。
+
+### 9.4 nshop C 端适配
+
+- `kbTypeLabelKey` kebab→camel（`geo-article → typeGeoArticle`），保证 i18n 键合法
+- 12 locale 补 `messages.search.typeGeoArticle` 词条；/search 知识类型 chips 增加 GEO 文章
+
+### 9.5 验证
+
+- reindex 返回：`{"ok":true,"counts":{"article":0,"faq":0,"tutorial":0,"case":0,"download":0,"geo-article":4},"errors":[]}`
+- 索引 facet：kb-zh `{geo-article:4, product:78}`、kb-en `{product:78}`（faq 残留清零）
+- C 端截图（Playwright 390×844 @2x，线上）：[kb1-modal-zh.png](../shots/2026-10-14-kb-zh-fix/kb1-modal-zh.png) / [kb2-search.png](../shots/2026-10-14-kb-zh-fix/kb2-search.png) / [kb3-kb-detail.png](../shots/2026-10-14-kb-zh-fix/kb3-kb-detail.png)
+
