@@ -1,7 +1,7 @@
 # MeiliSearch 统一知识库设计（Vendure + Strapi）
 
 > 日期：2026-10-13
-> 状态：已确认（方案 A：双侧直推 + web-admin 管理面）
+> 状态：**已交付**（2026-10-14，P1 全部 11 任务完成；C 端搜索 UI 为 P2 待做）
 > 范围：vendure（新插件）、strapi（新插件 zhao-search）、web-admin（新页面）、服务器部署（MeiliSearch 服务）
 
 ## 1. 背景与目标
