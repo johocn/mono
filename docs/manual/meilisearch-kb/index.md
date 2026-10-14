@@ -329,5 +329,59 @@ exp_backoff_restart_delay: 10000,  // 重试退避 10s→20s→40s…
 
 **③ deploy.mjs 已接入**：重启步骤由 `pm2 restart strapi --update-env` 改为 `bash scripts/safe-restart.sh`（这也修掉了「部署即踩 OOM 坑」的隐患）。vendure/nshop 自身的部署重启不受铁律约束，勿混用脚本。
 
-**演练数据（2026-10-14）**：strapi 健康 28s → settle 90s（available 293MB，峰值已过）→ vendure 健康 → 三进程 online，strapi `↺=0` 全程零重启；dmesg 演练后零新 OOM；回归 kb-zh 82 / kb-en 78（bootstrap 全量幂等）、youshop.cn 与 admin-api 均 200。
+**④ 两轮演练实录（2026-10-14）**
+
+*第一轮（失败，暴露 settle 缺失）*——脚本初版无 settle，六步流程自身全绿但埋雷：
+
+```
+1/5 停 vendure+nshop        → ✓
+2/5 strapi 重建（ecosystem） → pid 47，↺ 归零
+3/5 strapi 健康              → [OK] 耗时 28s   ← 此时 bootstrap 全量索引仍在灌内存！
+4/5 回起 vendure            → [OK] 健康 54s（432MB）
+5/5 回起 nshop + pm2 save   → [DONE]
+```
+
+约 1 分钟后 vendure(388MB) + strapi 内存爬坡(峰值 690MB) 顶穿 1.87G，strapi 被连续 OOM：
+
+```
+dmesg -T | grep "Killed process"          # 共 5 条，strapi ↺ 一路涨到 4
+[Wed Oct 14 22:42:04 2026] Out of memory: Killed process 24491 (node) anon-rss:689704kB
+[Wed Oct 14 22:42:32 2026] Out of memory: Killed process 25052 (node) anon-rss:485920kB
+[Wed Oct 14 22:43:02 2026] Out of memory: Killed process 25610 (node) anon-rss:501396kB
+[Wed Oct 14 22:43:32 2026] Out of memory: Killed process 26637 (node) anon-rss:389236kB
+[Wed Oct 14 22:44:01 2026] Out of memory: Killed process 26755 (node) anon-rss:437504kB
+```
+
+**手工止血（= 正确时序）**：`pm2 stop vendure nshop` → `pm2 restart strapi` → 等 130s（strapi node 子进程 rss 393MB、available 667MB 回落）→ `pm2 start vendure`（55s 后 GraphQL OK）→ `pm2 start nshop && pm2 save` → 三进程 online 不再重启。基于此实测补上 settle 窗口（commit `460d3f978c`）。
+
+*第二轮（settle 修正后，全绿）*——服务器 git pull → `bash -n` 语法校验通过 → `bash scripts/safe-restart.sh`：
+
+```
+=== 1/6 停 vendure + nshop（释放内存给 strapi 启动）===
+  nshop stopped / vendure stopped
+=== 2/6 重建 strapi（以 ecosystem.config.cjs 为准，含 crash-loop 防护参数）===
+  delete pid 47 → start pid 48（27.3MB，↺ 0）
+=== 3/6 等待 strapi 健康（最长 300s）===
+  ..... [OK] strapi 健康（耗时 28s）
+=== 4/6 settle 90s：等 bootstrap 全量索引内存峰值回落 ===
+  内存: 1577MB used / 293MB available        ← 峰值已过，可安全回起 vendure
+=== 5/6 回起 vendure ===
+  pid 33647 → [OK] vendure 健康（耗时 145s 为脚本全局计时，vendure 实际等待 ~25s，432MB）
+=== 6/6 回起 nshop + pm2 save ===
+  nshop online 78.7MB；dump.pm2 已保存
+[DONE] 错峰重启完成                          → Mem: 1630MB used / 240MB available
+```
+
+*成功指标（第二轮 + 回归，70s 后复测）*
+
+| 指标 | 实测 | 判定 |
+|------|------|------|
+| strapi 重启次数 | 全程 `↺=0`（pid 48 稳定，uptime 4m+） | ✓ |
+| strapi 健康探测 | 28s 通过（1337 任意 HTTP 响应判据） | ✓ |
+| settle 后内存 | available 293MB（bootstrap 峰值已回落） | ✓ |
+| vendure 健康 | /admin-api GraphQL `{"data":...}`，432MB 稳态 | ✓ |
+| 新增 OOM（dmesg） | 演练后 0 条（最后一条 22:44:01 为第一轮尾巴） | ✓ |
+| 索引幂等 | kb-zh 82（78 商品 + 4 GEO 文章）/ kb-en 78 | ✓ |
+| C 端回归 | youshop.cn `/` 200、e.joho.cn admin-api 200 | ✓ |
+| pm2 dump | 三进程配置已存 dump.pm2（reboot 可恢复） | ✓ |
 
