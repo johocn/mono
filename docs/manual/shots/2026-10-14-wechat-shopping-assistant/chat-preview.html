@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>微信购物助手 · 对话演示</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #ededed; font-family: -apple-system, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif; }
+  .chat { max-width: 390px; margin: 0 auto; min-height: 100vh; background: #ededed; display: flex; flex-direction: column; }
+
+  /* 顶部栏 */
+  .nav { position: sticky; top: 0; z-index: 10; background: #ededed; border-bottom: 1px solid #d9d9d9; padding: 10px 12px 8px; text-align: center; }
+  .nav .title { font-size: 17px; font-weight: 600; color: #000; }
+  .nav .sub { font-size: 11px; color: #888; margin-top: 2px; }
+
+  .msgs { padding: 12px 10px 24px; display: flex; flex-direction: column; gap: 14px; }
+
+  .row { display: flex; align-items: flex-start; gap: 8px; }
+  .row.me { flex-direction: row-reverse; }
+  .avatar { width: 38px; height: 38px; border-radius: 5px; flex: none; display: flex; align-items: center; justify-content: center; font-size: 20px; color: #fff; }
+  .avatar.assist { background: linear-gradient(135deg, #07c160, #06ad56); }
+  .avatar.user { background: linear-gradient(135deg, #576b95, #46608a); }
+
+  .bubble { max-width: 72%; padding: 9px 12px; border-radius: 6px; font-size: 15px; line-height: 1.5; color: #111; word-break: break-word; position: relative; }
+  .row.me .bubble { background: #95ec69; }
+  .row:not(.me) .bubble { background: #fff; }
+
+  .time { text-align: center; font-size: 11px; color: #9b9b9b; }
+
+  /* news 图文卡片 */
+  .news { background: #fff; border-radius: 6px; overflow: hidden; max-width: 78%; }
+  .news .item { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; display: flex; gap: 10px; }
+  .news .item:last-child { border-bottom: none; }
+  .news .thumb { width: 64px; height: 64px; border-radius: 4px; object-fit: cover; flex: none; background: #f4f4f4; }
+  .news .info { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .news .t { font-size: 14px; font-weight: 600; color: #111; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .news .d { font-size: 12px; color: #888; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .news .price { font-size: 14px; color: #fa5151; font-weight: 700; margin-top: auto; }
+  .news .price small { font-size: 11px; font-weight: 400; }
+  .news .idx { display: inline-block; background: #07c160; color: #fff; font-size: 11px; border-radius: 3px; padding: 0 5px; margin-right: 5px; vertical-align: 1px; }
+  .news .foot { padding: 7px 12px; font-size: 12px; color: #576b95; background: #fafafa; }
+
+  .hint { font-size: 12px; color: #07c160; margin-top: 6px; }
+
+  .order-ok { background: #fff; border-radius: 6px; max-width: 78%; padding: 10px 12px; font-size: 14px; line-height: 1.6; }
+  .order-ok .hd { font-weight: 700; color: #07c160; }
+  .order-ok .kv { color: #333; }
+  .order-ok .kv b { color: #fa5151; }
+  .order-ok .pay { display: block; margin-top: 8px; background: #07c160; color: #fff; text-align: center; border-radius: 5px; padding: 8px 0; font-size: 14px; font-weight: 600; text-decoration: none; }
+
+  .divider { display: flex; align-items: center; gap: 8px; color: #9b9b9b; font-size: 11px; margin: 6px 2px; }
+  .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: #d9d9d9; }
+
+  .anchor { height: 0; }
+</style>
+</head>
+<body>
+<div class="chat">
+  <div class="nav">
+    <div class="title">微商城购物助手</div>
+    <div class="sub">公众号 · 消息搜索与下单</div>
+  </div>
+
+  <div class="msgs" id="top">
+    <div class="time">14:02</div>
+
+    <!-- 用户搜索 -->
+    <div class="row me">
+      <div class="avatar user">客</div>
+      <div class="bubble">买一瓶酱油</div>
+    </div>
+
+    <!-- 助手：news 图文卡片 -->
+    <div class="row">
+      <div class="avatar assist">商</div>
+      <div class="news">
+        <div class="item">
+          <svg class="thumb" viewBox="0 0 64 64"><rect width="64" height="64" rx="4" fill="#f7f3ec"/><rect x="27" y="8" width="10" height="8" rx="1.5" fill="#8a5a2b"/><path d="M25 16h14l4 10v26a4 4 0 0 1-4 4H25a4 4 0 0 1-4-4V26z" fill="#c8843c"/><path d="M22 30h20v22a4 4 0 0 1-4 4H26a4 4 0 0 1-4-4z" fill="#6b3a12"/><rect x="24" y="34" width="16" height="10" rx="1" fill="#fff8ee"/><text x="32" y="42" font-size="6" text-anchor="middle" fill="#6b3a12" font-weight="700">酱油</text></svg>
+          <div class="info">
+            <div class="t"><span class="idx">1</span>古法酿造酱油 500ml</div>
+            <div class="d">黄豆发酵 180 天 · 厨房调味</div>
+            <div class="price"><small>¥</small>12.80</div>
+          </div>
+        </div>
+        <div class="item">
+          <svg class="thumb" viewBox="0 0 64 64"><rect width="64" height="64" rx="4" fill="#f2f2f0"/><rect x="27" y="8" width="10" height="8" rx="1.5" fill="#333"/><path d="M25 16h14l4 10v26a4 4 0 0 1-4 4H25a4 4 0 0 1-4-4V26z" fill="#3d3a35"/><path d="M22 30h20v22a4 4 0 0 1-4 4H26a4 4 0 0 1-4-4z" fill="#1c1a17"/><rect x="24" y="34" width="16" height="10" rx="1" fill="#f5efe4"/><text x="32" y="42" font-size="6" text-anchor="middle" fill="#1c1a17" font-weight="700">老抽</text></svg>
+          <div class="info">
+            <div class="t"><span class="idx">2</span>特级老抽 酱香浓郁 380ml</div>
+            <div class="d">红烧上色 · 家庭装</div>
+            <div class="price"><small>¥</small>9.90</div>
+          </div>
+        </div>
+        <div class="item">
+          <svg class="thumb" viewBox="0 0 64 64"><rect width="64" height="64" rx="4" fill="#eef4f4"/><rect x="27" y="8" width="10" height="8" rx="1.5" fill="#4a7a6f"/><path d="M25 16h14l4 10v26a4 4 0 0 1-4 4H25a4 4 0 0 1-4-4V26z" fill="#9fc4bb"/><path d="M22 30h20v22a4 4 0 0 1-4 4H26a4 4 0 0 1-4-4z" fill="#57857a"/><rect x="24" y="34" width="16" height="10" rx="1" fill="#f2faf7"/><text x="32" y="42" font-size="6" text-anchor="middle" fill="#33584f" font-weight="700">豉油</text></svg>
+          <div class="info">
+            <div class="t"><span class="idx">3</span>蒸鱼豉油 鲜味配方 410ml</div>
+            <div class="d">清蒸提鲜 · 冷藏保存</div>
+            <div class="price"><small>¥</small>15.50</div>
+          </div>
+        </div>
+        <div class="foot">回复「买1」或「买1和3」立即下单</div>
+      </div>
+    </div>
+
+    <!-- 降级文本列表示例 -->
+    <div class="divider">news 卡片发送失败时自动降级 ↓</div>
+    <div class="row">
+      <div class="avatar assist">商</div>
+      <div class="bubble">
+        为您找到「酱油」相关商品：<br>
+        1. 古法酿造酱油 500ml — ¥12.80<br>
+        2. 特级老抽 酱香浓郁 380ml — ¥9.90<br>
+        3. 蒸鱼豉油 鲜味配方 410ml — ¥15.50<br>
+        <span class="hint">回复「买1」下单，可多选如「买1和3」</span>
+      </div>
+    </div>
+
+    <div class="anchor" id="order"></div>
+    <div class="time">14:03</div>
+
+    <!-- 用户下单 -->
+    <div class="row me">
+      <div class="avatar user">客</div>
+      <div class="bubble">买1和3</div>
+    </div>
+
+    <!-- 下单成功 -->
+    <div class="row">
+      <div class="avatar assist">商</div>
+      <div class="order-ok">
+        <div class="hd">✔ 下单成功</div>
+        <div class="kv">订单号：#A8K2F9<br>
+        古法酿造酱油 500ml × 1<br>
+        蒸鱼豉油 鲜味配方 410ml × 1<br>
+        合计：<b>¥28.30</b></div>
+        <a class="pay" href="#">点击完成支付</a>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
