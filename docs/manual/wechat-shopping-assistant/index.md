@@ -53,7 +53,7 @@ wechat-shopping-assistant-plugin（异步编排）
 公众号消息 → POST https://<strapi域名>/api/zhao-sso/v1/wechat/callback（明文模式验签）
    ▼
 zhao-sso sso-wx-callback：验签 → 事件落库 → 管理员留言回复 → 关键字规则匹配
-   ▼ 关键字规则未命中（HTTP 内网直连 127.0.0.1）
+   ▼ 关键字规则未命中（HTTP 内网直连 127.0.0.1，body 带 WX_ASSISTANT_CHANNEL_TOKEN 指定渠道）
 vendure 决策接口 POST http://127.0.0.1:3020/wechat-assistant/handle（WX_ASSISTANT_URL）
    → 纯决策不发送：返回 { kind:'news', articles } / { kind:'text', content } / { handled:false }
    ▼
@@ -95,6 +95,7 @@ vendure 直连链路（`POST /wechat/message` → WechatMessageEvent → 客服�
 | 变量 | 说明 |
 |------|------|
 | `WX_ASSISTANT_URL` | `http://127.0.0.1:3020/wechat-assistant/handle`（**根路径无 /shop-api 前缀**——Nest controller 挂根路径，/shop-api/* 下的 POST 会被 Apollo GraphQL 中间件拦截）；未配置时 sso 不转调 |
+| `WX_ASSISTANT_CHANNEL_TOKEN` | 公众号绑定的 vendure 渠道 token（如利洋汽修 t2=`66ruvnhh34svhckaa2i`），决定搜索/下单渠道；未配置时 vendure 回退默认渠道 1。**strapi 对外域名是 v.joho.cn（/api→1337），e.joho.cn 无 strapi 转发** |
 | `ZHAO_SEARCH_SHARED_SECRET` | 与 vendure 同值 |
 
 ### 3.3 插件选项（dev-config.ts init）
@@ -104,7 +105,7 @@ vendure 直连链路（`POST /wechat/message` → WechatMessageEvent → 客服�
 ### 3.4 微信侧要求
 
 - 公众号为**认证服务号**（客服消息接口权限），服务器 IP 在白名单
-- **生产回调 URL（2026-10-14 起）**：`https://<strapi域名>/api/zhao-sso/v1/wechat/callback`（明文模式 + Token；Token 取 zhao-sso 后台「服务器配置」`sso-oauth-config(wechat/official_account).extraConfig.serverToken`，GET 验证 echostr）
+- **生产回调 URL（2026-10-14 起）**：`https://v.joho.cn/api/zhao-sso/v1/wechat/callback`（strapi 对外域名是 **v.joho.cn**，/api→1337；e.joho.cn 无 strapi 转发，勿用）。明文模式 + Token（Token 取 zhao-sso 后台「服务器配置」`sso-oauth-config(wechat/official_account).extraConfig.serverToken`，GET 验证 echostr）
 - vendure 直连备选回调 URL：`https://<api域名>/wechat/message`（**根路径**，nginx `location /wechat/message` 原样透传 3020；此前文档误记为 `/shop-api/wechat/message`——/shop-api/* 前缀下的 POST 会被 Apollo GraphQL 中间件拦截，勿配）
 - 客服消息有 **48 小时窗口**限制：用户 48h 内互动过才可主动发卡片（用户发消息即刷新窗口，正常购物流不受影响）；生产被动回复链路（sso）无此限制
 
