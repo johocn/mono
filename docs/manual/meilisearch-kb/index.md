@@ -120,7 +120,7 @@ curl -X POST http://127.0.0.1:1337/v1/zhao-search/reindex \
 | 脚本 | 覆盖 | 用法 |
 |------|------|------|
 | `d:\zhao\scripts\_meili_smoke.mjs` | 索引统计 + 商品域增量链路（改名→搜到→还原→搜回） | `ADMIN_P=<密码> node scripts/_meili_smoke.mjs` |
-| `d:\zhao\scripts\_meili_e2e.mjs` | ① reindex 路由鉴权 ② meiliReindex(ALL) ③ strapi 生命周期增量 ④ 渠道 filter | `ADMIN_P=<密码> node scripts/_meili_e2e.mjs`；断言 ③ 需 `STRAPI_ADMIN_EMAIL`/`STRAPI_ADMIN_P`（当前未知，见 §5.5） |
+| `d:\zhao\scripts\_meili_e2e.mjs` | ① reindex 路由鉴权 ② meiliReindex(ALL) ③ strapi 生命周期增量 ④ 渠道 filter | `ADMIN_P=<vendure密码> STRAPI_ADMIN_EMAIL/STRAPI_ADMIN_P（见 §5.5）node scripts/_meili_e2e.mjs`；**四断言 2026-10-14 实测全绿** |
 
 两脚本密钥/密码全走 env，不落文件。
 
@@ -157,10 +157,13 @@ WHERE "queueName" LIKE '%meili%' AND state='RUNNING';
 - 内容类型必须在映射表内（article/faq/tutorial/case/download，uid 前缀 `plugin::zhao-website.`）
 - 发布条件（三者同时满足）：`publishedAt` 非空 + `status='published'` + `deletedAt` 空 → 不满足会被移出索引
 - 排查：strapi 日志 `[zhao-search] 已同步 <docId>` / `增量同步失败`；或直接跑「重建内容域」
+- **软删场景兜底**：zhao-common 的全局软删过滤会让 db.update 收尾 findOne 读不到刚软删的行（`afterUpdate` 拿到 result=null），zhao-search 用 knex 按主键直查 documentId 兜底移除索引（bootstrap.ts `readDocumentIdRaw`，日志 `afterUpdate result 为空（软删过滤），按 documentId 移除索引 <docId>`）
 
-### 5.5 已知遗留
+### 5.5 已知遗留与凭据
 
-- **strapi 生产 admin 密码未知**：e2e 断言 ③（生命周期增量实测）待凭据补跑；拿到后 `STRAPI_ADMIN_EMAIL=<邮箱> STRAPI_ADMIN_P=<密码> node scripts/_meili_e2e.mjs` 即自动执行。生命周期链路本身代码路径与启动全量共用，风险低
+- **strapi admin 凭据**：`admin@example.com` / `a963963`（2026-10-14 落定）。e2e 断言 ③ 已实测通过：创建 FAQ → kb-en 搜到 → 软删 → 搜不到（软删兜底见 §5.4）
+- **生产 strapi i18n 仅配置 en locale**（暂无 zh-CN）：内容域 zh 文案待补 locale，e2e 断言 ③ 走 en 内容（归档 kb-en，链路等价）；后续补 zh-CN locale 无需改代码
+- **FAQ 内容类型必填 site（关联 site-config）与 slug**：脚本/e2e 创建 FAQ 需先取 site-config 的 documentId 作为 site 关联
 - **无 worker 拓扑**：当前生产 vendure 未跑 worker 进程（2G 内存限制），`RUN_JOB_QUEUE=1` 由 server 进程消费全部队列。**定时任务（ScheduledTask，runTasksInWorkerOnly=true）因此不会运行**——预留单超时释放/订单超时补偿等既有缺口，属本任务之前的状态，非本次引入
 - **服务器 strapi 根 dist 的 plugins.js 注册段为手工注入**（服务器不 build 铁律的权宜）：下次本地全量 build 上传 strapi 根 dist 时自然带上 zhao-search 注册，届时此手工状态消失
 
@@ -174,7 +177,7 @@ WHERE "queueName" LIKE '%meili%' AND state='RUNNING';
 | web-admin | 本地 `node scripts/deploy.mjs`（vshop 仓库，scp 产物→服务器解压） |
 | nginx | `/search-api/` 反代配置在 strapi 仓库 nginx/multi-site.conf |
 
-**OOM 铁律（2G 服务器）**：strapi 启动峰值 ~490MB、vendure ~440MB，**绝不同时重启**。顺序：停 vendure → strapi 独立启动稳定（~60s）→ 起回 vendure → `pm2 save`。改 .env 后必须重启对应进程。
+**OOM 铁律（2G 服务器）**：strapi 启动峰值 ~490MB、vendure ~440MB，**绝不同时重启**。顺序：停 vendure → strapi 独立启动稳定（~60s）→ 起回 vendure → `pm2 save`。改 .env 后必须重启对应进程。**实测补充（2026-10-14）**：稳定共存后内存充裕（vendure ~395MB + strapi ~63MB + nshop ~125MB），危险窗口仅在两者启动期互相挤兑；若观察到 pm2 崩溃循环（uptime 仅数秒、↺ 快速增长、dmesg 大量 OOM kill），立即停 vendure 让 strapi 独启稳定后再回起。
 
 ## 7. 页面截图
 

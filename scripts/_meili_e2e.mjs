@@ -125,25 +125,33 @@ const pollMeiliHit = async (indexUid, q, matchFn) => {
         console.log(`[login] strapi admin ${STRAPI_ADMIN_EMAIL} ok`);
 
         const e2eTag = `MeiliE2e${Date.now() % 1000000}`;
+        // 生产 strapi i18n 仅配置 en locale（无 zh-CN），故断言 ③ 走 en 内容（归档 kb-en，链路等价）
+        // faq 必填：site(relation)/question/answer/slug(uid)——site 取生产 site-config 第一个 documentId
+        const siteOut = ssh(
+            `curl -s -m 10 'http://127.0.0.1:1337/content-manager/collection-types/plugin::zhao-common.site-config?page=1&pageSize=1' ` +
+            `-H "Authorization: Bearer ${adminJwt}"`);
+        const siteDocId = JSON.parse(siteOut)?.results?.[0]?.documentId;
+        if (!siteDocId) throw new Error('未找到 site-config（faq.site 必填关联）: ' + siteOut.slice(0, 150));
+        const slug = 'meilie2e-' + e2eTag.toLowerCase();
         const createOut = ssh(
-            `curl -s -m 10 -X POST 'http://127.0.0.1:1337/content-manager/collection-types/plugin::zhao-website.faq?locale=zh-CN' ` +
+            `curl -s -m 10 -X POST 'http://127.0.0.1:1337/content-manager/collection-types/plugin::zhao-website.faq?locale=en' ` +
             `-H "Authorization: Bearer ${adminJwt}" -H 'Content-Type: application/json' ` +
-            `-d '{"question":"${e2eTag} 测试问题？","answer":"${e2eTag} 测试答案。","status":"published","publishedAt":"${new Date().toISOString()}"}'`);
+            `-d '{"question":"${e2eTag} 测试问题？","answer":"${e2eTag} 测试答案。","slug":"${slug}","status":"published","publishedAt":"${new Date().toISOString()}","site":{"connect":["${siteDocId}"]}}'`);
         const created = JSON.parse(createOut);
         const documentId = created?.documentId || created?.data?.documentId;
         if (!documentId) throw new Error('FAQ 创建失败: ' + createOut.slice(0, 200));
         console.log(`[lifecycle] FAQ 已创建 documentId=${documentId} tag=${e2eTag}`);
 
-        const hitNew = await pollMeiliHit('kb-zh', e2eTag, h => h.type === 'faq' && (h.id || '').includes(documentId));
-        check('FAQ 创建后 kb-zh 搜到（lifecycle 增量生效）', hitNew);
+        const hitNew = await pollMeiliHit('kb-en', e2eTag, h => h.type === 'faq' && (h.id || '').includes(documentId));
+        check('FAQ 创建后 kb-en 搜到（lifecycle 增量生效）', hitNew);
 
         // 软删除（deletedAt 非空 → syncOne 返回空 docs → 索引移除），失败兜底走 content-manager 删除
         ssh(
-            `curl -s -m 10 -X PUT 'http://127.0.0.1:1337/content-manager/collection-types/plugin::zhao-website.faq/${documentId}?locale=zh-CN' ` +
+            `curl -s -m 10 -X PUT 'http://127.0.0.1:1337/content-manager/collection-types/plugin::zhao-website.faq/${documentId}?locale=en' ` +
             `-H "Authorization: Bearer ${adminJwt}" -H 'Content-Type: application/json' ` +
             `-d '{"deletedAt":"${new Date().toISOString()}"}'`);
-        const gone = await pollMeiliHit('kb-zh', e2eTag, h => (h.id || '').includes(documentId)).then(found => !found);
-        check('FAQ 软删后 kb-zh 搜不到（索引移除生效）', gone);
+        const gone = await pollMeiliHit('kb-en', e2eTag, h => (h.id || '').includes(documentId)).then(found => !found);
+        check('FAQ 软删后 kb-en 搜不到（索引移除生效）', gone);
     } else {
         console.log('  ⚠ SKIP（未提供 STRAPI_ADMIN_EMAIL/STRAPI_ADMIN_P，生产 strapi admin 凭据未知时降级，不阻塞交付）');
     }
