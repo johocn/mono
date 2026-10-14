@@ -61,7 +61,7 @@ zhao-sso 用 buildReplyXml 组装被动回复 XML（news 最多 8 条 / text）�
 （转调超时 3.5s；超时/异常/不处理 → 回 success 静默）
 ```
 
-**卡片内容（2026-10-14 补齐）**：news article 含 `PicUrl`（商品主图 = `{PUBLIC_ASSET_URL}/{featuredAsset.preview}`）与 `Url`（点击直达商品详情页 = `{PUBLIC_STOREFRONT_URL}/product/{slug}`，search-adapter 以 slug 优先拼绝对地址）；未绑定用户下单时回复引导文案（H5 登录链接 + 手机号验证码登录自动绑定 + 「个人中心 → 地址簿」维护电话/收货地址指引），达成公众号内「看卡片 → 进详情页 → 绑定 → 回复编号下单 → 支付链接」闭环。
+**卡片内容（2026-10-14 补齐）**：news article 含 `PicUrl`（商品主图 = `{PUBLIC_ASSET_URL}/{featuredAsset.preview}`）与 `Url`（点击直达商品详情页：优先 `PUBLIC_PRODUCT_URL_TEMPLATE` 模板，未配置退回 `{PUBLIC_STOREFRONT_URL}/product/{slug}`）；未绑定用户下单时回复引导文案（登录链接取 `PUBLIC_LOGIN_URL_TEMPLATE` + 手机号验证码登录自动绑定 + 「个人中心 → 地址簿」维护电话/收货地址指引），达成公众号内「看卡片 → 进详情页 → 绑定 → 回复编号下单 → 支付链接」闭环。
 
 vendure 直连链路（`POST /wechat/message` → WechatMessageEvent → 客服消息发送）保留为备选，客服消息受 48h 窗口限制；被动回复链路无此限制。
 
@@ -87,10 +87,15 @@ vendure 直连链路（`POST /wechat/message` → WechatMessageEvent → 客服�
 | 变量 | 说明 |
 |------|------|
 | `WECHAT_AUTH_APP_ID` / `WECHAT_AUTH_APP_SECRET` | 公众号凭证（既有）；多租户店铺可用 cjk 渠道覆盖（`getAuthOverride(ctx,'wechat')`，含 appSecret） |
-| `PUBLIC_STOREFRONT_URL` | 商品卡片跳转 URL 前缀 + 绑定引导登录页 + 支付确认页前缀（`{storefront}/checkout/confirmation/{code}`）。生产已配 `https://e.joho.cn`（packages/dev-server/.env）；卡片 Url = `{storefront}/product/{slug}` 直达详情页 |
+| `PUBLIC_STOREFRONT_URL` | 绑定引导登录页/支付确认页未配模板时的前缀 + 支付确认页前缀（`{storefront}/checkout/confirmation/{code}`）。生产已配 `https://e.joho.cn`（packages/dev-server/.env） |
 | `PUBLIC_ASSET_URL` | 商品缩略图前缀（featuredAsset preview）。生产已配 `https://e.joho.cn/assets`；未配置时 meili 文档省略 thumbnail、卡片无图（不影响下单） |
+| `PUBLIC_PRODUCT_URL_TEMPLATE` | 商品详情页地址模板，`{slug}` 占位（替换时 encodeURIComponent）。生产已配 `"https://e.joho.cn/#/pkg-product/pages/detail?slug={slug}"`（vshop uni-app hash 路由，detail 页读 `options.slug`）；未配置退回 `{PUBLIC_STOREFRONT_URL}/product/{slug}` |
+| `PUBLIC_LOGIN_URL_TEMPLATE` | 绑定引导登录页（无占位符，整串绝对地址）。生产已配 `"https://e.joho.cn/#/pages/login/index"` |
+| `PUBLIC_PAY_URL_TEMPLATE` | 下单成功通知支付链接模板，`{code}` 占位（订单号 encodeURIComponent）。生产已配 `"https://e.joho.cn/#/pkg-order/pages/payment?code={code}"`（vshop 收银台 payment 页读 `query.code`） |
 | `WECHAT_ASSISTANT_OUTBOUND_MODE` | `api`（默认，真实发送客服消息）/ `echo`（仅日志，联调用） |
 | `ZHAO_SEARCH_SHARED_SECRET` | vendure 侧（`packages/dev-server/.env`，进程 cwd）；与 strapi 同值，`x-zhao-secret` 头服务间鉴权 |
+
+> **.env 值含 `#` 必须加双引号**（如上三行模板）——dotenv 把未加引号值里的 `#` 当行内注释截断，hash 路由会被截掉。
 
 **strapi 侧 .env（/www/apps/strapi）：**
 
@@ -188,7 +193,7 @@ npx vitest run
 2. POST text「买一瓶酱油」→ 200 text XML「没有找到…」（关键字未命中 → 转调 vendure 搜索 → 降级文案）
 3. POST text「DIY」→ 200 **news XML**（ArticleCount=1，Title/Description/Url 齐全）——搜索→卡片→被动回复完整闭环
 4. vendure handle 直测：`POST http://127.0.0.1:3020/wechat-assistant/handle` + `x-zhao-secret`（搜索 200 news/text、帮助 200 text、错误 secret 403）
-5. POST text「洗车服务一次」→ 200 **news XML 含 `<PicUrl>`（商品主图绝对地址）与 `<Url>https://e.joho.cn/product/利洋汽修</Url>`（详情页绝对地址）**——卡片图片 + 详情页跳转全链路通过（2026-10-14 复验，PASS）
+5. POST text「洗车服务一次」→ 200 **news XML 含 `<PicUrl>`（商品主图绝对地址）与 `<Url>https://e.joho.cn/#/pkg-product/pages/detail?slug=%E5%88%A9%E6%B4%8B%E6%B1%BD%E4%BF%AE</Url>`（hash 路由详情页绝对地址）**——卡片图片 + 详情页跳转全链路通过（2026-10-14 复验，PASS）
 
 ## 8. 对话演示截图
 
@@ -218,4 +223,5 @@ npx vitest run
 - 缩略图依赖 `PUBLIC_ASSET_URL` 配置与商品 featuredAsset；生产已配置（`https://e.joho.cn/assets`）且卡片图片已验证；未配置时卡片无图（不影响下单）
 - **被动回复链路（sso）会话/下单说明**：vendure handle 为纯决策接口（不主动发送），下单成功通知由 assistant 服务层生成 text 回复经 sso 被动返回；客服消息 48h 窗口限制不适用于被动回复
 - ~~news 卡片 Url 为站内相对路径~~ **已解决（2026-10-14）**：search-adapter 统一以 slug 拼 `{PUBLIC_STOREFRONT_URL}/product/{slug}` 绝对地址；无 slug/未配 storefrontUrl 时退回文档 url 原样
+- **storefront 为 hash 路由前端（vshop uni-app H5）时 history path 被前端忽略**（`/product/{slug}`、`/account/login`、`/checkout/confirmation/{code}` 均落首页，2026-10-14 勘误）——三个链接必须经 `PUBLIC_PRODUCT_URL_TEMPLATE` / `PUBLIC_LOGIN_URL_TEMPLATE` / `PUBLIC_PAY_URL_TEMPLATE` 配 hash 真实地址（已配，见 §3.2；值含 `#` 须加双引号）
 - 搜索无命中排查：MeiliSearch kb-zh 索引（商品+内容统一索引）无对应商品时走降级文案，属正常行为非链路故障
