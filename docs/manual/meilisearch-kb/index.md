@@ -301,3 +301,33 @@ WHERE "queueName" LIKE '%meili%' AND state='RUNNING';
 - 索引 facet：kb-zh `{geo-article:4, product:78}`、kb-en `{product:78}`（faq 残留清零）
 - C 端截图（Playwright 390×844 @2x，线上）：[kb1-modal-zh.png](../shots/2026-10-14-kb-zh-fix/kb1-modal-zh.png) / [kb2-search.png](../shots/2026-10-14-kb-zh-fix/kb2-search.png) / [kb3-kb-detail.png](../shots/2026-10-14-kb-zh-fix/kb3-kb-detail.png)
 
+### 9.6 错峰重启脚本化 + crash-loop 防护（2026-10-14 晚落地）
+
+> 9.3 的手工错峰流程已固化为脚本，并给 strapi 加了 pm2 防护参数。此后 **strapi 部署/重启一律走脚本，禁止 `pm2 restart strapi` 直拉**。
+
+**① `scripts/safe-restart.sh`**（strapi 仓库，服务器 `/www/apps/strapi/scripts/`，git 分发）
+
+```
+停 vendure+nshop → strapi 以 ecosystem.config.cjs 为准重建（delete+start，参数随文件）
+→ 轮询健康（1337 任意 HTTP 响应即通，production 下 /admin 404 不能作判据）
+→ settle 90s（关键！见下）→ 回起 vendure（等 /admin-api GraphQL 应答）→ 回起 nshop → pm2 save
+```
+
+- **settle 的由来**：实测 strapi 端口 ~28s 就开始响应，但 bootstrap 全量索引继续灌内存、峰值 ~690MB 在其后。首次演练「健康即回起 vendure」被顶爆三连 OOM（strapi ↺ 至 4）。settle 90s 后端口响应+settle≈120s，与 9.3 的历史安全经验（独启等 100-110s）吻合。可用 `STRAPI_SETTLE=120 bash scripts/safe-restart.sh` 覆盖。
+- **失败路径**：strapi 健康探测/settle 失败 → 保持 vendure/nshop 停止（避免回起再挤死 strapi），打印 `pm2 logs strapi --lines 30`，人工排查后 `pm2 start vendure nshop`。
+
+**② crash-loop 防护**（`ecosystem.config.cjs`）
+
+```js
+min_uptime: 150000,            // 150s > strapi 启动 ~110s：启动期死亡判 unstable
+max_restarts: 5,               // 连续 5 次 unstable 后 pm2 放弃重启（截断死循环）
+exp_backoff_restart_delay: 10000,  // 重试退避 10s→20s→40s…
+```
+
+- **为什么原配置拦不住**：`max_restarts` 只计 unstable 重启（存活 < min_uptime）；默认 min_uptime=1s 时，strapi 每次活 ~100s 才被 OOM 杀 → 判 stable、计数清零 → max_restarts 形同虚设（曾 ↺ 6200+）。min_uptime 提到 150s 后 OOM 死亡全部计 unstable。
+- 注意：pm2 监控的内存是 npm 父进程（~33MB），真实 strapi node 子进程（峰值 ~690MB）不在其视野内，故 `max_memory_restart` 实际不生效，防护靠 min_uptime/max_restarts。
+
+**③ deploy.mjs 已接入**：重启步骤由 `pm2 restart strapi --update-env` 改为 `bash scripts/safe-restart.sh`（这也修掉了「部署即踩 OOM 坑」的隐患）。vendure/nshop 自身的部署重启不受铁律约束，勿混用脚本。
+
+**演练数据（2026-10-14）**：strapi 健康 28s → settle 90s（available 293MB，峰值已过）→ vendure 健康 → 三进程 online，strapi `↺=0` 全程零重启；dmesg 演练后零新 OOM；回归 kb-zh 82 / kb-en 78（bootstrap 全量幂等）、youshop.cn 与 admin-api 均 200。
+
