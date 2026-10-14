@@ -61,6 +61,8 @@ zhao-sso 用 buildReplyXml 组装被动回复 XML（news 最多 8 条 / text）�
 （转调超时 3.5s；超时/异常/不处理 → 回 success 静默）
 ```
 
+**卡片内容（2026-10-14 补齐）**：news article 含 `PicUrl`（商品主图 = `{PUBLIC_ASSET_URL}/{featuredAsset.preview}`）与 `Url`（点击直达商品详情页 = `{PUBLIC_STOREFRONT_URL}/product/{slug}`，search-adapter 以 slug 优先拼绝对地址）；未绑定用户下单时回复引导文案（H5 登录链接 + 手机号验证码登录自动绑定 + 「个人中心 → 地址簿」维护电话/收货地址指引），达成公众号内「看卡片 → 进详情页 → 绑定 → 回复编号下单 → 支付链接」闭环。
+
 vendure 直连链路（`POST /wechat/message` → WechatMessageEvent → 客服消息发送）保留为备选，客服消息受 48h 窗口限制；被动回复链路无此限制。
 
 ## 2. 架构与插件职责
@@ -68,8 +70,8 @@ vendure 直连链路（`POST /wechat/message` → WechatMessageEvent → 客服�
 | 插件 | 本次改动 | 职责 |
 |------|---------|------|
 | `wechat-auth-plugin` | 补强 | 路由级 `express.text` 中间件（text/xml body）；`parseWechatXml` 零依赖解析；AES/明文双模式；发布 `WechatMessageEvent`；`sendCustomText` / `sendCustomNews` 客服消息（支持渠道覆盖凭证 cred 参数） |
-| `meilisearch-plugin` | 补强 | `MeiliService.search()`（filter：`type='product' AND status='published' AND channelId=…`，单引号转义）；商品投影新增 `thumbnail`（`PUBLIC_ASSET_URL` + featuredAsset preview） |
-| `wechat-shopping-assistant-plugin` | **新建** | 编排器：去重 → 意图 → 搜索 → 会话 → 卡片 → 下单 → 回复；两个实体；跨插件注入 MeiliSearchPlugin / WechatAuthPlugin 服务 |
+| `meilisearch-plugin` | 补强 | `MeiliService.search()`（filter：`type='product' AND status='published' AND channelId=…`，单引号转义）；商品投影新增 `thumbnail`（`PUBLIC_ASSET_URL` + featuredAsset preview）与 `slug`，url 投影 = `{PUBLIC_STOREFRONT_URL}/{slug}` |
+| `wechat-shopping-assistant-plugin` | **新建** | 编排器：去重 → 意图 → 搜索 → 会话 → 卡片 → 下单 → 回复；卡片以 slug 拼详情页绝对地址 `{storefront}/product/{slug}`；两个实体；跨插件注入 MeiliSearchPlugin / WechatAuthPlugin 服务 |
 | strapi `zhao-sso` | 补强 | 公众号回调入口（验签/落库/关键字规则/被动回复 XML）；text 未命中关键字规则时经 `askShoppingAssistant` 转调 vendure 决策接口（3.5s 超时），组装被动回复 XML |
 
 跨插件依赖：`imports: [PluginCommonModule, MeiliSearchPlugin, WechatAuthPlugin]`，直接注入 `MeiliService` / `WechatAuthService`。
@@ -85,8 +87,8 @@ vendure 直连链路（`POST /wechat/message` → WechatMessageEvent → 客服�
 | 变量 | 说明 |
 |------|------|
 | `WECHAT_AUTH_APP_ID` / `WECHAT_AUTH_APP_SECRET` | 公众号凭证（既有）；多租户店铺可用 cjk 渠道覆盖（`getAuthOverride(ctx,'wechat')`，含 appSecret） |
-| `PUBLIC_STOREFRONT_URL` | 商品卡片跳转 URL 前缀 + 绑定引导登录页 + 支付确认页前缀（`{storefront}/checkout/confirmation/{code}`） |
-| `PUBLIC_ASSET_URL` | 商品缩略图前缀（featuredAsset preview）；未配置时卡片省略图片（news 无图可接受） |
+| `PUBLIC_STOREFRONT_URL` | 商品卡片跳转 URL 前缀 + 绑定引导登录页 + 支付确认页前缀（`{storefront}/checkout/confirmation/{code}`）。生产已配 `https://e.joho.cn`（packages/dev-server/.env）；卡片 Url = `{storefront}/product/{slug}` 直达详情页 |
+| `PUBLIC_ASSET_URL` | 商品缩略图前缀（featuredAsset preview）。生产已配 `https://e.joho.cn/assets`；未配置时 meili 文档省略 thumbnail、卡片无图（不影响下单） |
 | `WECHAT_ASSISTANT_OUTBOUND_MODE` | `api`（默认，真实发送客服消息）/ `echo`（仅日志，联调用） |
 | `ZHAO_SEARCH_SHARED_SECRET` | vendure 侧（`packages/dev-server/.env`，进程 cwd）；与 strapi 同值，`x-zhao-secret` 头服务间鉴权 |
 
@@ -97,6 +99,16 @@ vendure 直连链路（`POST /wechat/message` → WechatMessageEvent → 客服�
 | `WX_ASSISTANT_URL` | `http://127.0.0.1:3020/wechat-assistant/handle`（**根路径无 /shop-api 前缀**——Nest controller 挂根路径，/shop-api/* 下的 POST 会被 Apollo GraphQL 中间件拦截）；未配置时 sso 不转调 |
 | `WX_ASSISTANT_CHANNEL_TOKEN` | 公众号绑定的 vendure 渠道 token（如利洋汽修 t2=`66ruvnhh34svhckaa2i`），决定搜索/下单渠道；未配置时 vendure 回退默认渠道 1。**strapi 对外域名是 v.joho.cn（/api→1337），e.joho.cn 无 strapi 转发** |
 | `ZHAO_SEARCH_SHARED_SECRET` | 与 vendure 同值 |
+
+**MeiliSearch 商品文档全量重建**（修改 `PUBLIC_STOREFRONT_URL` / `PUBLIC_ASSET_URL` 后需重建才生效；管理端 `meiliReindex` mutation 需 SuperAdmin 凭据，运维可直接 INSERT job_record 取件，需 vendure `RUN_JOB_QUEUE=1`）：
+
+```sql
+-- 列名为驼峰带引号（以 information_schema 为准）；createdAt/updatedAt 自动填充
+INSERT INTO job_record ("queueName", data, state, retries, "isSettled")
+VALUES ('meili-reindex-products', '{"all":true}', 'PENDING', 5, false);
+```
+
+> 完成后 `state='COMPLETED'`、progress=100；抽查：`curl http://127.0.0.1:7700/indexes/kb-zh/documents/product-73` 确认文档含 `thumbnail` 与绝对 `url`/`slug`。
 
 ### 3.3 插件选项（dev-config.ts init）
 
@@ -131,7 +143,7 @@ vendure 直连链路（`POST /wechat/message` → WechatMessageEvent → 客服�
 | news 卡片发送失败 | 自动降级纯文本编号列表（`sendOrFallback`） |
 | 回复无效编号 | 引导提示（当前会话有效编号范围） |
 | 会话过期（默认 30 分钟） | 引导重新搜索 |
-| 未绑定用户下单 | 引导跳 H5 登录页绑定（下单前置校验） |
+| 未绑定用户下单 | 引导文案：H5 登录链接（微信内打开，手机号验证码登录自动绑定）+「个人中心 → 地址簿」维护电话/收货地址（下单前置校验） |
 | 库存不足 / 无可用变体 | 「库存不足」文案（`addItemToOrder` 返回 `INSUFFICIENT_STOCK_ERROR` 时中止建单） |
 | 建单异常 | 「下单失败」文案 + 引导重试 |
 | 同一 MsgId 重试推送 | 幂等表唯一键挡住，只处理一次 |
@@ -176,6 +188,7 @@ npx vitest run
 2. POST text「买一瓶酱油」→ 200 text XML「没有找到…」（关键字未命中 → 转调 vendure 搜索 → 降级文案）
 3. POST text「DIY」→ 200 **news XML**（ArticleCount=1，Title/Description/Url 齐全）——搜索→卡片→被动回复完整闭环
 4. vendure handle 直测：`POST http://127.0.0.1:3020/wechat-assistant/handle` + `x-zhao-secret`（搜索 200 news/text、帮助 200 text、错误 secret 403）
+5. POST text「洗车服务一次」→ 200 **news XML 含 `<PicUrl>`（商品主图绝对地址）与 `<Url>https://e.joho.cn/product/利洋汽修</Url>`（详情页绝对地址）**——卡片图片 + 详情页跳转全链路通过（2026-10-14 复验，PASS）
 
 ## 8. 对话演示截图
 
@@ -202,7 +215,7 @@ npx vitest run
 - **订单状态后续通知**（发货/退款等订阅消息）→ P1
 - 中文数字数量（「一瓶」）不解析，仅阿拉伯数字（「2瓶」）进会话数量
 - 客服消息 48h 窗口外的主动触达不可用（微信平台限制）
-- 缩略图依赖 `PUBLIC_ASSET_URL` 配置与商品 featuredAsset；未配置时卡片无图（不影响下单）
+- 缩略图依赖 `PUBLIC_ASSET_URL` 配置与商品 featuredAsset；生产已配置（`https://e.joho.cn/assets`）且卡片图片已验证；未配置时卡片无图（不影响下单）
 - **被动回复链路（sso）会话/下单说明**：vendure handle 为纯决策接口（不主动发送），下单成功通知由 assistant 服务层生成 text 回复经 sso 被动返回；客服消息 48h 窗口限制不适用于被动回复
-- **news 卡片 Url 为站内相对路径时**（如 `/diy-custom-carrier`），微信内点击无法跳转——需 storefrontUrl 前缀拼绝对地址（既有搜索组装行为，待优化为绝对 URL）→ P1
+- ~~news 卡片 Url 为站内相对路径~~ **已解决（2026-10-14）**：search-adapter 统一以 slug 拼 `{PUBLIC_STOREFRONT_URL}/product/{slug}` 绝对地址；无 slug/未配 storefrontUrl 时退回文档 url 原样
 - 搜索无命中排查：MeiliSearch kb-zh 索引（商品+内容统一索引）无对应商品时走降级文案，属正常行为非链路故障
