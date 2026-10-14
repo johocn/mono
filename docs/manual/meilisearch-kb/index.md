@@ -1,7 +1,7 @@
 # MeiliSearch 统一知识库 · 操作手册
 
 > 运维与开发操作指南：架构、配置、重建操作、故障排查
-> 交付日期：2026-10-14（P1：知识库后端 + 管理面 + 查询 API；C 端搜索 UI 为 P2）
+> 交付日期：2026-10-14（P1：知识库后端 + 管理面 + 查询 API；P2：nshop C 端搜索 UI）
 
 ---
 
@@ -14,6 +14,7 @@
 - [5. 故障排查](#5-故障排查)
 - [6. 部署机制与注意事项](#6-部署机制与注意事项)
 - [7. 页面截图](#7-页面截图)
+- [8. C 端搜索 UI（P2，nshop）](#8-c-端搜索-uip2nshop)
 
 ---
 
@@ -75,6 +76,24 @@
 - systemd unit：`/etc/systemd/system/meilisearch.service`；env 文件 `/etc/meilisearch/keys.env`（`MEILI_MASTER_KEY` / `MEILI_SEARCH_KEY`）
 - 启动参数含 `--max-indexing-memory 128 MB`（2G 服务器内存保护）；版本 **v1.11.3**（受服务器 GLIBC 2.32 限制，不可盲升最新版）
 - 搜索 key（只读、限 `indexes:kb-*`）供 C 端查询侧使用；nginx `/search-api/` 反代仅放行 GET/POST
+
+### 2.3.1 C 端搜索 key 注入（P2，nshop）
+
+nshop C 端使用**专用 key** `nshop-kb-c-end`（2026-10-14 用 master key 创建，uid `0c0a000a-deb1-45ae-80d1-b6af552ce3b8`）：只读、限 `indexes:kb-*`、actions `["search", "documents.get"]`。**必须含 documents.get**——/kb 详情页走 `GET /indexes/:uid/documents/:id` 直取文档（sourceId 不是 filterable，无法用 search+filter 代替）；Meili 内建的 Default Search key 只有 search 权限会 401。
+
+| 变量 | 位置 | 说明 |
+|------|------|------|
+| `NUXT_PUBLIC_MEILI_SEARCH_KEY` | nshop **本地** .env（gitignored） | 构建期烧进 runtimeConfig.public，值为 `nshop-kb-c-end` 的 key。只读公钥随构建产物下发是既定路径；**不要**放服务器 REMOTE_DIR .env（deploy.mjs 每次部署 `rm -rf` 清空该目录） |
+| `NUXT_MEILI_HOST` | nshop 构建期（默认 `http://127.0.0.1:7700`） | **SSR 直连通道**：生产 nitro 无 /search-api 路由，node 内相对路径 fetch 只会 404，服务端必须用绝对地址直连本机 Meili。useKbSearch 里回退用 `\|\|` 而非 `??`（runtimeConfig 缺失时是空串，nullish 合并不回退） |
+| `MEILI_DEV_PROXY_TARGET` | nshop 本地 dev | devProxy /search-api 目标；默认 `https://www.youshop.cn/search-api`（走线上 nginx），本地调试可配 `http://127.0.0.1:7700`（配 ssh 隧道） |
+
+重建该 key（遗失时）：
+
+```bash
+MK=$(grep MEILI_ADMIN_KEY /www/apps/vendure/packages/dev-server/.env | cut -d= -f2 | tr -d '"' | tr -d "'")
+curl -s -X POST http://127.0.0.1:7700/keys -H "Authorization: Bearer $MK" -H "Content-Type: application/json" \
+  -d '{"name":"nshop-kb-c-end","description":"nshop C-end kb search + document get (read-only kb-*)","expiresAt":null,"actions":["search","documents.get"],"indexes":["kb-*"]}'
+```
 
 ### 2.4 密钥轮换
 
@@ -194,3 +213,53 @@ WHERE "queueName" LIKE '%meili%' AND state='RUNNING';
 - [01-stats-board.png](../shots/2026-10-14-meilisearch-kb/01-stats-board.png)：知识库索引看板（kb-zh/kb-en 各 78 文档、健康状态、三按钮）
 - [02-reindex-toast.png](../shots/2026-10-14-meilisearch-kb/02-reindex-toast.png)：全部重建提交成功 toast
 - Playwright 移动视口 390×844 @2x（780×1688）
+
+## 8. C 端搜索 UI（P2，nshop）
+
+> 交付日期：2026-10-14。nshop（Nuxt 3）方案 C 混合：搜索弹窗分组预览 + /search 结果页 + /kb 内容详情页，数据直取 Meili，**无新后端**。
+
+### 8.1 页面与代码位置
+
+| 入口 | 实现 | 说明 |
+|------|------|------|
+| 搜索弹窗（AppHeader 放大镜 / Ctrl+K） | `layers/base/app/components/SearchModal.vue` | 防抖 300ms、≥2 字符；商品组（type=product Top2，缩略图+价格）+ 知识组（type!=product Top3，徽标+高亮+日期）；底部「查看全部 N 条结果」进 /search |
+| 结果页 `/search?q=` | `layers/base/app/pages/search.vue` | SSR 首屏；分段筛选（全部/商品/知识）+ 知识类型 chips + 加载更多（offset 追加）；robots 已 disallow |
+| 内容详情页 `/kb/[type]/[id]` | `layers/base/app/pages/kb/[type]/[id].vue` | 文档 id 构造 `${type}-${documentId}-${zh\|en}`；徽标+更新时间+正文（\n 分段）+ 相关内容（同 type 最新 2 篇）；type=product 恒 404；definePageMeta key=fullPath 防 /kb 内跳转陈旧数据 |
+| JD 风格 PC 顶栏搜索 | `components/home/jd/JdPcHeader.vue` | 同源迁移到 useKbSearch（原 GraphQL SearchProducts 下线） |
+| 共用 composable | `composables/useKbSearch.ts` | useKbSearch（搜索）/ useKbDocument（单文档）/ kbFormatDate / kbTypeLabelKey / kbIndexFor |
+
+已删除：`composables/useSimpleSearch.ts`（GraphQL SearchProducts 旧链路；gql 定义保留避免 codegen 波及）。
+
+### 8.2 双通道请求（关键设计）
+
+- **CSR**（弹窗/加载更多）：同源相对路径 `/search-api/` → nginx 反代 → 127.0.0.1:7700，`Authorization: Bearer <search key>`
+- **SSR**（/search 首屏、/kb 详情、相关内容）：node 内相对路径 fetch 只会命中 nitro 自身（生产无 /search-api 路由 → 404），必须绝对地址直连 `NUXT_MEILI_HOST`（默认 `http://127.0.0.1:7700`，服务器本机回环）
+- locale 归档：`zh* → kb-zh`，其余 → `kb-en`（与 strapi content-mapper 的 toIndexLocale 一致）
+- 降级：key 缺失 / 网络错误 / 空词且无 filter（无界 browse 防护）一律返回空结果渲染空态，不抛错
+- 高亮：Meili 原生 `attributesToHighlight: ['title','body']`（`<mark>` 包裹，`_formatted` 已转义可安全 v-html）+ `attributesToCrop: ['body']`（30 词摘片）；日期一律 `kbFormatDate` 手拼 YYYY-MM-DD（防 hydration mismatch）
+
+### 8.3 i18n
+
+- 新增 `messages.search.*`（24 词条：placeholder/分段/chips/空态/加载更多/相关内容/类型徽标等）+ `messages.kb.*`（2 词条）
+- zh-CN / en-US 全译；其余 10 语言补英文文案（merge.ts zhFallbackLocale 深合并，缺失自动回退中文）
+- 已知稀疏：生产 strapi 仅 en 内容 → kb-zh 内容域 0 文档，zh 弹窗/搜索页只见商品组（设计预期，内容补齐后自动出现）
+
+### 8.4 验证与截图
+
+- 移动视口截图（Playwright 390×844 @2x，本地 dev + ssh 隧道取真实数据）：
+  - [kb1-modal-zh.png](../shots/2026-10-14-kb-search-p2/kb1-modal-zh.png)：搜索弹窗分组预览（商品组 + 高亮 mark + 「查看全部 N 条结果」）
+  - [kb2-search.png](../shots/2026-10-14-kb-search-p2/kb2-search.png)：/search 结果页（分段筛选 All/Products/Knowledge + 高亮卡片 + No more results）
+  - [kb3-kb-detail.png](../shots/2026-10-14-kb-search-p2/kb3-kb-detail.png)：/kb/[type]/[id] 内容详情页（FAQ 徽标 + Updated 日期 + 正文 + Related content 排除自身；en 路线，zh 内容稀疏）
+- 本地验收脚本：`python scripts/_shot_kb_search.py`（自动从 Meili 取真实关键词与文档；前置：ssh 隧道 7700 + 本地 dev；弹窗验证必须走 dev——本地 prod 预览无 devProxy，CSR /search-api 会 404）
+- 本地冒烟断言（prod 预览）：/search?q=蓝牙 mark=2、/en/kb 详情 200 含标题、/kb/faq/伪id → 404、SPA 跳离 /search 无 dispose/mismatch 报错
+- 部署后复测：线上弹窗预览 / /search 筛选 / /kb 直链与伪 id 404
+- 既有 `scripts/_meili_e2e.mjs` 四断言不受影响（纯前端改动）
+
+**顺手修复的既有缺陷（2026-10-14）**：`JdAllCategoryDrawer` 的 `<Teleport to="body">` SSR 直出导致全站 hydration mismatch（dev 下 /en 路由甚至整树重挂载白屏）→ 已包 `<ClientOnly>` 修复（抽屉默认关闭，零视觉影响）。另：/search 页 `useHead` getter 曾在 `q` 声明前引用（TDZ），会致 unhead entry 未创建、跳离页面时报 `Cannot read properties of undefined (reading 'dispose')`，已调整声明顺序。首页尚余 1 条既有 hydration mismatch（横幅轮播时变渲染，非 P2 范围，未动）。
+
+### 8.5 部署（nshop）
+
+1. 本地构建 `node scripts/deploy.mjs`（scp 产物 → 服务器解压 → pm2 restart；服务器绝不构建）
+2. search key 随构建产物下发（本地 .env → runtimeConfig.public），**无需**服务器 .env
+3. nginx `/search-api/` location 已在 P1 配好（www.youshop.cn.conf 443 server 块，仅 GET/POST）
+4. 验证：`curl -X POST https://www.youshop.cn/search-api/indexes/kb-en/search -H "Authorization: Bearer <key>" --data-binary @body.json`（body 文件防 BOM：`[IO.File]::WriteAllText`，勿用 PS5.1 `Set-Content -Encoding utf8`）
