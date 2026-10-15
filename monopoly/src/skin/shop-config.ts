@@ -41,6 +41,8 @@ export interface ShopConfig {
   overrides: Record<string, ProviderSpec>;
   /** 需预装载的商家图片相对路径（相对皮肤包目录） */
   images: string[];
+  /** 解析后的商家条目（M21 广告商城层消费：卡面 / 落格联动 / 弹券） */
+  entries: ShopEntry[];
   /** 字牌短名（当前 locale 无关；缺配置逐格回退 `TILE_SHORT`） */
   shortAt(index: number): string;
   /** 店招 / 楼体 / 橱窗文字（缺配置逐格回退 `TILE_BRAND`） */
@@ -51,6 +53,7 @@ export interface ShopConfig {
 export const SHOP_DEFAULTS: ShopConfig = {
   overrides: {},
   images: [],
+  entries: [],
   shortAt: boardShortAt,
   brandAt: boardBrandAt,
 };
@@ -123,6 +126,7 @@ export function parseShopConfig(raw: unknown): ShopConfig {
   return {
     overrides,
     images,
+    entries: [...bySlot.values()],
     shortAt: (i) => bySlot.get(i)?.short ?? boardShortAt(i),
     brandAt: (i) => bySlot.get(i)?.brand ?? boardBrandAt(i),
   };

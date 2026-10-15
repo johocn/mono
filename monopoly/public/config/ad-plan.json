@@ -1,0 +1,4 @@
+{
+  "_readme": "广告宣传版 · 当前方案（商户后台管理系统配置出口）。本期后台 UI 未建，运营/后台直接改本文件的 plan 字段即可切换方案：showcase=橱窗商城(A) / flagship=旗舰展厅(B) / billboard=霓虹广告牌(C) / theater=剧场舞台(D) / catalog=商圈图录(E)。B–E 尚未实现时自动回退 showcase。URL ?plan= 为临时预览（不落库）；localStorage mono.adPlan 为会话切换落点。优先级：URL > localStorage > 本文件 > 默认 showcase。",
+  "plan": "showcase"
+}

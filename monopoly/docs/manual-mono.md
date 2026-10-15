@@ -1277,6 +1277,55 @@ $env:MONO_ORIGIN='http://127.0.0.1:52301'; node local/mono-shots-m206.mjs   # [m
 
 **单测**（新增 5 个 spec，共 32 例）：`test/core/endgame.spec.ts`（阶段阈值 / `amplify` 恒等性 / `endgameAiParams` 段内外）、`test/core/sector.spec.ts`（板块系数命中与回退）、`test/core/facility-boost.spec.ts`（控股权溢价 / 通过系数）、`test/core/multi-settle.spec.ts`（分账挂起 / 续跑 / 破产续接）、`test/core/unique-winner.spec.ts`（`autoPlay` 任意 seed 恰返回 1 个胜者且与 `winnerOf` 一致）。
 
+### M21 广告宣传版（方案 A 橱窗商城 + 五案切换架构）2026-10-15
+
+**需求定稿（四条硬要求）**：① 所有配色参数 100% 抽取为全局公共变量，存于公共样式变量文件，组件内不得硬编码色值；② 模块化低耦合方案切换架构，切换方案仅需替换配置文件；③ 多方案切换无卡顿、无样式错乱、无残留；④ 公共变量与架构预留五方案快速接入的扩展接口。**布局**：上 2/3（0..563px）店铺商品广告区 + 下 1/3（563..844px）原版游戏区（迷你棋盘 + 紧凑 HUD），**核心玩法零改动**。五套备选方案（A 橱窗商城 / B 旗舰展厅 / C 霓虹广告牌 / D 剧场舞台 / E 商圈图录）全部保留为可选配置，最终由商户后台配置选择——本期只落地远端配置 hook `public/config/ad-plan.json`（后台 UI 未建，运营/后台直接改该文件的 `plan` 字段即可切换），本期完整实现方案 A（showcase）。
+
+**入口与零回归**：`?ad=1` 激活广告版；裸链接行为与 M20.6 完全一致（`adPlan === null` 时所有广告分支旁路：canvas 版 `hudSpecs` / 教程 / 摊位层 / 氛围件 / 相机全部照常）。`window.__monoMain` 新增 `adPlan`（当前方案 id 或 null）与 `adSwitch(id)`（`persistPlan` 落库 + reload，后台 / e2e 切换落点）。
+
+**架构（[src/ad/](file:///d:/zhao/monopoly/src/ad) 8 文件，核心业务零侵入）**：
+
+| 文件 | 职责 |
+|---|---|
+| [types.ts](file:///d:/zhao/monopoly/src/ad/types.ts) | `AdPlanId` 五案字面量（showcase/flagship/billboard/theater/catalog）/ `AdPlanConfig` / hero·Tab·占位卡类型。**新增方案三步**：新建 `plans/<id>.ts` 导出 `AdPlanConfig` → `plans/registry.ts` 注册一行 → 核心逻辑零改动 |
+| [resolve.ts](file:///d:/zhao/monopoly/src/ad/resolve.ts) | 方案级联解析（绝不抛错）：URL `?plan=`（预览**不落库**）→ `localStorage['mono.adPlan']` → 远端 `./config/ad-plan.json`（商户后台配置出口）→ 默认 showcase；非法 id 静默下探（宽入严出） |
+| [tokens.ts](file:///d:/zhao/monopoly/src/ad/tokens.ts) | **配色唯一真源**：17 键 `AD_TOKEN_DEFAULTS` → `applyAdTokens()` 全量注入 `--ad-*` CSS 变量（缺省键回落默认 → 切换无残留）；方案只能 `Partial` 覆盖既有键，禁止私造色键 |
+| [adLayout.ts](file:///d:/zhao/monopoly/src/ad/adLayout.ts) | 布局常量（非配色）：`AD_ZONE_H=563` / hero 96 / Tab 22 / `AD_GEO`（迷你棋盘 hw10.75·hh9，顶缘 572、底缘 734）/ `AD_PLACEMENT`（台位缩放）/ 紧凑 HUD 734..844 四行 |
+| [plans/registry.ts](file:///d:/zhao/monopoly/src/ad/plans/registry.ts) | 五案注册表；未实现 id 回退 showcase 并 `console.warn`（`[ad] 方案「x」尚未实现…`） |
+| [plans/showcase.ts](file:///d:/zhao/monopoly/src/ad/plans/showcase.ts) | 方案 A 配置：hero 4 帧渐变占位 / 4 商圈 Tab（全部·核心·文旅·乡镇）/ 18 张占位商品卡（从棋盘商家格动态生成，tones 轮换 gold/brick/tan） |
+| [MallView.ts](file:///d:/zhao/monopoly/src/ad/MallView.ts) | DOM 商城层（0..563）：分享按钮 + hero 轮播（4s 自动滚动，destroy 清定时器）/ 商圈 Tab 过滤 / 双列商品卡网格 / 落格联动；`shops.json` 为空时显示占位卡，有配置则显示真实商家 |
+| [AdHud.ts](file:///d:/zhao/monopoly/src/ad/AdHud.ts) | DOM 紧凑 HUD（734..844）：状态行（含 M20.6 终局阶段标签）+ 新闻条 + 债务徽标 + 双静音键 / 4 段资产条 / 双骰 + 主/买地/升级按钮 / 5 快捷键 |
+
+**配色硬规范落地**：广告层 DOM（MallView / AdHud）CSS **只消费 `var(--ad-*)`，组件内零色值**；canvas 迷你棋盘配色走 `config/theme.json` 调色板（`AdPlanConfig.palette` 配置化，`forcePalette` 强制绑定）+ 舞台底色取 `canvasBgKey` token。`npm run build` 的 check-hardcoded clean。
+
+**业务判定零复制**：主按钮阶段机 / 买地报价 / 升级报价 / enabled 判定全部复用 [ui/Hud.ts](file:///d:/zhao/monopoly/src/ui/Hud.ts) 导出的纯函数（`primaryAction` / `primaryLabel` / `buyOffer` / `upgradeOffer` / `hitAreas`）；动作走同一 `HudActionId` 通道（main.ts 的 `hudAction` 回调原样消费）——广告版 HUD 与 canvas 版 HUD 同源一份业务逻辑，无第二实现。
+
+**落格联动**：`pickLanding(state, entryBySlot)` 纯函数——只在 `phase === 'settled'` 触发；落格为已认领商家（`shops.json` 含 `couponTemplateId`）→ 商品卡 `is-hot` 金框高亮 + `scrollIntoView` + 券抽屉（领取 / 关闭；领取写 `localStorage['mono.adCoupons']`，同 key 防重复弹）。
+
+**回归口径（本轮实测）**：
+
+```powershell
+npx tsc --noEmit                                  # 退出码 0、无输出
+npm run check                                     # eslint 0 错；[theme] OK / [skin:default] OK / [skin:photo] OK；registry-ids.json: 345 ids；89 文件 / 982 例全绿（新增 test/ad/ad.spec.ts 15 例）
+npm run build                                     # [check-hardcoded] clean → vite build 通过
+$env:MONO_ORIGIN='http://127.0.0.1:52300'; npm run shots:ad   # mono-shots-ad: 17 项 gate 全 PASS · errors: []
+```
+
+**截图清单（6 张，均 390×844 @dpr2 手机视口，出 780×1688 PNG，入 `docs/verify/`）**：
+
+| 文件 | 内容 |
+|---|---|
+| `mono-ad-01-original` | 原版裸链接零回归：无 ad DOM / 无 `--ad-*` 注入 / canvas HUD（ui.qk）照常 |
+| `mono-ad-02-mall` | 广告版整屏：hero 轮播 + 4 商圈 Tab + 双列商品卡 + 迷你棋盘 + 紧凑 HUD |
+| `mono-ad-03-tab-filter` | Tab 过滤：点「核心商圈」→ on 迁移 + 卡数变少且 >0 |
+| `mono-ad-04-landing` | 落格联动（mock shops.json slot 3 长峰特产）：`is-hot` 金框 + 「领券」角标 + 券抽屉（领取/关闭） |
+| `mono-ad-05-plan-fallback` | `?plan=flagship` 预览不落库（localStorage null）+ 回退 showcase 告警 |
+| `mono-ad-06-after-switch` | `adSwitch('showcase')` 落库 reload 重启后零残留 |
+
+**取证脚本**：[local/mono-shots-ad.mjs](file:///d:/zhao/monopoly/local/mono-shots-ad.mjs)（**17 项机器闸门**：`orig_no_ad` / `orig_canvas_hud` / `ad_boot` / `ad_tokens` / `ad_hero_tabs` / `ad_cards` / `ad_hud_compact` / `ad_canvas_hud_absent` / `ad_hero_autoplay` / `ad_tab_filter` / `ad_landing_hot` / `ad_landing_coupon` / `ad_landing_guard` / `ad_coupon_close` / `plan_preview_no_persist` / `plan_fallback_warn` / `ad_switch_reboot`）。关键口径：**`headless:false` 有头截图**——headless 的软件 GL 合成器会把 `overflow-y:auto` 滚动容器在 `#mono-ad` 裁剪区外的溢出带画成纯黑（**伪影**，真实 Chrome 无此问题，已 headed 复测逐点确认），有头模式额外请求的 favicon 已在脚本内短路；落格联动用「`moveCurrent()` 后、`settleCurrent()` 前传送 `players[0].pos=3`」确定性落格（`moveCurrent` 含技能 `stepBonus`，落格点 ≠ 骰值步数）；`?debug=1` 不带（会弹风格控制台遮挡广告区，`__monoMain` 本就无条件暴露）。
+
+**单测**：`test/ad/ad.spec.ts` 15 例（resolve 四级级联与宽入严出 / tokens 注入·清理·Partial 覆盖 / registry 未实现回退告警 / `pickLanding` 触发条件·高亮·防重复）。
+
 | # | spec §11 条目 | 证据 |
 |---|---|---|
 | 1 | 手机视口截图（390×844 dpr2） | M1–M8 全部 `docs/verify/mono-*.png`（M7 新增线上 `mono-prod-01..03`；M7-4 真实点击整局另出 `mono-e2e-01..07`——首末 `mono-e2e-01-start` / `07-final`，973 次点击跑到 `over=true`；M8 新增 `mono-share-01-cta` / `02-result` / `03-fallback`；M9/M10 新增 `mono-ai-01-setup-skip` / `02-setup` / `03-started` / `04-turn` / `05-tour-1..4` + 线上 `mono-prod-00-default`（开局面板）/ `mono-prod-04-ai-seat` / `mono-e2e-08-ai-final`；M11 新增 `mono-prod-05-audio-on` / `mono-prod-06-audio-off`） |

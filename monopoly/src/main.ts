@@ -21,7 +21,7 @@ import { pathIndices, type Advance } from './core/board-path';
 import { candidatesFor, canTarget, type PickKind } from './core/targeting';
 import { bboxOf, choreography, frameFor, landingPose, type CamPose, type Cell, type ChoreographyOpts, type View } from './core/framing';
 import { createCamera, toWorld } from './render/camera';
-import { hudSpecs, mountHud, type HudActionId, type HudHandle } from './ui/Hud';
+import { hudSpecs, mountHud, type HudActionId, type HudHandle, type HudUiOpts } from './ui/Hud';
 import { applyAmountKey, applyAmountTier, handLayout, mountPanels, newsTickerSpecOf, overlayOf, panelSpecs, parseAmount, parseTierKey, sectorTagTextOf, tierShares, type BankProductKind, type BullbearUiState, type FacilityUiState, type PanelActionId, type PanelHandle, type StockUiState, type StoreUiState, type TargetingView } from './ui/panels';
 import { createAiDriver, type AiDriver } from './ui/aiDriver';
 import { createAudioEngine } from './ui/audio';
@@ -34,6 +34,14 @@ import {
   type ShareHandle,
 } from './ui/share';
 import { SHARE_VERSION } from './data/share';
+/* —— 广告宣传版（M21）：`?ad=1` 激活；方案配置化（plans/registry），核心逻辑零侵入 —— */
+import { AD_GEO, AD_PLACEMENT } from './ad/adLayout';
+import { resolveAdPlan, persistPlan } from './ad/resolve';
+import { adPlanConfigOf } from './ad/plans/registry';
+import { applyAdTokens, adToken } from './ad/tokens';
+import { mountMall, type MallHandle } from './ad/MallView';
+import { mountAdHud } from './ad/AdHud';
+import type { AdPlanConfig } from './ad/types';
 import { FATE_DECK, type ItemCardKind } from './data/cards';
 import { DEMO_OWNER, PLAYER_NAME, type BuildLevel } from './data/board';
 import { STOCKS, STOCK_TILE_INDEX } from './data/stocks';
@@ -76,6 +84,8 @@ export interface UrlOptions {
   audio: boolean;
   /** `?theme=off` 关掉 `config/theme.json` 出厂配色；`?theme=<paletteId>` 强制整体套色（spec §4 调试通路） */
   theme?: string;
+  /** `?ad=1`：广告宣传版（M21）——上 2/3 商城广告区 + 下 1/3 迷你棋盘 + 紧凑 HUD；方案 `?plan=` 预览 */
+  ad: boolean;
 }
 
 /** v5 样张 line 63：当前格 index 4（太平温泉）在 (5,9)，四枚棋子同格 */
@@ -113,6 +123,8 @@ export function parseOptions(search: string): UrlOptions {
     audio: q.get('audio') !== '0',
     /* 风格调试（spec §4）：`?theme=off` 关掉 theme.json；`?theme=<paletteId>` 强制整体套色 */
     theme: q.get('theme') ?? undefined,
+    /* 广告宣传版（M21）：`?ad=1` 激活；裸链接 = 原版（零回归） */
+    ad: q.get('ad') === '1',
   };
 }
 
@@ -209,9 +221,18 @@ export async function boot(): Promise<void> {
   const fitRoot = document.getElementById('mono-ui') ?? document.body;
   const opts = parseOptions(location.search);
 
+  /* —— 广告宣传版（M21）：`?ad=1` 激活。方案级联：URL ?plan=（预览，不落库）→ localStorage
+     mono.adPlan（后台 / e2e 切换落点）→ 远端 config/ad-plan.json（商户后台配置出口）→ 默认 showcase。
+     未实现 id 由 adPlanConfigOf 回退 showcase 并告警——方案切换不改核心业务逻辑。 —— */
+  const adId = opts.ad ? await resolveAdPlan() : null;
+  const adPlan: AdPlanConfig | null = adId ? adPlanConfigOf(adId) : null;
+  if (adPlan) applyAdTokens(document.documentElement, adPlan.theme);   // 公共配色变量全量注入（无残留）
+
   const defaultSkin = await loadSkin('default');
   const skin = opts.skin === 'default' ? defaultSkin : await loadSkin(opts.skin);
-  const geo = skin?.geo ?? defaultSkin?.geo ?? DEFAULT_GEO;
+  const baseGeo = skin?.geo ?? defaultSkin?.geo ?? DEFAULT_GEO;
+  /* 广告版：迷你棋盘几何（五案共用一份；与原版 geo 断言互不干扰） */
+  const geo = adPlan ? { ...baseGeo, ...AD_GEO } : baseGeo;
   const tokens = { ...(defaultSkin?.tokens ?? {}), ...(skin?.tokens ?? {}) };
 
   /* —— M11 音效与音乐（spec §3 / §9）：此处置装配，但**不建 `AudioContext`**——等首次手势解锁 —— */
@@ -243,16 +264,20 @@ export async function boot(): Promise<void> {
      补丁只叠在 L2/L3/L4 之上：商家实拍（L1）永远赢，见 instantiate()。 */
   const theme = await loadThemeConfig();
   const ids = allElementIds();
-  const forced = opts.theme && opts.theme !== 'off' ? forcePalette(theme, opts.theme, ids) : {};
-  const themePatch = opts.theme === 'off' ? null : mergePatches(compileTheme(theme, ids), forced);
+  /* 广告版棋盘统一方案指定调色板（theme.json 配置化，非硬编码）；`?theme=` 调试通路仅原版生效 */
+  const forced = adPlan
+    ? forcePalette(theme, adPlan.palette, ids)
+    : (opts.theme && opts.theme !== 'off' ? forcePalette(theme, opts.theme, ids) : {});
+  const themePatch = opts.theme === 'off' && !adPlan ? null : mergePatches(compileTheme(theme, ids), forced);
 
   const stage = await createStage(canvas, { bg: BG_FALLBACK, dpr: window.devicePixelRatio || 2 });
   /* —— 相机（spec §5.2）：`world` 容器变换，与画布自身的页适配（`fitStage`）互不干涉 —— */
   const camera = createCamera({ world: stage.world });
-  /** 相机是否介入（spec §7 总回退 / §8 V19）：
-   *  `?cam=0` 关掉全部取景；`?nofx=1` 下时轴 = 999，补间会瞬间到位并**停在近景**，
-   *  违背「nofx 下恒 1.0」，故一并禁用（等价于「无动效即无取景」）。 */
-  const camOn = opts.cam && !opts.nofx;
+  /* 相机是否介入（spec §7 总回退 / §8 V19）：
+     `?cam=0` 关掉全部取景；`?nofx=1` 下时轴 = 999，补间会瞬间到位并**停在近景**，
+     违背「nofx 下恒 1.0」，故一并禁用（等价于「无动效即无取景」）。
+     广告版（M21）：迷你棋盘需整盘稳定可见，取景关闭。 */
+  const camOn = opts.cam && !opts.nofx && !adPlan;
   /* 倍率上限（spec §7 R3）：`?perf=1` 实测帧超预算时降到 `CAM_FALLBACK_MAX_ZOOM` */
   const camMax = { zoom: CAM_MAX_ZOOM };
   /* 地块序号 → 建筑层级（与楼体、楼顶名牌同源一份） */
@@ -262,7 +287,7 @@ export async function boot(): Promise<void> {
      同格四人改 2×2 方阵（`pawnRowDy` 为后排上移量）；
      Q 版化后头部占高 57%，头宽达 18px、八戒垂耳外缘 28px，
      单排间距同步放宽到 24（相邻两头仍留 6px 净空），两人并肩而不糊成一团。 */
-  const PLACEMENT: PlacementOpts = {
+  const PLACEMENT: PlacementOpts = adPlan ? AD_PLACEMENT : {
     pawnGap: 24, pawnFrontDy: 1.2, pawnRowDy: 22, pawnScale: 1.6,
     buildingScale: BUILDING_SCALE, buildingYOffset: BUILDING_Y_OFFSET,
   };
@@ -273,7 +298,8 @@ export async function boot(): Promise<void> {
   const scene = new Scene({
     layers: stage.layers,
     geo,
-    bg: { color: tokens.bgBottom ?? '#0c1513', alpha: 1 },
+    /* 广告版舞台底色走公共 token（tokens.ts 唯一真源）；原版沿用皮肤 tokens */
+    bg: { color: adPlan ? adToken(adPlan.canvasBgKey, adPlan.theme) : (tokens.bgBottom ?? '#0c1513'), alpha: 1 },
     instantiateDeps,
     /* 台位（唯一一份）：Scene 的落位与「气泡锚在棋子头顶」共用，改这里即两处同步 */
     placement: PLACEMENT,
@@ -585,12 +611,14 @@ export async function boot(): Promise<void> {
         return { id: 'board.tile.candidate', c: cell.c, r: cell.r, pass: 1, state: { index: idx } };
       }) : []),
       /* spec §7.2：play 版式不再常驻中部橱窗（`?show=b|c` 演示版式完整保留），
-         中部条带交给环境层近景街市带；落地时由地块卡（`ui.tileCard`）滑入 */
-      ...hudSpecs(g.state, fxPending || fx.busy(), seats, driver?.isFast() ?? false, audio.prefs(),
-        { tileCard: tileCardOn(g), handOpen: handOpenEff(), callout, bankOpen, storeOpen, facilityOpen }),
+         中部条带交给环境层近景街市带；落地时由地块卡（`ui.tileCard`）滑入。
+         广告版（M21）：canvas HUD 整体不画（底部 281px 由 AdHud DOM 重排），新闻条随 HUD 一并由
+         AdHud 状态行承接（newsTickerSpecOf 同口径复用）。 */
+      ...(adPlan ? [] : hudSpecs(g.state, fxPending || fx.busy(), seats, driver?.isFast() ?? false, audio.prefs(),
+        { tileCard: tileCardOn(g), handOpen: handOpenEff(), callout, bankOpen, storeOpen, facilityOpen })),
       /* M20.4 新闻条（spec §6.2）：每轮 1 条，落 474..500 的空带；夹在 `hudSpecs` 与 `panelSpecs` 之间
          ⇒ 浮层（含设施浮层）自然盖住它；`state.news === null` 时不出 */
-      ...(newsTick ? [newsTick] : []),
+      ...(newsTick && !adPlan ? [newsTick] : []),
       /* M5 浮层：手牌抽屉（默认收起）+ 抽卡翻牌 / 股票盘 / 结算面板（未触发时为空）；
          M20.2 银行浮层（版式 C）由 `{ open, sel }` 驱动、M20.3 商店浮层同理，可见性仍由 `overlayOf` 统一仲裁 */
       ...panelSpecs(g.state, handOpenEff(), uiSel, bankUi(), handScroll, storeUi(),
@@ -602,6 +630,7 @@ export async function boot(): Promise<void> {
   let panels: PanelHandle | null = null;
   let share: ShareHandle | null = null;
   let slots: SlotsHandle | null = null;
+  let mall: MallHandle | null = null;   // M21 广告商城层（仅 `?ad=1`）
 
   /** 唯一出画口：清 spec → 组视图 → 渲染 → 标签 → HUD / 浮层命中层 */
   const paint = (): void => {
@@ -610,8 +639,9 @@ export async function boot(): Promise<void> {
     const lv = liveLevels();
     instantiateDeps.slotLevels = lv;
     scene.reset();
-    /* 环境层（夜空/星/月/远山/街市/街灯/灯笼串）：静态底遍，插在最前 ⇒ 压在所有棋盘元素之下 */
-    scene.addMany(atmosphereSpecs());
+    /* 环境层（夜空/星/月/远山/街市/街灯/灯笼串）：静态底遍，插在最前 ⇒ 压在所有棋盘元素之下；
+       广告版关闭（奶油底 + 迷你棋盘，不叠夜色街景） */
+    if (!adPlan) scene.addMany(atmosphereSpecs());
     if (game) scene.addMany(playView(game, lv));
     else if (!opts.play) scene.addMany(demoView());
     scene.render();
@@ -630,9 +660,11 @@ export async function boot(): Promise<void> {
     panels?.update();
     share?.update();
     slots?.update(calloutOf(game));
+    mall?.update();   // M21 落格联动（结算态高亮商品卡 + 弹券）
     /* 遮挡修复：`#mono-slots`（右上轮播 + 左下战报）是 DOM，恒在画布之上 ⇒ 任何浮层展开时
        整块隐藏，否则必然压住事件卡（canvas 的 `ui.card`）左下角。无浮层时 `false` = 逐像素回现状。 */
     slots?.setHidden(game !== null && overlayOf(game.state, overlays()) !== null);
+    mall?.setHidden(game !== null && overlayOf(game.state, overlays()) !== null);
     /* 选目标命中层仅在选目标态吃事件（否则 pointer-events:none 穿透到画布 / 其它覆盖层） */
     pickLayer.style.pointerEvents = uiSel ? 'auto' : 'none';
   };
@@ -981,36 +1013,47 @@ export async function boot(): Promise<void> {
     tutorial = mountTutorial(fitRoot, { onDone: () => { tutorial = null; } });
   };
 
+  /** HUD 动作回调（canvas 版 mountHud 与广告版 mountAdHud 共用同一通道） */
+  const hudAction = (a: HudActionId): void => {
+    /* 静音键（spec §7.4）：翻转 → 落库 → 立即重画图标；不跳动画、不推进状态 */
+    if (a === 'audio:sfx' || a === 'audio:bgm') {
+      audio.toggle(a === 'audio:sfx' ? 'sfx' : 'bgm');
+      paint();
+      return;
+    }
+    /* 牌袋抽屉开合（spec §7.3）：只改可见性、不推进状态，故不走 `dispatch`（也就不吃动效与气泡） */
+    if (a === 'hand') { handOpen = !handOpen; paint(); return; }
+    /* 自由出售入口（spec §3.5）：进入 M19 选目标态，等待棋盘点选自有地块 */
+    if (a === 'sell') { uiSel = { kind: 'sell', hovered: null }; paint(); return; }
+    /* 银行 / 商店 / 设施浮层开合（M20.2 §3.8 / M20.3 §5.1 / M20.4 §6.1）：只改 UI 态、不推进状态，
+       故不走 `dispatch`（也就不吃动效与气泡）；三者互斥——开启一方即收起另两方 */
+    if (a === 'bank') {
+      bankOpen = !bankOpen;
+      if (bankOpen) bankAmount = '';   // M20.5：开面板清空金额输入
+      storeOpen = false; facilityOpen = false; paint(); return;
+    }
+    if (a === 'store') { storeOpen = !storeOpen; bankOpen = false; facilityOpen = false; paint(); return; }
+    if (a === 'facility') { facilityOpen = !facilityOpen; bankOpen = false; storeOpen = false; paint(); return; }
+    if (fx.busy()) fx.skip();   // 点屏加速：状态早已落库，跳过只影响观感时长
+    if (a === 'ai:fast') { if (driver) driver.setFast(!driver.isFast()); paint(); return; }
+    if (a === 'ai:skip') { driver?.skipRest(); return; }
+    dispatch(stepOfHud(a));
+  };
+  /** HUD 可见性视图（两版 HUD 同签名） */
+  const hudView = (g: Game): { seats: readonly Seat[]; fast: boolean; ui: HudUiOpts } => ({
+    seats, fast: driver?.isFast() ?? false,
+    ui: { tileCard: tileCardOn(g), handOpen: handOpenEff(), bankOpen, storeOpen, facilityOpen },
+  });
+
   /** 席位确定后开局（spec §6：选完再 createGame）：建 game → 挂 HUD/浮层/驱动器 → 按需弹引导 → 重画 */
   const startGame = (plan: SeatPlan): void => {
     seats = plan;
     const g = createGame({ seed: opts.seed, playerCount: 4, abilities: true, seats: plan });
     game = g;
-    hud = mountHud(fitRoot, g, (a: HudActionId) => {
-      /* 静音键（spec §7.4）：翻转 → 落库 → 立即重画图标；不跳动画、不推进状态 */
-      if (a === 'audio:sfx' || a === 'audio:bgm') {
-        audio.toggle(a === 'audio:sfx' ? 'sfx' : 'bgm');
-        paint();
-        return;
-      }
-      /* 牌袋抽屉开合（spec §7.3）：只改可见性、不推进状态，故不走 `dispatch`（也就不吃动效与气泡） */
-      if (a === 'hand') { handOpen = !handOpen; paint(); return; }
-      /* 自由出售入口（spec §3.5）：进入 M19 选目标态，等待棋盘点选自有地块 */
-      if (a === 'sell') { uiSel = { kind: 'sell', hovered: null }; paint(); return; }
-      /* 银行 / 商店 / 设施浮层开合（M20.2 §3.8 / M20.3 §5.1 / M20.4 §6.1）：只改 UI 态、不推进状态，
-         故不走 `dispatch`（也就不吃动效与气泡）；三者互斥——开启一方即收起另两方 */
-      if (a === 'bank') {
-        bankOpen = !bankOpen;
-        if (bankOpen) bankAmount = '';   // M20.5：开面板清空金额输入
-        storeOpen = false; facilityOpen = false; paint(); return;
-      }
-      if (a === 'store') { storeOpen = !storeOpen; bankOpen = false; facilityOpen = false; paint(); return; }
-      if (a === 'facility') { facilityOpen = !facilityOpen; bankOpen = false; storeOpen = false; paint(); return; }
-      if (fx.busy()) fx.skip();   // 点屏加速：状态早已落库，跳过只影响观感时长
-      if (a === 'ai:fast') { if (driver) driver.setFast(!driver.isFast()); paint(); return; }
-      if (a === 'ai:skip') { driver?.skipRest(); return; }
-      dispatch(stepOfHud(a));
-    }, () => ({ seats, fast: driver?.isFast() ?? false, ui: { tileCard: tileCardOn(g), handOpen: handOpenEff(), bankOpen, storeOpen, facilityOpen } }));
+    /* M21：广告版挂 DOM 紧凑 HUD（业务判定复用 ui/Hud 纯函数），原版挂 canvas HUD 命中层 */
+    hud = adPlan
+      ? mountAdHud(fitRoot, g, hudAction, () => hudView(g), { prefs: () => audio.prefs() })
+      : mountHud(fitRoot, g, hudAction, () => hudView(g));
     /* 浮层动作：关浮层 / 股票买卖 / 打手牌 / 银行信贷 / 道具商店买卖（目标由命中区 `data-target` 带出） */
     panels = mountPanels(fitRoot, g, (a: PanelActionId, target?: number | string) => {
       if (fx.busy()) fx.skip();
@@ -1066,8 +1109,9 @@ export async function boot(): Promise<void> {
         e.preventDefault();
       }, true);
     }
-    /* 三角内容位（spec §6 版式 A 补全）：右上轮播 + 左下事件战报；与浮层同层、随舞台缩放 */
-    slots = mountSlots(fitRoot, slotCfg);
+    /* 三角内容位（spec §6 版式 A 补全）：右上轮播 + 左下事件战报；与浮层同层、随舞台缩放。
+       广告版不挂（右上轮播位被广告 hero 覆盖，战报由 AdHud 状态行承接） */
+    if (!adPlan) slots = mountSlots(fitRoot, slotCfg);
     driver = createAiDriver({
       game, seats: () => seats,
       run: (step, withFx = true) => dispatch(step, withFx),
@@ -1082,7 +1126,8 @@ export async function boot(): Promise<void> {
     driver.start();
     /* BGM 起播（spec §6.2）：未解锁时只记「想要」，首次手势 `unlock()` 时随解锁一起起播 */
     audio.startBgm();
-    if (shouldShowTutorial(opts, isDone(), seats)) replayTour();
+    /* 广告版跳过新手引导（引导高亮按原版 canvas HUD 坐标制作，迷你布局下不适用） */
+    if (!adPlan && shouldShowTutorial(opts, isDone(), seats)) replayTour();
     /* 面板在 boot 之后才 resolve 时，审计对象已建立但 game 仍为 null → 回填 */
     const api = (window as unknown as Record<string, unknown>).__monoMain as { game?: Game | null } | undefined;
     if (api) api.game = game;
@@ -1103,6 +1148,16 @@ export async function boot(): Promise<void> {
       share?.setWechat(b);
       (window as unknown as Record<string, unknown>).__monoShareStatus = b.status;
     });
+
+  /* —— M21 广告商城层（方案 A 橱窗商城）：hero 轮播 + 商圈 Tab + 商品卡网格 + 落格联动 + 弹券。
+     方案切换出口挂在本层（后台 / e2e：persistPlan + reload，几何在 boot 期烘焙故整页重载，零残留）。 —— */
+  if (adPlan) {
+    mall = mountMall(fitRoot, adPlan, shops, {
+      skinId: skin?.id ?? 'default',
+      gameOf: () => game,
+      onSwitch: (id) => { persistPlan(id as Parameters<typeof persistPlan>[0]); location.reload(); },
+    });
+  }
   /* —— M8 结束 —— */
 
   paint();
@@ -1217,6 +1272,9 @@ export async function boot(): Promise<void> {
     tutorial: () => tutorial, mountTutorial: replayTour, themeConsole,
     /* 选目标交互（M19-D2）：`cellXY(idx)` 供 e2e 由格号取舞台坐标；`uiSel()` 断言是否在选目标态 */
     cellXY, uiSel: () => uiSel,
+    /* 广告宣传版（M21）：当前方案 id（null=原版）+ 商城层句柄 + 方案切换出口 */
+    adPlan: adPlan?.id ?? null, mall: () => mall,
+    adSwitch: (id: string) => { persistPlan(id as Parameters<typeof persistPlan>[0]); location.reload(); },
     /* 破产拍卖（M20.1）：`auction()` 读待拍态（null = 无拍卖），供 e2e / 取证脚本取证 */
     auction: () => game?.state.auction ?? null,
     /* 银行信贷（M20.2）：`bank()` 读 UI 态；`setBank(open, sel?)` 供 e2e / 取证脚本直接开面板取景 */
