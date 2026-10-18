@@ -2,6 +2,14 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **✅ 执行完成（2026-10-18）。** 全部 9 个 Task 已落地并上线（t1 已配置 coupon/floors）。
+> - vendure：`7a9a2526` 字段 + `ce856849` 匿名目录 + lib 产物入库，已部署（pm2 vendure）
+> - vshop/web-admin：`9a46776b` 店面模式表单，已部署；**表单 UI 已于当日生产环境浏览器补验通过**（superadmin 登录 → 平台管理 → 租户管理可见，渲染/保存链路正常；顺手修复窄屏双 picker 文字重叠，截图 `06-admin-storefront-config.png` 入手册）。t1 配置 grid 补拍截图后已经 `updateTenant`（表单同一 API）回退 floors
+> - nshop：`1dd2bc4` Task4 / `50dd916` Task5 / `4cea8ad` Task6 / `2a0c169` Task7 / `f9312ec` Task8 + 两笔修复（SSR 渠道数据/拦截中间件、券单页匿名引导登录），已部署并推送 origin/nshop
+> - 实施偏差：① Task 7 拦截并入 `tenant.global.ts`（独立 global middleware 会破坏租户解析链，且 await 后 nuxt instance 丢失）；② `useChannelTheme` SSR 改 `$fetch` 直连带租户 token（graphql-client nitro 直连只带构建期默认渠道静态头）；③ 本地 schema 快照用 `scripts/_patch_schema_storefront.mjs` 临时补字段（codegen 依赖）
+> - 线上冒烟：t1 首页券店 SSR ✅ / 商品直连 302 提示页 ✅ / 默认店版式回归 ✅ / B1-B4 API 用例 ✅
+> - 手机截图与手册：[nshop/docs/superpowers/manual/coupon-storefront/README.md](../../nshop/docs/superpowers/manual/coupon-storefront/README.md)
+
 **Goal:** 给多租户商城新增租户级「券店模式」：t1 等 `storefrontMode=coupon` 的租户，nshop 首页渲染券店版式（楼层导购/券卡宫格双版式），拦截普通商品链路，TabBar/Header 券店化，券目录匿名可浏览（购买仍需登录）。
 
 **Architecture:** 配置驱动——`Channel.customFields` 新增 `storefrontMode`/`storefrontHomeLayout`（vendure cjk-plugin，web-admin 平台侧设置），nshop 经既有 `GetChannelTheme` 管线读取后全局分支渲染；购券/支付/积分兑换链路从券商城页抽取为 `useCouponSaleFlow` composable 供券店首页复用；新增全局 route middleware 拦截商品路由。
