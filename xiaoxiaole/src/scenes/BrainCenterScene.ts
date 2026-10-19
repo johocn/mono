@@ -14,6 +14,7 @@ import { audioSynth } from "../ui/AudioSynth";
 import { progress } from "../core/ProgressStore";
 import { reviews } from "../core/ReviewStore";
 import { getCognitiveProfile } from "../core/CognitiveProfile";
+import { evaluateCognitive } from "../core/CognitiveEvaluation";
 import { drawRadarChart } from "../ui/RadarChart";
 import { ScrollView } from "../ui/ScrollView";
 import { NAV_H } from "../ui/SceneChrome";
@@ -150,6 +151,15 @@ export class BrainCenterScene {
       { size: 18, color: "#4ECDC4", bold: true }, 6);
     gameCanvas.drawText(`已训练 ${profile.trainedCount} / ${profile.axes.length} 个认知域`,
       w / 2, cy + radius + 94 - off, { size: 13, color: "#8b93b8" }, 6);
+
+    // 距目标差距（设计文档第 7 章：主入口即可见「现状 → 目标 → 差距」）
+    const ev = evaluateCognitive(profile);
+    gameCanvas.drawText(
+      ev.overallGap > 0
+        ? `处于「${ev.band}」· 距目标线${ev.overallTarget}还差${ev.overallGap}分`
+        : `处于「${ev.band}」· 已达成目标线${ev.overallTarget}`,
+      w / 2, cy + radius + 116 - off,
+      { size: 13, color: ev.overallGap > 0 ? "#FFB877" : "#7FE3DC", align: "center" }, 6);
 
     // === 今日训练计划 ===
     this.weakRect = { x: planX, y: planY, w: planW, h: planH };
