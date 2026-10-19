@@ -203,6 +203,14 @@ export function buildWeeklyReport(): string {
     lines.push(`可加强：${p.weakest.map((w) => w.label).join("、")}`);
   }
 
+  // 目标与差距（设计文档第 7 章「现状 → 目标 → 差距」落地）
+  const ev = evaluateCognitive(p);
+  if (ev.weakestGaps.length > 0) {
+    lines.push(`距目标线(${ev.overallTarget})还差 ${ev.overallGap} 分，优先练：${ev.weakestGaps.map((d) => d.label).join("、")}`);
+  } else {
+    lines.push(`综合指数已达目标线 ${ev.overallTarget}，继续保持！`);
+  }
+
   const last = progress.getLastPlayed();
   const days = last > 0 ? Math.floor((Date.now() - last) / 86400000) : null;
   if (days !== null) {

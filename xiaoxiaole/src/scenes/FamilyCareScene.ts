@@ -14,6 +14,7 @@ import { gameCanvas } from "../ui/GameCanvas";
 import { audioSynth } from "../ui/AudioSynth";
 import { progress } from "../core/ProgressStore";
 import { getCognitiveProfile, buildMonthlyReport, buildWeeklyReport } from "../core/CognitiveProfile";
+import { evaluateCognitive } from "../core/CognitiveEvaluation";
 import { reminderToChild } from "../core/CareWords";
 import { familySync, generateFamilyCode } from "../core/FamilySync";
 import { renderFamilyCard, familyShareDesc } from "../ui/PosterRenderer";
@@ -126,15 +127,21 @@ export class FamilyCareScene {
     }
   }
 
-  /** 家属版报告：在健康月报前加一段家属引导语 */
+  /** 家属版报告：在健康月报前加一段家属引导语，并附「本月该练什么」建议 */
   private fullReport(): string {
+    const p = getCognitiveProfile();
     const report = buildMonthlyReport();
     const lead = [
       "【给家人】这是「岁月神偷·脑力花园」为长辈生成的自测健康月报，",
       "仅供日常关注参考，不能替代医院专业认知评估。多陪伴、多陪练，是最好的关爱。",
       "",
     ].join("\n");
-    return lead + report;
+    const ev = evaluateCognitive(p);
+    const action =
+      p.trainedCount > 0
+        ? `💡 本月建议：综合指数处于「${ev.band}」（${ev.bandAction}），距目标线还差 ${ev.overallGap} 分，可陪长辈优先练：${ev.weakestGaps.length ? ev.weakestGaps.map((d) => d.label).join("、") : "维持现有节奏"}。`
+        : "💡 先陪长辈玩一局，报告就会慢慢有内容。";
+    return lead + report + "\n\n" + action;
   }
 
   private render(): void {
