@@ -61,6 +61,9 @@ export interface LevelMetrics {
   pmHits?: number;
   pmTargets?: number;
   pmFalseAlarms?: number;
+  // match3-mem（记忆增强型三消）专用
+  memoryHitRate?: number;  // 记忆命中率 0-1（主准确率来源）
+  mismatchCount?: number;  // 配对/回忆误判次数（降稳定性）
 }
 
 // === 事实赞美输出 ===

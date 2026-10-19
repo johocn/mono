@@ -30,7 +30,9 @@ const clamp = (v: number, lo = 0, hi = 100): number => Math.max(lo, Math.min(hi,
 function accuracyOf(m: LevelMetrics): number {
   switch (m.mode) {
     case "match3":
-      // score 为积分，passTarget 为通关阈值
+      // match3-mem（记忆增强型三消）：若提供了 memoryHitRate，以其作为主准确率
+      if (typeof m.memoryHitRate === "number") return clamp(m.memoryHitRate);
+      // 普通 match3：score 为积分，passTarget 为通关阈值
       return m.passTarget > 0 ? Math.min(1, m.score / m.passTarget) : m.passed ? 1 : 0;
     case "poetry":
     case "memory":
@@ -89,6 +91,12 @@ function stabilityOf(m: LevelMetrics): number {
   if (m.mode === "audio" && typeof m.maxSeqAchieved === "number") {
     // 序列记忆：最长序列越长越稳
     return clamp(m.maxSeqAchieved * 12);
+  }
+  if (m.mode === "match3" && typeof m.memoryHitRate === "number") {
+    // match3-mem：配对/回忆误判越多越不稳
+    const base = accuracyOf(m) * 100;
+    const mm = m.mismatchCount ?? 0;
+    return clamp(base - mm * 8);
   }
   // 其它模式：以准确率近似稳定性
   return clamp(accuracyOf(m) * 100);

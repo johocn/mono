@@ -131,3 +131,27 @@ test("face: 准确率按认对/总面孔数梯度（用 totalQuestions，非通�
   assert.equal(half.axes.accuracy, 40);
   assert.ok(half.axes.accuracy < all.axes.accuracy);
 });
+
+test("match3-mem: 提供 memoryHitRate 时以其为主准确率（不取 score/passTarget）", () => {
+  const r = computeCrossGameScore(
+    "m-1",
+    "brain-working-memory",
+    base({ mode: "match3", score: 999, passTarget: 1, memoryHitRate: 0.6, stepsUsed: 10, stepLimit: 20 }),
+  );
+  assert.equal(r.axes.accuracy, 60);
+  assert.equal(r.targetGameId, "brain-working-memory");
+});
+
+test("match3-mem: mismatchCount 降低稳定性", () => {
+  const clean = computeCrossGameScore(
+    "m-1",
+    "brain-working-memory",
+    base({ mode: "match3", score: 100, passTarget: 100, memoryHitRate: 1, stepsUsed: 5, stepLimit: 20, mismatchCount: 0 }),
+  );
+  const flawed = computeCrossGameScore(
+    "m-1",
+    "brain-working-memory",
+    base({ mode: "match3", score: 100, passTarget: 100, memoryHitRate: 1, stepsUsed: 5, stepLimit: 20, mismatchCount: 3 }),
+  );
+  assert.ok(flawed.axes.stability < clean.axes.stability, `clean=${clean.axes.stability} flawed=${flawed.axes.stability}`);
+});

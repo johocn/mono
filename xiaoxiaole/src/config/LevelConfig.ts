@@ -16,6 +16,23 @@ export type ThemeId = "spring" | "summer" | "autumn" | "winter" | "shuangyang";
 import { GEN_MATCH3, GEN_AUDIO, GEN_POETRY, GEN_CORSI, GEN_FACE, GEN_MEMORY, GEN_STROOP, GEN_MONEY, GEN_PM, GEN_CLOCK } from "./LevelGen";
 export { GEN_MATCH3, GEN_AUDIO, GEN_POETRY, GEN_CORSI, GEN_FACE, GEN_MEMORY, GEN_STROOP, GEN_MONEY, GEN_PM, GEN_CLOCK };
 
+// === match3-mem：记忆增强型三消叠加配置（见《match3-mem 原型规格》） ===
+// 玩法仍为 match3（复用三消内核与场景），仅叠加一层「记忆 overlay」；
+// 无需新增 ModeId，避免波及场景路由/计划引擎。关卡同时设 targetGameId="brain-working-memory" 即归属记忆训练。
+export type MemoryType = "shadow" | "paired" | "delayed";
+
+export interface MemoryConfig {
+  type: MemoryType;
+  /** shadow: 目标格数 / delayed: 要求消除数 */
+  targetCount: number;
+  /** paired 专用：配对对数 */
+  pairedPairs?: number;
+  /** 预览时长（毫秒），越短越难 */
+  maskDelayMs: number;
+  /** delayed 专用：间隔步数（干扰越多越难） */
+  recallSteps?: number;
+}
+
 export interface LevelConfig {
   id: LevelId;
   mode: ModeId;
@@ -90,6 +107,8 @@ export interface LevelConfig {
   nostalgiaVariants?: ("lyricToTitle" | "titleToLyric")[]; // 启用题型：看歌词选歌名 / 看歌名选歌词
   // 跨游戏：本关归属的目标游戏 id（覆盖 CognitiveMap 的 mode 默认映射；不选则按 mode 判定是否跨游戏关）
   targetGameId?: string;
+  // match3-mem：记忆增强型三消叠加配置（仅当本关为记忆增强玩法时设置；详见原型规格）
+  memory?: MemoryConfig;
 }
 
 export interface GoalConfig {
@@ -124,6 +143,7 @@ export interface AdaptiveRange {
   contentDelta: number; // 内容数量浮动
   stepMin: number;     // 步数下限
   contentMin: number;  // 内容数量下限
+  memoryDelta?: number; // 记忆负荷浮动（match3-mem 专用，可选）
 }
 
 // === 基础模式 时光整理师（match3）===
