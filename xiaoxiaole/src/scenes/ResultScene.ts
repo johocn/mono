@@ -107,6 +107,8 @@ export class ResultScene {
       pmHits: result.pmHits,
       pmTargets: result.pmTargets,
       pmFalseAlarms: result.pmFalseAlarms,
+      memoryHitRate: result.memoryHitRate,
+      mismatchCount: result.mismatchCount,
     };
     this.praise = generatePraise(metrics);
 

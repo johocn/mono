@@ -1040,6 +1040,23 @@ const NOSTALGIA_LEVELS: LevelConfig[] = [
   makeNostalgia("11-9", "怀旧金曲 · 秋之章", 3, "autumn", 12, 10, 2, 4, ["lyricToTitle", "titleToLyric"]),
 ];
 
+// match3-mem（记忆增强型三消）原型示例关：在普通三消上叠加「影子任务」记忆层。
+// 接入链路：level.memory → Match3Scene overlay（学习/遮蔽/追踪）→ memoryHitRate → 跨游戏评分器 → brain-working-memory。
+// ⚠️ 原型示例，上线前需真机 playtest（尤其学习阶段遮挡与误判统计），确认体验后再考虑批量铺开。
+export const LEVEL_MEM_1: LevelConfig = {
+  id: "m-1", mode: "match3", name: "花影寻踪 · 记忆", chapter: 1, theme: "spring",
+  boardCols: 6, boardRows: 6,
+  stepLimit: 24, passTarget: 2000,
+  iconTypes: ["flower", "leaf", "fruit", "butterfly", "bird"],
+  obstacles: { type: "frozen", count: 2 },
+  items: { hint: 2, reshuffle: 1, reveal: 1, peek: 0, undo: 1, rehear: 0, step: 0, shield: 1, hammer: 0 },
+  itemDropInterval: 7, itemDropChance: 0.35,
+  idleHintDelay: 4,
+  adaptive: { stepDelta: 3, contentDelta: 1, stepMin: 16, contentMin: 3 },
+  memory: { type: "shadow", targetCount: 4, maskDelayMs: 1600 },
+  targetGameId: "brain-working-memory",
+};
+
 export const ALL_LEVELS: LevelConfig[] = [
   LEVEL_1_1, LEVEL_1_2, LEVEL_1_3, LEVEL_1_4, LEVEL_1_5, LEVEL_1_6, LEVEL_1_7, LEVEL_1_8,
   LEVEL_1_9, LEVEL_1_10, LEVEL_1_11, LEVEL_1_12,
@@ -1062,6 +1079,7 @@ export const ALL_LEVELS: LevelConfig[] = [
   ...GEN_PM,       // 9-1 .. 9-9（前瞻记忆）
   ...GEN_CLOCK,    // 10-1 .. 10-9（时间/钟表定向）
   ...NOSTALGIA_LEVELS, // 11-1 .. 11-9（怀旧金曲 / 歌词-歌名联想回忆）
+  LEVEL_MEM_1,        // 记忆增强型三消原型示例（match3 + memory 层 → brain-working-memory）
 ];
 
 export function getLevel(id: LevelId): LevelConfig | undefined {

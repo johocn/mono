@@ -41,6 +41,9 @@ export interface LevelResult {
   pmHits?: number;
   pmTargets?: number;
   pmFalseAlarms?: number;
+  // match3-mem（记忆增强型三消）专用：记忆命中率 / 误判次数（传给 ResultScene 评分器）
+  memoryHitRate?: number;
+  mismatchCount?: number;
 }
 
 // === 事实赞美生成器输入 ===

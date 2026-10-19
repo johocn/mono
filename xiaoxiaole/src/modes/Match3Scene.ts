@@ -51,6 +51,8 @@ import {
   type CellSnapshot,
   type EngineSnapshot,
 } from "./Match3Engine";
+import { scoreShadowRecall, scoreDelayedRetention } from "../core/MemoryMechanics";
+import type { MemoryConfig } from "../config/LevelConfig";
 
 interface MktRect { x: number; y: number; w: number; h: number }
 
@@ -158,6 +160,17 @@ export class Match3Scene {
   private boosterRects: { key: "minus" | "plus" | "start"; x: number; y: number; w: number; h: number }[] = [];
   private hammerInv = 0;           // 本关开始时的库存（带入后扣减，通关 +1）
 
+  // --- match3-mem 记忆增强型三消 overlay（仅当 level.memory 存在时激活，不影响普通三消）---
+  private mem?: MemoryConfig;
+  private memoryLearning = false;        // 学习阶段：高亮/预览，冻结引擎与输入
+  private memLearnTimer = 0;             // 学习阶段剩余秒数
+  private memTargets: Set<string> = new Set();      // shadow/paired：需回忆清除的目标格 "col,row"
+  private memClearedTargets: Set<string> = new Set(); // 已清除的目标格
+  private memType?: string;              // delayed：需优先清除的图案类型
+  private memMoveCount = 0;              // 已完成的交换步数（delayed 窗口判定）
+  private memActualClears = 0;           // delayed：窗口内正确清除数
+  private memLures = 0;                  // delayed：窗口外（过早）清除数 = 误判
+
   private prevSkin: import("../core/Skin").SkinConfig | null = null;
 
   constructor(level: LevelConfig, cb: LevelSceneCallbacks) {
@@ -202,6 +215,7 @@ export class Match3Scene {
     gameCanvas.setUpdateCallback(() => this.update(performance.now()));
 
     this.syncTiles();
+    this.initMemory();
   }
 
   // === 生命周期 ===
@@ -217,8 +231,13 @@ export class Match3Scene {
     this.hud.update(dt);
 
     if (!this.ended) {
-      // 限时关：仅在未暂停 / 未弹窗 / 未疲劳暂停时推进计时，并据此判定胜负
-      if (this.engine.isTimed() && !this.pause.isOpen && !this.reviveModal && !this.offerModal && !this.fatiguePaused) {
+      // match3-mem：学习阶段冻结引擎与计时，仅推进学习倒计时
+      if (this.memoryLearning) {
+        this.memLearnTimer -= dt;
+        if (this.memLearnTimer <= 0) this.memoryLearning = false;
+      }
+      // 限时关：仅在未暂停 / 未弹窗 / 未疲劳暂停 / 非学习阶段时推进计时
+      if (this.engine.isTimed() && !this.pause.isOpen && !this.reviveModal && !this.offerModal && !this.fatiguePaused && !this.memoryLearning) {
         this.engine.tick(dt * 1000);
         this.checkEnd();
       }
@@ -355,6 +374,7 @@ export class Match3Scene {
       return;
     }
     this.startPhase("clear", CLEAR_DUR);
+    this.trackMemoryClears(step.cleared);  // match3-mem：记录本次消除的记忆相关命中
 
     const rect = this.board.getBoardRect();
     const cx = rect.x + rect.w / 2;
@@ -471,6 +491,7 @@ export class Match3Scene {
     if (this.offerModal) { this.onOfferTouch(x, y); return; }
 
     if (this.ended || this.fatiguePaused) return;
+    if (this.memoryLearning) return;  // 学习阶段吞掉棋盘输入
 
     // 2. HUD（暂停按钮 / 道具栏）
     const hudAction = this.hud.hitTest(x, y);
@@ -548,6 +569,7 @@ export class Match3Scene {
   /** 滑动手势：按主导轴取相邻格 */
   private onDrag(x0: number, y0: number, x1: number, y1: number): void {
     if (this.ended || this.fatiguePaused || this.pause.isOpen) return;
+    if (this.memoryLearning) return;  // 学习阶段吞掉棋盘输入
     if (this.phase !== "idle") return;
 
     const from = this.board.screenToGrid(x0, y0);
@@ -588,6 +610,7 @@ export class Match3Scene {
 
     if (res.valid) {
       tracker.record("swap", true, res.totalScore);
+      if (this.mem) this.memMoveCount++;  // match3-mem：累计交换步数（delayed 窗口判定）
       if (res.specialCombo) {
         const mg = this.board.gridToScreen((a.col + b.col) / 2, (a.row + b.row) / 2);
         this.feedback.popText(mg.x, mg.y - 20, "特效组合！", "#FFE66D", 26, 40);
@@ -1055,11 +1078,24 @@ export class Match3Scene {
 
     audioSynth.playUi(passed ? "win" : "fail");
 
+    // match3-mem：计算记忆命中率/误判并随结果传出，供结算场景 → 跨游戏评分器使用
+    let memHitRate: number | undefined;
+    let memMismatch: number | undefined;
+    if (this.mem) {
+      const o = this.mem.type === "delayed"
+        ? scoreDelayedRetention(this.mem.targetCount, this.memActualClears, this.memLures)
+        : scoreShadowRecall([...this.memTargets], [...this.memClearedTargets]);
+      memHitRate = o.memoryHitRate;
+      memMismatch = o.mismatchCount;
+    }
+
     const result: LevelResult = {
       passed,
       score,
       stepsUsed,
       medianRT: tracker.getMedianRT(),
+      memoryHitRate: memHitRate,
+      mismatchCount: memMismatch,
     };
 
     // 延迟让玩家读完事实赞美再进结算场景；destroy() 会清理该定时器
@@ -1446,6 +1482,9 @@ export class Match3Scene {
 
     this.feedback.draw();
 
+    // match3-mem：学习阶段遮罩 + 高亮目标（仅当本关为记忆增强玩法且处于学习阶段）
+    this.drawMemoryOverlay(w, h);
+
     // 入场台词
     if (this.introTimer > 0 && !this.ended && !this.pause.isOpen) {
       const alpha = Math.min(1, this.introTimer / 0.5);
@@ -1498,5 +1537,99 @@ export class Match3Scene {
       const fadeIn = Math.min(1, this.resultAnimTime / 0.4);
       drawResultCard(this.praise, this.resultPassed, statsLine, fadeIn);
     }
+  }
+
+  // === match3-mem：记忆增强型三消 overlay（仅当 level.memory 存在时激活） ===
+
+  private initMemory(): void {
+    if (!this.level.memory) return;
+    this.mem = this.level.memory;
+    const cols = this.engine.getCols();
+    const rows = this.engine.getRows();
+    const snap = this.engine.getBoardSnapshot();
+    const cells: string[] = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (snap[r]?.[c]?.type) cells.push(`${c},${r}`);
+      }
+    }
+    const pick = (n: number): string[] => {
+      const pool = [...cells];
+      const out: string[] = [];
+      for (let i = 0; i < n && pool.length > 0; i++) {
+        const idx = Math.floor(Math.random() * pool.length);
+        out.push(pool.splice(idx, 1)[0]);
+      }
+      return out;
+    };
+    if (this.mem.type === "delayed") {
+      const types = new Set<string>();
+      for (const k of cells) {
+        const [cc, rr] = k.split(",").map(Number);
+        const t = snap[rr]?.[cc]?.type;
+        if (t) types.add(t);
+      }
+      const arr = [...types];
+      this.memType = arr.length > 0 ? arr[Math.floor(Math.random() * arr.length)] : undefined;
+    } else {
+      const n = this.mem.type === "paired" ? (this.mem.pairedPairs ?? this.mem.targetCount) * 2 : this.mem.targetCount;
+      this.memTargets = new Set(pick(n));
+    }
+    this.memoryLearning = true;
+    this.memLearnTimer = this.mem.maskDelayMs / 1000;
+  }
+
+  private trackMemoryClears(cells: { col: number; row: number; type?: string }[]): void {
+    if (!this.mem) return;
+    if (this.mem.type === "delayed") {
+      if (!this.memType) return;
+      const inWindow = this.memMoveCount > (this.mem.recallSteps ?? 0);
+      for (const c of cells) {
+        if (c.type === this.memType) {
+          if (inWindow) this.memActualClears++;
+          else this.memLures++; // 窗口外（过早）清除 = 误判
+        }
+      }
+      return;
+    }
+    // shadow / paired：清除落在目标格集合中的棋子计为命中
+    for (const c of cells) {
+      const key = `${c.col},${c.row}`;
+      if (this.memTargets.has(key)) this.memClearedTargets.add(key);
+    }
+  }
+
+  private drawMemoryOverlay(w: number, h: number): void {
+    if (!this.mem || !this.memoryLearning) return;
+    const rect = this.board.getBoardRect();
+    gameCanvas.draw((ctx) => {
+      ctx.fillStyle = "rgba(8,10,22,0.55)";
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+    }, 40);
+    if (this.mem.type === "delayed" && this.memType) {
+      const skin = skinManager.tile(this.memType);
+      gameCanvas.drawText(`记住这个图案：${skin.label || this.memType}`, w / 2, rect.y + 30,
+        { size: 20, color: "#FFE66D", bold: true, align: "center" }, 41);
+      gameCanvas.drawText(skin.label || this.memType, w / 2, rect.y + rect.h / 2,
+        { size: 72, color: skin.color || "#FFE66D", bold: true, align: "center" }, 41);
+    } else {
+      const label = this.mem.type === "paired" ? "记住这些配对位置！" : "记住这些位置！";
+      gameCanvas.drawText(label, w / 2, rect.y + 30,
+        { size: 20, color: "#FFE66D", bold: true, align: "center" }, 41);
+      this.memTargets.forEach((k) => {
+        const [c, r] = k.split(",").map(Number);
+        const s = this.board.gridToScreen(c, r);
+        gameCanvas.draw((ctx) => {
+          ctx.strokeStyle = "#FFE66D";
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(s.x, s.y, this.board.getTileSize() * 0.42, 0, Math.PI * 2);
+          ctx.stroke();
+        }, 41);
+      });
+    }
+    const secs = Math.max(0, Math.ceil(this.memLearnTimer));
+    gameCanvas.drawText(`${secs}s 后开始`, w / 2, rect.y + rect.h - 16,
+      { size: 16, color: "#fff", align: "center" }, 41);
   }
 }
