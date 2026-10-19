@@ -24,6 +24,7 @@ import {
   redirectToSsoLogin,
   buildShareUrl,
 } from "./core/SsoAuth";
+import { flushPendingCrossGameRecords } from "./core/CrossGameApi";
 import { initMarketingShare } from "./core/MarketingShare";
 import { exitGuard } from "./core/ExitGuard";
 import { sceneChrome, type NavKey } from "./ui/SceneChrome";
@@ -182,6 +183,14 @@ class Game {
       onConfirm: () => this.requestExitConfirm(),
       onInternalBack: () => this.goBack(),
     });
+
+    // 跨游戏离线队列补传：启动 / SSO 登录成功（已确保最新令牌）后，把断网期间排队的评分上报，
+    // 保证不丢成绩。游客态 / 未配后端时该函数内部直接空操作。
+    void flushPendingCrossGameRecords();
+    // 设备恢复联网时立即补传（不必等到下一关结算 / 重启）
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      window.addEventListener("online", () => void flushPendingCrossGameRecords());
+    }
 
     this.goHome();
   }

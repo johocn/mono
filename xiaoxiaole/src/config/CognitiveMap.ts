@@ -1,6 +1,9 @@
 /**
  * 认知域映射表 — spec v1.1 第 7.1 节
  * 三大模式训练目标映射到标准化认知构念与参考测评
+ *
+ * 跨游戏：每个 mode 已补 `targetGameId`（玩法默认归属的目标游戏 id）；
+ * 个别关卡可在 LevelConfig 用 targetGameId 覆盖。解析见 CrossGameMap.resolveTargetGame。
  */
 
 export interface CognitiveDomainMap {
@@ -9,6 +12,8 @@ export interface CognitiveDomainMap {
   constructs: string[];        // 训练认知构念
   referenceTests: string[];    // 参考标准化测评
   proxyMetrics: string[];      // 游戏内代理指标
+  /** 玩法默认映射的目标游戏 id（跨游戏关卡：该玩法整体归属的目标游戏；关卡可覆盖） */
+  targetGameId: string;
 }
 
 export const COGNITIVE_MAP: CognitiveDomainMap[] = [
@@ -18,6 +23,7 @@ export const COGNITIVE_MAP: CognitiveDomainMap[] = [
     constructs: ["加工速度", "执行功能（视觉搜索/抑制）", "手眼协调"],
     referenceTests: ["连线测验 TMT-A/B", "符号数字模式测验 SDMT"],
     proxyMetrics: ["反应时", "连击率", "误触率"],
+    targetGameId: "brain-processing-speed",
   },
   {
     mode: "audio",
@@ -25,6 +31,7 @@ export const COGNITIVE_MAP: CognitiveDomainMap[] = [
     constructs: ["听觉语义加工", "听觉工作记忆容量", "序列记忆", "分配性注意"],
     referenceTests: ["环境音识别测验", "数字广度", "n-back", "双重任务范式"],
     proxyMetrics: ["选择准确率", "反应时与方差", "最大序列长度", "干扰下正确率", "重听率"],
+    targetGameId: "brain-working-memory",
   },
   {
     mode: "poetry",
@@ -32,6 +39,7 @@ export const COGNITIVE_MAP: CognitiveDomainMap[] = [
     constructs: ["语言流畅度", "语义联想", "线索回忆", "情景记忆"],
     referenceTests: ["语义流畅性（动物/字头）", "Boston 命名", "Cued Recall"],
     proxyMetrics: ["配对准确率", "误配次数", "提示等级达成率"],
+    targetGameId: "brain-language",
   },
   {
     mode: "corsi",
@@ -39,6 +47,7 @@ export const COGNITIVE_MAP: CognitiveDomainMap[] = [
     constructs: ["空间工作记忆", "空间注意", "视听联合编码"],
     referenceTests: ["Corsi Block-Tapping", "空间广度测验"],
     proxyMetrics: ["正确轮数", "序列长度", "平均反应时"],
+    targetGameId: "brain-spatial",
   },
   {
     mode: "face",
@@ -46,6 +55,7 @@ export const COGNITIVE_MAP: CognitiveDomainMap[] = [
     constructs: ["联想记忆", "情景记忆", "面孔-名字绑定"],
     referenceTests: ["Face-Name Associative Memory", "Benton 面孔再认"],
     proxyMetrics: ["正确回忆数", "延迟保持率", "干扰抗力"],
+    targetGameId: "brain-face-name",
   },
   {
     mode: "memory",
@@ -53,6 +63,7 @@ export const COGNITIVE_MAP: CognitiveDomainMap[] = [
     constructs: ["视觉再认记忆", "空间位置记忆", "联想编码"],
     referenceTests: ["Concentration", "视觉配对再认测验"],
     proxyMetrics: ["配对成功率", "翻牌步数效率", "重复翻看次数"],
+    targetGameId: "brain-visual-recognition",
   },
   {
     mode: "stroop",
@@ -60,6 +71,7 @@ export const COGNITIVE_MAP: CognitiveDomainMap[] = [
     constructs: ["抑制控制", "干扰抑制", "认知灵活性"],
     referenceTests: ["Stroop 色词测验", "Go/No-Go"],
     proxyMetrics: ["冲突条件正确率", "平均反应时", "Stroop 效应量"],
+    targetGameId: "brain-inhibition",
   },
   {
     mode: "money",
@@ -67,6 +79,7 @@ export const COGNITIVE_MAP: CognitiveDomainMap[] = [
     constructs: ["数感", "心算能力", "工作记忆", "日常财务能力"],
     referenceTests: ["数字运算测验", "IADL 财务管理条目"],
     proxyMetrics: ["计算正确率", "平均反应时", "大额题正确率"],
+    targetGameId: "brain-numeracy",
   },
   {
     mode: "pm",
@@ -74,6 +87,7 @@ export const COGNITIVE_MAP: CognitiveDomainMap[] = [
     constructs: ["前瞻记忆", "意图维持", "注意分配", "反应抑制"],
     referenceTests: ["事件型前瞻记忆范式", "Rivermead 行为记忆测验"],
     proxyMetrics: ["按铃命中率", "误报次数", "进行中任务正确率"],
+    targetGameId: "brain-prospective",
   },
   {
     mode: "clock",
@@ -81,6 +95,7 @@ export const COGNITIVE_MAP: CognitiveDomainMap[] = [
     constructs: ["时间定向", "视觉空间转换", "日常实用能力"],
     referenceTests: ["画钟测验 CDT", "时间定向条目"],
     proxyMetrics: ["认时正确率", "拨钟正确率", "平均反应时"],
+    targetGameId: "brain-time-orientation",
   },
   {
     mode: "nostalgia",
@@ -88,6 +103,7 @@ export const COGNITIVE_MAP: CognitiveDomainMap[] = [
     constructs: ["语义记忆", "情景记忆", "联想记忆", "语言流畅度"],
     referenceTests: ["语义流畅性（歌曲/事件）", "自传体记忆访谈", "Cued Recall"],
     proxyMetrics: ["歌名回忆正确率", "歌词联想正确率", "平均反应时"],
+    targetGameId: "brain-reminiscence",
   },
 ];
 

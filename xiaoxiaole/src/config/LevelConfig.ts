@@ -88,6 +88,8 @@ export interface LevelConfig {
   // nostalgia mode（怀旧金曲 / 歌词-歌名联想回忆）：纯文本大字号，怀旧疗法 + 语义/联想/情景记忆
   nostalgiaOptionCount?: number;   // 每题选项数（含正确项）
   nostalgiaVariants?: ("lyricToTitle" | "titleToLyric")[]; // 启用题型：看歌词选歌名 / 看歌名选歌词
+  // 跨游戏：本关归属的目标游戏 id（覆盖 CognitiveMap 的 mode 默认映射；不选则按 mode 判定是否跨游戏关）
+  targetGameId?: string;
 }
 
 export interface GoalConfig {

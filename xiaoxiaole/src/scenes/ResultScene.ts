@@ -31,6 +31,10 @@ import { wrapText } from "../ui/ResultCard";
 import { recommendProductsFor } from "../config/ShopData";
 import type { ShopProduct } from "../api/types";
 import { getMarketingShareLink } from "../core/MarketingShare";
+import { submitCrossGameScore, flushPendingCrossGameRecords } from "../core/CrossGameApi";
+import { resolveTargetGame, targetGameName } from "../config/CrossGameMap";
+import { redirectToSsoLogin } from "../core/SsoAuth";
+import { authStore } from "../core/AuthStore";
 
 interface Rect { x: number; y: number; w: number; h: number }
 
@@ -73,6 +77,10 @@ export class ResultScene {
   private shared = false;
   private toastText = "";
   private toastUntil = 0;
+  /** 本关归属的目标游戏 id（null = 非跨游戏关卡） */
+  private targetGameId: string | null = null;
+  /** 游客态登录横幅点击区 */
+  private loginRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
   /** 成就庆祝（非 null 时弹窗并拦截其它按钮；可连续弹出多个） */
   private celebration: Celebration | null = null;
   private celebrationRect: Rect = { x: 0, y: 0, w: 0, h: 0 };
@@ -101,6 +109,14 @@ export class ResultScene {
       pmFalseAlarms: result.pmFalseAlarms,
     };
     this.praise = generatePraise(metrics);
+
+    // 跨游戏关卡：先尝试补传离线队列（空队列/游客态为空操作），再判定本关 → 算分 → 强制 SSO 后上报
+    void flushPendingCrossGameRecords();
+    this.targetGameId = resolveTargetGame(level);
+    if (this.targetGameId) {
+      void submitCrossGameScore(level, metrics);
+    }
+
     this.stars = level.mode === "corsi"
       ? computeCorsiStars(result.passed, result.score, level.stepLimit)
       : level.mode === "face"
@@ -172,6 +188,13 @@ export class ResultScene {
         audioSynth.playUi("button");
         this.celebration = achievements.consumeCelebration();
       }
+      return;
+    }
+
+    // 跨游戏关 + 游客态：点登录横幅跳 SSO（记录严格挂在正式 playerId）
+    if (this.targetGameId && authStore.isGuest() && this.hit(this.loginRect, x, y)) {
+      audioSynth.playUi("button");
+      redirectToSsoLogin();
       return;
     }
 
@@ -288,13 +311,39 @@ export class ResultScene {
       : this.level.mode === "clock"
       ? `认对 ${this.result.score} / ${this.level.stepLimit} 题`
       : `得分 ${this.result.score}`;
-    gameCanvas.drawText(`${this.level.id} · ${this.level.name} · ${scoreText}`,
-      w / 2, 96, { size: 15, color: "#FFE66D" }, 5);
+    // 跨游戏关卡徽标 / 登录横幅：先占位决定副标题下移量，避免与标题/副标题重叠
+    let subtitleY = 96;
+    if (this.targetGameId) {
+      const name = targetGameName(this.targetGameId);
+      if (authStore.isGuest()) {
+        this.loginRect = { x: 18, y: 68, w: w - 36, h: 24 };
+        gameCanvas.draw((ctx) => {
+          ctx.fillStyle = "rgba(255,107,157,0.16)";
+          ctx.beginPath();
+          ctx.roundRect(18, 68, w - 36, 24, 10);
+          ctx.fill();
+          ctx.strokeStyle = "rgba(255,107,157,0.5)";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+        }, 5);
+        gameCanvas.drawText(`🔒 登录后本关成绩计入《${name}》 · 点此登录`,
+          w / 2, 81, { size: 12, color: "#FFE66D" }, 5);
+        subtitleY = 108;
+      } else {
+        this.loginRect = { x: 0, y: 0, w: 0, h: 0 };
+        gameCanvas.drawText(`🏆 本关成绩计入《${name}》`,
+          w / 2, 80, { size: 12, color: "#4ECDC4", bold: true }, 5);
+        subtitleY = 100;
+      }
+    }
 
-    // 通关奖励提示
+    gameCanvas.drawText(`${this.level.id} · ${this.level.name} · ${scoreText}`,
+      w / 2, subtitleY, { size: 15, color: "#FFE66D" }, 5);
+
+    // 通关奖励提示（跟随副标题下移到 subtitleY+24，跨游戏横幅出现时不重叠）
     if (this.rewardItem) {
       gameCanvas.drawText(`🎁 通关奖励：${ITEM_LABEL[this.rewardItem]} ×1 · 积分 +${this.pointsGained}`,
-        w / 2, 120, { size: 14, color: "#4ECDC4", bold: true }, 5);
+        w / 2, subtitleY + 24, { size: 14, color: "#4ECDC4", bold: true }, 5);
     }
 
     // 星级
