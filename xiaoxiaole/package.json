@@ -7,7 +7,7 @@
     "build": "npm run typecheck && node scripts/build.mjs",
     "deploy": "node scripts/deploy.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "esbuild tools/engine.test.ts --bundle --platform=node --format=cjs --outfile=tools/.engine.test.cjs && esbuild tools/cross-game-scorer.test.ts --bundle --platform=node --format=cjs --outfile=tools/.cross-game.test.cjs && esbuild tools/cognitive-evaluation.test.ts --bundle --platform=node --format=cjs --outfile=tools/.cognitive.test.cjs && node --test tools/.engine.test.cjs tools/.cross-game.test.cjs tools/.cognitive.test.cjs",
+    "test": "esbuild tools/engine.test.ts --bundle --platform=node --format=cjs --outfile=tools/.engine.test.cjs && esbuild tools/cross-game-scorer.test.ts --bundle --platform=node --format=cjs --outfile=tools/.cross-game.test.cjs && esbuild tools/cognitive-evaluation.test.ts --bundle --platform=node --format=cjs --outfile=tools/.cognitive.test.cjs && esbuild tools/memory-mechanics.test.ts --bundle --platform=node --format=cjs --outfile=tools/.memory.test.cjs && node --test tools/.engine.test.cjs tools/.cross-game.test.cjs tools/.cognitive.test.cjs tools/.memory.test.cjs",
     "balance": "esbuild tools/balance-sim.ts --bundle --platform=node --format=cjs --outfile=tools/.balance-sim.cjs && node tools/.balance-sim.cjs",
     "facebalance": "esbuild tools/face-sim.ts --bundle --platform=node --format=cjs --outfile=tools/.face-sim.cjs && node tools/.face-sim.cjs",
     "serve": "http-server bin -p 8080 -c-1 --cors"
