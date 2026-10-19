@@ -1057,6 +1057,36 @@ export const LEVEL_MEM_1: LevelConfig = {
   targetGameId: "brain-working-memory",
 };
 
+// 配对线索（联想绑定）：高亮 3 对（6 格），稍长预览利于长辈建立配对印象
+export const LEVEL_MEM_2: LevelConfig = {
+  id: "m-2", mode: "match3", name: "双生花色 · 记忆", chapter: 1, theme: "summer",
+  boardCols: 6, boardRows: 6,
+  stepLimit: 26, passTarget: 2000,
+  iconTypes: ["flower", "leaf", "fruit", "butterfly", "bird"],
+  obstacles: { type: "chain", count: 2 },
+  items: { hint: 2, reshuffle: 1, reveal: 1, peek: 0, undo: 1, rehear: 0, step: 0, shield: 1, hammer: 0 },
+  itemDropInterval: 7, itemDropChance: 0.35,
+  idleHintDelay: 4,
+  adaptive: { stepDelta: 3, contentDelta: 1, stepMin: 16, contentMin: 3 },
+  memory: { type: "paired", targetCount: 6, pairedPairs: 3, maskDelayMs: 1800 },
+  targetGameId: "brain-working-memory",
+};
+
+// 延迟保持（前瞻记忆微缩）：记住某图案，先干扰 5 步，之后清除该图案才算命中，过早清除计误判
+export const LEVEL_MEM_3: LevelConfig = {
+  id: "m-3", mode: "match3", name: "迟来的信 · 记忆", chapter: 1, theme: "autumn",
+  boardCols: 6, boardRows: 6,
+  stepLimit: 28, passTarget: 2000,
+  iconTypes: ["flower", "leaf", "fruit", "butterfly", "bird"],
+  obstacles: { type: "frozen", count: 2 },
+  items: { hint: 2, reshuffle: 1, reveal: 1, peek: 0, undo: 1, rehear: 0, step: 0, shield: 1, hammer: 0 },
+  itemDropInterval: 7, itemDropChance: 0.35,
+  idleHintDelay: 4,
+  adaptive: { stepDelta: 3, contentDelta: 1, stepMin: 16, contentMin: 3 },
+  memory: { type: "delayed", targetCount: 5, recallSteps: 5, maskDelayMs: 1500 },
+  targetGameId: "brain-working-memory",
+};
+
 export const ALL_LEVELS: LevelConfig[] = [
   LEVEL_1_1, LEVEL_1_2, LEVEL_1_3, LEVEL_1_4, LEVEL_1_5, LEVEL_1_6, LEVEL_1_7, LEVEL_1_8,
   LEVEL_1_9, LEVEL_1_10, LEVEL_1_11, LEVEL_1_12,
@@ -1079,7 +1109,7 @@ export const ALL_LEVELS: LevelConfig[] = [
   ...GEN_PM,       // 9-1 .. 9-9（前瞻记忆）
   ...GEN_CLOCK,    // 10-1 .. 10-9（时间/钟表定向）
   ...NOSTALGIA_LEVELS, // 11-1 .. 11-9（怀旧金曲 / 歌词-歌名联想回忆）
-  LEVEL_MEM_1,        // 记忆增强型三消原型示例（match3 + memory 层 → brain-working-memory）
+  LEVEL_MEM_1, LEVEL_MEM_2, LEVEL_MEM_3, // 记忆增强型三消原型示例（shadow / paired / delayed → brain-working-memory）
 ];
 
 export function getLevel(id: LevelId): LevelConfig | undefined {
