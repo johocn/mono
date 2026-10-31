@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+    />
+    <title>修仙 · 凡人之路（2.5D MVP）</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: #101018;
+        overflow: hidden;
+        /* 移动端：禁用长按选择、双击缩放、橡皮筋滚动等系统手势，避免吞掉游戏触控 */
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        overscroll-behavior: none;
+        touch-action: none;
+      }
+      canvas {
+        display: block;
+        margin: auto;
+        touch-action: none;
+        -webkit-tap-highlight-color: transparent;
+      }
+      /* 触屏竖屏提示：横屏体验最佳（游戏为 16:9 横版） */
+      #rotate-hint {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        background: #101018;
+        color: #e8dcb0;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        font-size: 18px;
+        line-height: 1.7;
+        padding: 24px;
+      }
+      #rotate-hint .icon {
+        font-size: 48px;
+        margin-bottom: 12px;
+      }
+      @media (max-aspect-ratio: 1/1) and (pointer: coarse) {
+        #rotate-hint {
+          display: flex;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="rotate-hint">
+      <div>
+        <div class="icon">📱↻</div>
+        请将手机横屏游玩<br />（修仙 · 凡人之路为横版 2.5D 游戏）
+      </div>
+    </div>
+    <!-- 本地 LayaAir 3 运行时（注册全局 Laya 命名空间；ui 提供 TextInput 等组件） -->
+    <script src="libs/laya.core.js"></script>
+    <script src="libs/laya.webgl_2D.js"></script>
+    <script src="libs/laya.ui.js"></script>
+    <!-- LayaAir 内置骨骼（.sk）运行时：需从 LayaAir 3.3.4 引擎包复制 libs/laya.ani.js 到 public/libs/。
+         文件缺失时仅 404，游戏仍走代码骨骼兜底，不影响运行。 -->
+    <script src="libs/laya.ani.js"></script>
+    <!-- 游戏入口（ESM，defer 执行，晚于上面的运行时） -->
+    <script type="module" src="src/main.ts"></script>
+  </body>
+</html>

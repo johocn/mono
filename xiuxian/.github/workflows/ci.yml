@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    name: typecheck + smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  e2e:
+    name: browser e2e + visual regression
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      # playwright 不在项目依赖内，CI 显式安装（--no-save 不污染 lock）
+      - run: npm install --no-save playwright
+      - run: npx playwright install --with-deps chromium
+      - name: dev server + e2e + visual regression
+        run: |
+          npm run dev &
+          DEV_PID=$!
+          for i in $(seq 1 40); do curl -s http://localhost:5180 >/dev/null && break; sleep 1; done
+          node test/browser-check.cjs
+          node test/visual-regression.cjs
+          kill $DEV_PID || true

@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Live2D × Laya 集成沙盒（叠加层验证）</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #101018; overflow: hidden; }
+      #cv { position: fixed; inset: 0; width: 100%; height: 100%; }
+      #status { position: fixed; left: 8px; top: 8px; color: #8fb7ff; font: 12px monospace; z-index: 10; }
+    </style>
+    <!--
+      一键拉取官方 Cubism Web SDK + 免费 CC 样本模型（Hiyori）到 vendor/：
+        cd sandbox/live2d
+        git clone --depth 1 https://github.com/Live2D/CubismWebSamples vendor/_sdk
+        git clone --depth 1 https://github.com/Live2D/CubismWebFramework vendor/CubismWebFramework
+        mkdir -p vendor/Hiyori
+        cp -r vendor/_sdk/Samples/Resources/Hiyori/. vendor/Hiyori/
+        cp vendor/_sdk/Core/live2dcubismcore.min.js vendor/
+        rm -rf vendor/_sdk
+      若处于受限网络，用代理前缀 https://ghproxy.net/https://github.com/... 克隆。
+      启动（Vite 直接服务本目录，自动转译 Framework 的 TS 源码）：
+        npx vite sandbox/live2d
+      状态说明：CORE_MISSING=未放 Core；WEBGL_UNAVAILABLE=无 WebGL；LOAD_FAIL=资源缺失/路径错；
+               RENDERING=模型已加载并逐帧渲染（集成可行）。
+    -->
+    <script src="./vendor/live2dcubismcore.min.js"></script>
+  </head>
+  <body>
+    <canvas id="cv"></canvas>
+    <div id="status">BOOTING</div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

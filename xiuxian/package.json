@@ -1,0 +1,20 @@
+{
+  "name": "xiuxian",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "修仙 · 凡人之路 —— 2.5D 斜视角修仙 RPG MVP（LayaAir 3 + TypeScript + Vite）",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit",
+    "server": "node --experimental-sqlite server/server.cjs",
+    "test": "node test/smoke.cjs && node test/smoke.server.cjs",
+    "release": "npm run build && node scripts/package-release.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vite": "^5.2.0"
+  }
+}

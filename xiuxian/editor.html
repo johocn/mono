@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>修仙 · 内容编辑器</title>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; font: 13px/1.5 system-ui, "PingFang SC", "Microsoft YaHei", sans-serif; background: #14161f; color: #e8e2d0; }
+      #toolbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #1d2030; border-bottom: 1px solid #2c3046; position: sticky; top: 0; z-index: 10; }
+      #toolbar strong { font-size: 15px; color: #f0d999; }
+      #stat { color: #8fb7ff; font-size: 12px; }
+      .spacer { flex: 1; }
+      button, .filebtn { background: #2c3350; color: #e8e2d0; border: 1px solid #3a4366; border-radius: 6px; padding: 6px 12px; cursor: pointer; font: inherit; }
+      button:hover, .filebtn:hover { background: #38416a; }
+      #tabs { display: flex; gap: 6px; padding: 10px 14px 0; }
+      #tabs button { background: #20232f; border: 1px solid #2c3046; border-bottom: none; border-radius: 6px 6px 0 0; padding: 6px 16px; cursor: pointer; color: #aab; }
+      #tabs button.active { background: #14161f; color: #f0d999; border-color: #3a4366; }
+      main { padding: 14px; }
+      .panel { display: none; }
+      .panel.active { display: block; }
+      .card { background: #1b1e2b; border: 1px solid #2c3046; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+      .card.dirty { border-color: #c98a3a; box-shadow: 0 0 0 1px #c98a3a33; }
+      .card h3 { margin: 0 0 8px; font-size: 14px; color: #f0d999; }
+      .card h3 small { color: #7c8298; font-weight: 400; font-size: 11px; margin-left: 6px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+      label.f { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: #9aa0b8; }
+      label.f input, label.f select { background: #11131c; color: #e8e2d0; border: 1px solid #333a55; border-radius: 5px; padding: 4px 6px; font: inherit; }
+      label.f input[type="checkbox"] { width: 18px; height: 18px; }
+      .hint { color: #6b7088; padding: 0 14px 14px; font-size: 12px; }
+      .hint code { color: #c9b27a; }
+    </style>
+  </head>
+  <body>
+    <header id="toolbar">
+      <strong>修仙 · 内容编辑器</strong>
+      <span id="stat"></span>
+      <span class="spacer"></span>
+      <button id="export">导出 override.json</button>
+      <button id="copy">复制 JSON</button>
+      <label class="filebtn">载入 override.json<input type="file" id="load" accept="application/json" hidden /></label>
+      <button id="reset">还原改动</button>
+    </header>
+    <nav id="tabs">
+      <button data-tab="skills" class="active">技能（24）</button>
+      <button data-tab="monsters">怪物</button>
+    </nav>
+    <main>
+      <section id="panel-skills" class="panel active"></section>
+      <section id="panel-monsters" class="panel"></section>
+    </main>
+    <p class="hint">
+      可视化调表 → 导出 <code>override.json</code> → 放到 <code>public/data/override.json</code> → 游戏冷启动自动合并（无需重编译）。
+      仅导出有改动的字段；嵌套字段（属性/手感/灵石）整对象导出，避免覆盖其它子字段。
+    </p>
+    <script type="module" src="src/editor/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+release/
+*.log
+*.err
+vite.config.ts.timestamp-*.mjs
+server/data/
+test/data/
+shot-*.png
