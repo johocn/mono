@@ -10,9 +10,9 @@
  * 注意：以下 import 路径与 API 严格对应 Cubism Web Framework 源码结构，运行前需把 SDK 放入 vendor/。
  * Vite(esbuild) 会转译 TS，类型名若有细微版本差异以运行时报错为准，按官方 Demo 微调即可。
  */
-import { CubismFramework } from "../vendor/CubismWebFramework/src/framework/CubismFramework.js";
-import { CubismUserModel } from "../vendor/CubismWebFramework/src/framework/model/CubismUserModel.js";
-import { CubismMatrix44 } from "../vendor/CubismWebFramework/src/framework/math/CubismMatrix44.js";
+import { CubismFramework } from "../fw/src/framework/CubismFramework.js";
+import { CubismUserModel } from "../fw/src/framework/model/CubismUserModel.js";
+import { CubismMatrix44 } from "../fw/src/framework/math/CubismMatrix44.js";
 
 const status = (s: string) => {
   const el = document.getElementById("status");

@@ -9,19 +9,18 @@
       #status { position: fixed; left: 8px; top: 8px; color: #8fb7ff; font: 12px monospace; z-index: 10; }
     </style>
     <!--
-      一键拉取官方 Cubism Web SDK + 免费 CC 样本模型（Hiyori）到 vendor/：
-        cd sandbox/live2d
-        git clone --depth 1 https://github.com/Live2D/CubismWebSamples vendor/_sdk
-        git clone --depth 1 https://github.com/Live2D/CubismWebFramework vendor/CubismWebFramework
-        mkdir -p vendor/Hiyori
-        cp -r vendor/_sdk/Samples/Resources/Hiyori/. vendor/Hiyori/
-        cp vendor/_sdk/Core/live2dcubismcore.min.js vendor/
-        rm -rf vendor/_sdk
-      若处于受限网络，用代理前缀 https://ghproxy.net/https://github.com/... 克隆。
-      启动（Vite 直接服务本目录，自动转译 Framework 的 TS 源码）：
-        npx vite sandbox/live2d
-      状态说明：CORE_MISSING=未放 Core；WEBGL_UNAVAILABLE=无 WebGL；LOAD_FAIL=资源缺失/路径错；
-               RENDERING=模型已加载并逐帧渲染（集成可行）。
+      资产准备（本沙盒已含 Hiyori 模型与 Framework 源码；仅 Core 需手动）：
+        • vendor/Hiyori  —— 免费 CC 样本模型，已用 fetch-assets.mjs 拉取；重拉：node fetch-assets.mjs
+        • fw/ (CubismWebFramework) —— 官方渲染框架 TS 源码（已克隆），main.ts 直接引用
+        • ★ vendor/live2dcubismcore.min.js —— Core 运行时【必须手动下载】：
+          CubismWebSamples 不随 GitHub 分发 Core 二进制（仅文档），公共 CDN 亦无；
+          须从 Live2D 官网 https://www.live2d.com/download/cubism-sdk/ 下载
+          Cubism 5 SDK for Web（免费，需接受许可），解压取出 Core/live2dcubismcore.min.js 放到 vendor/。
+          版本须与 fw/ 的 Framework 匹配（建议直接用官方 SDK 内的 Framework/src 替换 fw/）。
+      启动（Vite 直接服务本目录，自动转译 Framework 的 TS 源码）：npx vite sandbox/live2d
+      校验（需本地安装 playwright）：node check.mjs
+      状态：CORE_MISSING=未放 Core；WEBGL_UNAVAILABLE=无 WebGL；LOAD_FAIL=资源缺失；
+            RENDERING=模型已加载并逐帧渲染（集成可行）。
     -->
     <script src="./vendor/live2dcubismcore.min.js"></script>
   </head>
