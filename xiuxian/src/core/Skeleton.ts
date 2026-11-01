@@ -5,8 +5,26 @@
  *
  * 设计目标：在现有 LayaAir 运行时（无 Spine/DragonBones 库）下，给 2.5D 立绘角色
  * 提供可程序化驱动的骨骼动画，含 idle/walk/attack/cast/skill 等，便于后续美术替换。
+ *
+ * 观感增强（对标商业 2D 的低成本补丁）：
+ *   1) 动画过渡 crossfade：切换 clip 时把上一 clip 的姿态按权重混合进来，消除硬切。
+ *   2) 次级运动：裙摆/披风走弹簧跟随（滞后 + 轻微过冲），不再与躯干刚性同步。
+ *   3) 姿态应用到全部骨骼：未出现在当前 clip 轨道里的骨骼回到静止值，
+ *      避免「切到 attack 后披风卡在 walk 的最后一个姿势」这类残留。
  */
-export type Ease = "linear" | "in" | "out" | "inout";
+export type Ease =
+  | "linear"
+  | "in"
+  | "out"
+  | "inout"
+  | "cubicIn"
+  | "cubicOut"
+  | "cubicInOut"
+  | "expoOut"
+  | "circOut"
+  | "backOut"
+  | "elasticOut"
+  | "bounceOut";
 
 export interface Keyframe {
   /** 关键帧时间（秒，0..duration） */
@@ -25,11 +43,34 @@ export interface Keyframe {
   ease?: Ease;
 }
 
-function applyEase(u: number, ease: Ease): number {
+export function applyEase(u: number, ease: Ease): number {
   switch (ease) {
     case "in": return u * u;
     case "out": return u * (2 - u);
     case "linear": return u;
+    case "cubicIn": return u * u * u;
+    case "cubicOut": return 1 - Math.pow(1 - u, 3);
+    case "cubicInOut": return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+    case "expoOut": return u >= 1 ? 1 : 1 - Math.pow(2, -10 * u);
+    case "circOut": return Math.sqrt(Math.max(0, 1 - (u - 1) * (u - 1)));
+    // 回弹过冲：用于收势/受击回正的「余劲」，幅度克制（c1=1.70158 标准 back）
+    case "backOut": {
+      const c1 = 1.70158, c3 = c1 + 1;
+      return 1 + c3 * Math.pow(u - 1, 3) + c1 * Math.pow(u - 1, 2);
+    }
+    case "elasticOut": {
+      if (u <= 0) return 0;
+      if (u >= 1) return 1;
+      const c4 = (2 * Math.PI) / 3;
+      return Math.pow(2, -10 * u) * Math.sin((u * 10 - 0.75) * c4) + 1;
+    }
+    case "bounceOut": {
+      const n1 = 7.5625, d1 = 2.75;
+      if (u < 1 / d1) return n1 * u * u;
+      if (u < 2 / d1) return n1 * (u -= 1.5 / d1) * u + 0.75;
+      if (u < 2.5 / d1) return n1 * (u -= 2.25 / d1) * u + 0.9375;
+      return n1 * (u -= 2.625 / d1) * u + 0.984375;
+    }
     case "inout":
     default: return u * u * (3 - 2 * u);
   }
@@ -81,6 +122,15 @@ function lerp(a: number, b: number, u: number): number {
   return a + (b - a) * u;
 }
 
+/** 平滑步进（crossfade 权重用，避免线性过渡的折角） */
+function smoothstep(u: number): number {
+  const x = Math.max(0, Math.min(1, u));
+  return x * x * (3 - 2 * x);
+}
+
+/** 次级运动骨骼：裙摆/披风走弹簧跟随，产生滞后与回弹（布料感） */
+const SECONDARY_BONES = new Set(["skirt", "cape"]);
+
 /** 采样某轨道在时刻 t 的插值结果（缺失字段回退静止值 0/1） */
 function sampleTrack(track: Keyframe[], t: number): Keyframe {
   if (track.length === 0) return { t: 0 };
@@ -102,6 +152,19 @@ function sampleTrack(track: Keyframe[], t: number): Keyframe {
   return out;
 }
 
+/** 两个关键帧按权重混合（w=1 全取 a，w=0 全取 b） */
+function blendKey(a: Keyframe, b: Keyframe, w: number): Keyframe {
+  return {
+    t: a.t,
+    rot: lerp(b.rot ?? 0, a.rot ?? 0, w),
+    x: lerp(b.x ?? 0, a.x ?? 0, w),
+    y: lerp(b.y ?? 0, a.y ?? 0, w),
+    sx: lerp(b.sx ?? 1, a.sx ?? 1, w),
+    sy: lerp(b.sy ?? 1, a.sy ?? 1, w),
+    alpha: lerp(b.alpha ?? 1, a.alpha ?? 1, w),
+  };
+}
+
 export class SkeletonRig {
   /** 根节点（锚点在脚底），由调用方挂到 Rig.root */
   readonly root: any = new (globalThis as any).Laya.Sprite();
@@ -111,6 +174,16 @@ export class SkeletonRig {
   private t = 0;
   private loop = false;
   private finished = false;
+  /** crossfade：淡出源 clip 与其进度 */
+  private prev = "";
+  private prevT = 0;
+  private prevLoop = false;
+  private fadeT = 0;
+  private fadeDur = 0.12;
+  /** 次级运动弹簧状态（角度/角速度） */
+  private springs = new Map<string, { a: number; v: number }>();
+  /** 部件放大系数：>1 让相邻部件互相压边，掩盖 AI 切图的硬边接缝；1 = 精确装配 */
+  seamScale = 1;
 
   addBone(def: BoneDef): void {
     const L: any = (globalThis as any).Laya;
@@ -118,7 +191,7 @@ export class SkeletonRig {
     const baseX = def.x ?? 0;
     const baseY = def.y ?? 0;
     const baseRot = def.rot ?? 0;
-    const baseScale = def.scale ?? 1;
+    const baseScale = (def.scale ?? 1) * this.seamScale;
     const baseScaleX = def.scaleX ?? 1;
     const baseScaleY = def.scaleY ?? 1;
     node.pos(baseX, baseY);
@@ -155,6 +228,16 @@ export class SkeletonRig {
   play(name: string, loop = false): void {
     if (!this.clips.has(name)) return;
     if (this.current === name && !this.finished) return;
+    // 旧 clip 作为淡出源（已结束的不再淡出，避免衰亡姿态被混进来）
+    if (this.current && !this.finished) {
+      this.prev = this.current;
+      this.prevT = this.t;
+      this.prevLoop = this.loop;
+      this.fadeT = 0;
+    } else {
+      this.prev = "";
+      this.fadeT = this.fadeDur;
+    }
     this.current = name;
     this.t = 0;
     this.loop = loop || !!this.clips.get(name)!.loop;
@@ -175,18 +258,75 @@ export class SkeletonRig {
       if (this.loop) time = time % clip.duration;
       else { time = clip.duration; this.finished = true; }
     }
-    // 朝向由外部（Rig）通过 root.scaleX 统一处理，这里只做关键帧插值
-    void facing;
-    for (const [name, track] of Object.entries(clip.tracks)) {
-      const bn = this.bones.get(name);
-      if (!bn) continue;
-      const s = sampleTrack(track, time);
-      bn.node.rotation = bn.baseRot + (s.rot ?? 0);
-      bn.node.x = bn.baseX + (s.x ?? 0);
-      bn.node.y = bn.baseY + (s.y ?? 0);
-      bn.node.scaleX = (s.sx ?? 1) * bn.baseScale * bn.baseScaleX;
-      bn.node.scaleY = (s.sy ?? 1) * bn.baseScale * bn.baseScaleY;
-      if (bn.disp && s.alpha !== undefined) bn.disp.alpha = s.alpha;
+
+    let w = 1; // 当前 clip 权重
+    if (this.prev && this.fadeT < this.fadeDur) {
+      this.fadeT += dt;
+      this.prevT += dt;
+      const pc = this.clips.get(this.prev);
+      if (pc) {
+        if (this.prevLoop) this.prevT = this.prevT % pc.duration;
+        else this.prevT = Math.min(this.prevT, pc.duration);
+      }
+      w = smoothstep(this.fadeT / this.fadeDur);
+      if (this.fadeT >= this.fadeDur) this.prev = "";
     }
+
+    const pose = this.samplePose(this.current, time);
+    if (this.prev && w < 1) {
+      const from = this.samplePose(this.prev, this.prevT);
+      for (const [name, k] of from) {
+        pose.set(name, blendKey(pose.get(name) ?? { t: time }, k, w));
+      }
+    }
+    this.applyPose(pose, dt);
+    void facing;
+  }
+
+  /** 取某 clip 在时刻 t 的全部轨道采样（不含未出现骨骼 → 由 applyPose 回落静止值） */
+  private samplePose(name: string, time: number): Map<string, Keyframe> {
+    const out = new Map<string, Keyframe>();
+    const clip = this.clips.get(name);
+    if (!clip) return out;
+    for (const [bone, track] of Object.entries(clip.tracks)) {
+      out.set(bone, sampleTrack(track, time));
+    }
+    return out;
+  }
+
+  /** 应用到全部骨骼：未在当前 pose 里的骨骼回到静止值（消除切换残留） */
+  private applyPose(pose: Map<string, Keyframe>, dt: number): void {
+    for (const [name, bn] of this.bones) {
+      const s = pose.get(name);
+      let rot = s?.rot ?? 0;
+      // 次级运动：裙摆/披风弹簧跟随目标角，产生滞后与回弹
+      if (SECONDARY_BONES.has(name)) rot = this.spring(name, rot, dt);
+      const x = s?.x ?? 0;
+      const y = s?.y ?? 0;
+      const sx = s?.sx ?? 1;
+      const sy = s?.sy ?? 1;
+      bn.node.rotation = bn.baseRot + rot;
+      bn.node.x = bn.baseX + x;
+      bn.node.y = bn.baseY + y;
+      bn.node.scaleX = sx * bn.baseScale * bn.baseScaleX;
+      bn.node.scaleY = sy * bn.baseScale * bn.baseScaleY;
+      if (bn.disp && s?.alpha !== undefined) bn.disp.alpha = s.alpha;
+    }
+  }
+
+  /** 二阶弹簧：临界阻尼比 ~0.55，既跟随又有轻微过冲（布料/发丝的廉价替身） */
+  private spring(name: string, target: number, dt: number): number {
+    let st = this.springs.get(name);
+    if (!st) {
+      st = { a: target, v: 0 };
+      this.springs.set(name, st);
+      return target;
+    }
+    const k = 150;
+    const c = 2 * 0.55 * Math.sqrt(k);
+    const acc = k * (target - st.a) - c * st.v;
+    st.v += acc * dt;
+    st.a += st.v * dt;
+    return st.a;
   }
 }

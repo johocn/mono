@@ -176,8 +176,12 @@ const BASE_HP = 120;
 const BASE_MP = 60;
 const BASE_SPEED = 3.4;
 
-/** 表现层开关：true=韩立青袍全身立绘（整体律动，无接缝）；false=分体骨骼装配 */
-const PLAYER_ROBE_ART = true;
+/**
+ * 表现层开关：true=韩立青袍全身立绘（整体律动，无接缝）；false=分体骨骼装配（真骨骼动画）。
+ * B2：置 false 启用部件骨架（SkeletonRig）——双腿/双臂/披风独立摆动，且能享用到
+ * crossfade / 裙摆披风弹簧次级运动 / 打击帧对齐；代价是 AI 切图的接缝与色差会暴露。
+ */
+const PLAYER_ROBE_ART = false;
 
 // P3-1 翻滚参数
 const ROLL_COST = 22;        // 翻滚体力消耗
@@ -370,9 +374,26 @@ export class Player extends Actor {
       // - 立绘模式（默认）：整体立绘 + 程序化律动（无接缝/无色差、翻滚整圈旋转）——长袍角色最优解
       // - 骨骼模式：AI 分体部件装配，腿/臂独立摆动，但有接缝/色差（素材级缺陷）；置 false 切换
       img: PLAYER_ROBE_ART ? ART.cutHanliRobe : ART.cutHanli,
-      imgH: 95,
+      imgH: 80,
       skel: PLAYER_ROBE_ART ? undefined : "art/skel/hanli",
-      skelFile: PLAYER_ROBE_ART ? undefined : "art/skel/hanli/zhaolong.sk",
+      // 骨骼模式不再传 skelFile：zhaolong.sk 资产本就不存在，且 .sk 需 laya.ani 运行时
+      // （public/libs 里缺失、长期 404），传了只会先空等再回退。直接走部件骨架，无等待。
+      skelFile: undefined,
+      // —— Flipbook（Blender 3D→2D 序列帧）：已接入占位烘焙图集（tools/placeholder_hanli.blend → public/art/hanli_sheet.png）——
+      // 占位仅为验证整条链路；真实韩立模型就绪后替换 .blend 重烘即可，此配置无需改动。
+      sheet: {
+        sheet: "art/hanli_sheet.png", cols: 20, rows: 5, // 100 格图集（20×5，受 4096 纹理上限约束），帧序 0..99
+        clips: {
+          idle:  { from: 0,  count: 16, fps: 8,  loop: true }, // 0..15
+          walk:  { from: 16, count: 12, fps: 10, loop: true }, // 16..27
+          attack:{ from: 28, count: 10, fps: 20, hit: 6 },     // 28..37（第 6 帧为打击帧）
+          cast:  { from: 38, count: 16, fps: 10, loop: true }, // 38..53
+          skill: { from: 54, count: 18, fps: 20, hit: 11 },    // 54..71
+          hurt:  { from: 72, count: 6,  fps: 12 },             // 72..77
+          death: { from: 78, count: 14, fps: 12 },             // 78..91
+          dodge: { from: 92, count: 8,  fps: 20 },             // 92..99
+        },
+      },
       seed: opts.seed,
     });
     this.nickname = opts.nickname || "无名散修";

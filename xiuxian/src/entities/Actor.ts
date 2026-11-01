@@ -7,7 +7,7 @@ import { ELEM_CRYSTAL_COLOR, MULTI_CRYSTAL_COLOR } from "../data/elements";
 import { isWalkable } from "../data/map";
 import type { MapDef } from "../data/map";
 import type { Player } from "./Player";
-import { Rig, type ClipName } from "../core/Rig";
+import { Rig, type ClipName, type FlipbookDef } from "../core/Rig";
 import { makeRng, type Rng } from "../core/Rng";
 import {
   addBuff, consumeShield, defBonus, hasteMul, hotValue, isStunned,
@@ -34,6 +34,8 @@ export interface ActorOpts {
   skel?: string;
   /** LayaAir 内置骨骼路径（指向 <name>.sk；laya.ani 运行时/文件缺失则回退 skel） */
   skelFile?: string;
+  /** Flipbook（Blender 3D→2D 序列帧）图集定义；提供后由 Rig 最高优先级接管渲染 */
+  sheet?: FlipbookDef;
   seed?: number;
   critRate?: number;
   critMul?: number;
@@ -101,7 +103,7 @@ export class Actor {
     this.critMul = opts.critMul ?? 1.5;
     this.knockResist = opts.knockResist ?? 0;
     this.rng = makeRng(opts.seed ?? 1234);
-    this.rig = new Rig(opts.color, opts.size ?? 1, { horn: opts.horn, img: opts.img, imgH: opts.imgH, skel: opts.skel, skelFile: opts.skelFile });
+    this.rig = new Rig(opts.color, opts.size ?? 1, { horn: opts.horn, img: opts.img, imgH: opts.imgH, skel: opts.skel, skelFile: opts.skelFile, sheet: opts.sheet });
     // 命中闪白叠加层（程序化白色轮廓，受击时淡入再衰减）
     const sz = opts.size ?? 1;
     this.flash = new Laya.Sprite();
