@@ -96,3 +96,70 @@ Flipbook 在 `Rig.ts` 里**优先级最高**（高于骨架/立绘），图集�
 脚本改用 `mathutils.to_track_quat` 直接算相机朝向。另外 Blender 里手动 `parent_bone` 会导致网格偏移，
 务必用 `bpy.ops.object.parent_set(type='BONE')` 保留世界变换。
 
+## 8. 韩立 CC0 改造清单（路线②实操手册）
+目标：拿到干净可绑骨的人形基底 → 改造韩立（青袍/墨发髻/竹绿腰带/长矛）→ 绑骨 → 8 个同名 Action → 交 prep+bake。
+本手册给你照着做；真模型到手后，游戏侧 `Player.ts` 的 `sheet` 配置**一行都不用改**。
+
+### 8.1 选基底（去哪找、怎么挑）
+- **许可优先级**：`CC0`（可改可再分发）> `CC-BY`（需署名、可改）> 免费商用（逐条看条款）> `Mixamo`（免费可用但**角色源不可再分发/改源**，仅适合直接吃它的动画，不适合本项目「改源+烘焙再分发」）。**本项目要改源，强烈建议 CC0 / CC-BY。**
+- 推荐站点 / 关键词：
+  - **Sketchfab**：搜 `humanoid base mesh` / `stylized male` / `anime character base`，左侧筛选 `License = CC0 或 CC-BY`、`Downloadable`、有 rig 更佳（但仍建议自家 Rigify 重绑以保证骨骼名统一）。
+  - **Quaternius** / **Kenney.nl**：CC0 低面数人形，拓扑干净，卡通友好。
+  - **Blendswap**：CC0 专区；**Poly Pizza**：低面数 CC0。
+- 挑选标准（重要性排序）：
+  1. **拓扑干净、四边面为主、关节有余量环线**（肩/肘/膝/裙摆）——决定权重变形是否破面。
+  2. 比例接近真人或轻动漫（头身比 ~6.5–7.5），别太高或太 Q。
+  3. 已有基础绑骨可省事，但**最终用 Rigify 重绑**最稳（骨骼命名统一、IK 现成）。
+  4. 面数：游戏里角色约 80px 高、2.5D 卡通，**1k–15k 面足够**；别拿电影级高模（烘焙慢且没必要）。
+
+### 8.2 改造韩立（部位拆解 + 配色）
+韩立是《凡人修仙传》男主：出身农家、后成仙，常着素袍。本项目定妆：**青袍 + 墨发髻 + 竹绿腰带 + 长矛**。
+- **身体 / 衣**：基底自带衣裤，或直接加一件 **青袍** 外罩（用 cone/cylinder 做下摆 + 躯干片）覆盖下半身与肩。色取沉稳青蓝绿，`RGB≈(0.10, 0.42, 0.40)`（十六进制 ~`#1A6B66`）。
+- **头 / 发**：基底头 + 加 **墨发髻**——头顶一个黑色发髻（球/胶囊，黑 `RGB≈(0.02,0.02,0.03)`），可加发带；面部留素面或简单五官。
+- **腰带**：腰间一圈 **竹绿** 腰带（torus 或薄圆柱），`RGB≈(0.42,0.55,0.18)`（~`#6B8C2E`）。
+- **武器 长矛**：细长杆（cylinder，长约身高 1.3 倍）+ 枪头（cone）。**必须 parent 到手骨**——用 `parent_set(type='BONE')` 保留世界变换，别手动设 `parent_bone`（会偏移，见 §7 坑）。
+- 配色录入：prep 的 `toonify` 会**保留原材质颜色**（读原有 Base Color 输入；无则回退灰）。所以直接在 Blender 里把各部位材质颜色调好即可，prep 只换 shader 为 Toon、不覆盖色。
+
+### 8.3 绑骨（Rigify）
+- 加 `Armature` → `Add` → `Armature` → 选 **Human (metarig)**（Rigify 的）。
+- 编辑 metarig 对齐基底关节（肩/肘/腕/髋/膝/踝）；手指/面部可简化（2.5D 看不清，省事）。
+- Object Mode → 选中 Armature 物体 → 侧栏 `Armature` → `Rigify Buttons` → **Generate Rig**（生成带 IK 的 `rig`）。
+- 选中网格 + 选 `rig` → `Parent` → **With Automatic Weights**。
+- 裙摆 / 披风：加 2–3 根额外骨骼驱动，或挂 **Cloth 模拟**（烘焙时出真实飘动，最省事的次级运动）；用 Cloth 需让 prep/bake 场景里能结算（EEVEE 可跑 cloth，无需预烘）。
+- 权重修：肩/肘/膝/裙摆处补几笔，避免穿插/破面。
+
+### 8.4 做 8 个命名 Action（严格同名！）
+bake 脚本**按名字取帧**，名字错一个字母就丢 clip。命名必须：`idle / walk / attack / cast / skill / hurt / death / dodge`。
+| clip | 内容要点 | fps×帧 | 备注 |
+|---|---|---|---|
+| idle  | 呼吸微动（胸/肩起伏） | 8×16  | 循环，脚不动 |
+| walk  | 双腿反相迈步 + 重心左右移 | 10×12 | 循环，**根骨原位**（相机固定只动骨，脚落同点） |
+| attack| 抬矛过头 → 下劈 → 回弹 | 20×10 | **第 6 帧=打击帧**（hit:6） |
+| cast  | 聚气后仰 + 双手前推（可加发光空物体） | 10×16 | 循环 |
+| skill | 提气后仰 → 前送爆发 | 20×18 | **第 11 帧=打击帧**（hit:11） |
+| hurt  | 后仰 + 退半步 | 12×6  | |
+| death | 前旋 / 后倒地 | 12×14 | |
+| dodge | 侧翻 / 急闪 | 20×8  | |
+- 每个 action 长度 **至少** 表里 `count` 帧（bake 从 action 首帧连取 `count` 帧；不足会提前停、多余帧忽略）。
+- 根骨/原点固定、相机固定、**只动骨骼** → 脚始终落同点，帧间构图一致（2.5D 序列帧的关键）。
+- 打击帧在动作里打 marker，bake 用 `hit` 偏移触发刀光/伤害（与游戏 A1 打击帧机制对齐）。
+
+### 8.5 导出 / 交给我
+- 存 `.blend` 直接给我最稳（保留全部 rig/action/材质）。
+- 或导出 `.glb`：`File → Export → glTF 2.0`，勾 `Include`（全选 armature+meshes）、`Transform`（+Y Up 由导出器处理）、`Animation`（Export Animation ✓）、`Skinning`（Export Skinning ✓）。
+- **交付前自检**：场景里有那 8 个同名 Action（Dope Sheet → Action Editor 下拉能看到，或 NLA）；角色大致在原点、脚贴地；武器已绑到手骨。
+- 然后我跑：
+```pwsh
+$b = "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe"
+& $b --background --python tools/blender_prep.py -- --in 韩立.glb --out 韩立_prepped.blend
+& $b --background --python tools/blender_bake.py -- --blend 韩立_prepped.blend --out public/art/hanli_sheet.png --usecamera
+```
+- 若渲出来面朝左：prep 加 `--view -1,1,0.6` 翻向；若构图太满/太松：调 `--pad`。
+
+### 8.6 常见坑（对照 §7）
+- 手动 `parent_bone` 导致网格偏移 → 用 `parent_set(type='BONE')`。
+- headless 渲染 `TrackTo` 不求值 → 已改 `aim_camera`；**你自己模型里也别依赖 TrackTo 相机**，交给 prep 的自动取景。
+- Action 命名 / 数量不对 → 图集对应 clip 空白或错位。
+- 角色不在原点 / 尺度离谱 → prep 自动取景能救，但根骨固定仍是好习惯。
+- 面数过高 / 用 Cloth 却没让场景结算 → 烘焙慢或飘动不生效。
+
