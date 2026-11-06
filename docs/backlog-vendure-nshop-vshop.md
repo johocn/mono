@@ -586,3 +586,52 @@
 - **要求**：按季度轮换，或人员变动/离职时立即轮换；轮换后无需 reload nginx（文件热生效），但要复验「匿名 401 / 带凭据 200」。
 - **后续（可选）**：若要求与后台登录态复用，需改 `auth_request` + 后端校验 admin token 的方案（对应 VS-03 的另一条路径）。
 - **优先级**：P2
+
+---
+
+## 9. SSR 表单 hydration 前原生提交会把凭据带进 URL（2026-11-06）
+
+### NS-06 账号表单未拦截 hydration 前的原生提交
+
+- **现象**：SSR 页面（`/account/login`）在 JS 产物尚未加载/未 hydration 时点击提交按钮，浏览器按原生表单 GET 提交，账号与密码会以 `?identifier=...&password=...` 形式进入地址栏，同时向服务器发出一次携带凭据的请求。
+- **影响**：凭据进入浏览器历史、代理/网关访问日志与 Referer；属于凭据泄漏面，正常用户慢网/首屏快速点击时可触发。
+- **修复（nshop）**：给含凭据字段的账号表单加**不依赖组件逻辑**的内联拦截 `onsubmit="return false"`，覆盖：
+  - `layers/base/app/components/account/LoginForm.vue`（identifier/password）
+  - `layers/base/app/components/account/RegisterForm.vue`（email/password×2）
+  - `layers/base/app/components/account/ResetPasswordForm.vue`（password×2）
+  - `layers/base/app/components/account/RequestPasswordResetForm.vue`（email）
+  - 提交：`497dbc0`；线上验证：拦截 JS 产物模拟 hydration 前提交，三个 SSR 表单 URL 均无 `identifier=`/`password=`/`email=`；`password-reset` 页在 SSR 不渲染表单（`onMounted` 后才出现），JS 正常时属性存在。
+- **限制**：浏览器**完全禁用 JS** 时，内联事件处理器同样不执行，因此该模式仍会发生原生提交；这是内联方案的固有限制（要彻底覆盖需把提交按钮改为非 submit 并放弃 Enter 提交，代价更大）。
+- **后续约定（强制）**：新增任何把 `identifier`/`password`/验证码作为表单字段的 SSR 页面，`UForm`/`<form>` 必须带 `onsubmit="return false"`；合并前用「拦截 JS 产物」模式复验：点击提交后 URL 不出现凭据参数。
+- **优先级**：P2（已修复；约定待后续表单遵守）
+
+---
+
+## 10. Schema 契约与产物治理（2026-11-06，SDL 漂移盘点后）
+
+> 背景：外卖审计把生产实际存在的 `MyMessageListOptions` 判成「类型不存在」，原因是本地仓库与生产 schema 漂移；同一天还发现生产运行态的 `myMessages` 契约与服务器磁盘 `lib` 不一致。仓库已按生产契约恢复 `MyMessageListOptions`，但不解决基线漂移这个根因。
+
+### SC-01 生产 SDL 快照入仓作为契约基线
+
+- **做法**：从有 introspection 权限的环境导出 shop-api / admin-api 的 SDL（或由生产侧构建流程导出 `schema.graphql`），存到仓库固定路径（如 `schema/production-shop.graphql`、`schema/production-admin.graphql`），随版本更新。
+- **用途**：前端调用、审计、后端改造都以快照为「生产现状」，不再拿 `src` 反推生产。
+- **注意**：生产 introspection 被 HardenPlugin 禁用，导出需在有权限的环境或 CI 部署后执行，不能直接依赖线上内省。
+- **优先级**：P1（漂移已造成误报与契约风险）
+
+### SC-02 CI 做 schema 兼容 diff
+
+- **做法**：每次合并前，把「本次构建产物生成的 SDL」与仓库快照 diff；只允许兼容性变更（新增可选字段/类型、新增枚举值需评估），破坏性变更（删字段、改参数类型、必填化）必须显式审批并在快照中同步。
+- **补充**：diff 结果作为构建日志附件，失败时阻断合并。
+- **优先级**：P1
+
+### SC-03 禁止手改 lib 产物，产物只能来自已提交 src
+
+- **规则**：`packages/*/lib` 与 `packages/dev-server/dist` 只能由 `npx tsc -p tsconfig.json` / `tsconfig.prod.json` 从已提交的 `src` 生成；禁止 scp 覆盖或手工编辑产物上线。
+- **发现行为与磁盘不一致时**：先按已提交 `src` 重新构建部署，再复测，不允许「保留手工产物 + 只在仓库改 src」的双轨状态。
+- **优先级**：P1
+
+### SC-04 上线后 schema 冒烟
+
+- **做法**：每次部署后跑一组固定探针（关键查询 + 参数类型探针），确认 `myMessages(options:{take:5})`、`myVouchers`、`availablePlans`、`mySubscriptions` 等 C 端入口不报 400 或「字段不存在」。
+- **优先级**：P2
+
