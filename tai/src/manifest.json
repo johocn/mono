@@ -1,0 +1,19 @@
+{
+  "name": "雪地胎寄存预约",
+  "appid": "",
+  "description": "长春净月雪地胎专业寄存预约 H5",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "vueVersion": "3",
+  "uniStatistics": {
+    "enable": false
+  },
+  "h5": {
+    "title": "雪地胎寄存预约",
+    "router": {
+      "mode": "hash",
+      "base": "/tire/"
+    }
+  }
+}

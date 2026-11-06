@@ -1,0 +1,20 @@
+{
+  "home": {
+    "address": "长春市净月开发区福祉大路 588 号（轮胎寄存仓）",
+    "sdkReady": true,
+    "fallbackText": "",
+    "navUrl": "https://uri.amap.com/navigation?to=125.4233,43.7833,%E9%9B%AA%E5%9C%B0%E8%83%8E%E5%AF%84%E5%AD%98%E4%BB%93&mode=car&coordinate=gaode&callnative=1&src=tire-storage"
+  },
+  "fallback": {
+    "address": "长春市净月开发区福祉大路 588 号（轮胎寄存仓）",
+    "sdkReady": false,
+    "fallbackText": "地图加载失败，仍可点击导航",
+    "navUrl": "https://uri.amap.com/navigation?to=125.4233,43.7833,%E9%9B%AA%E5%9C%B0%E8%83%8E%E5%AF%84%E5%AD%98%E4%BB%93&mode=car&coordinate=gaode&callnative=1&src=tire-storage"
+  },
+  "detail": {
+    "address": "长春市净月开发区福祉大路 588 号（轮胎寄存仓）",
+    "sdkReady": true,
+    "fallbackText": "",
+    "navUrl": "https://uri.amap.com/navigation?to=125.4233,43.7833,%E9%9B%AA%E5%9C%B0%E8%83%8E%E5%AF%84%E5%AD%98%E4%BB%93&mode=car&coordinate=gaode&callnative=1&src=tire-storage"
+  }
+}

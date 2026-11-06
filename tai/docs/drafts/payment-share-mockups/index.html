@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>轮胎寄存 v2 · 支付与分享裂变 Mockup（草案）</title>
+<style>
+:root{
+  --bg:#F3F4F6; --card:#FFFFFF; --ink:#101828; --sub:#667085; --line:#E7E9EC;
+  --brand:#0B7A53; --brand-soft:#E7F5EF; --wechat:#07C160; --wechat-soft:#E8F8EF;
+  --warn:#B54708; --warn-soft:#FEF0C7; --danger:#B42318; --danger-soft:#FEE4E2;
+  --info:#175CD3; --info-soft:#E8F1FD; --radius:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--brand);text-decoration:none}
+.page{max-width:1300px;margin:0 auto;padding:32px 24px 80px}
+.masthead{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;padding-bottom:20px;border-bottom:1px solid var(--line)}
+.masthead h1{font-size:26px;letter-spacing:-.02em}
+.masthead p{margin-top:8px;color:var(--sub);font-size:13px;line-height:1.7;max-width:640px}
+.badge-draft{display:inline-flex;align-items:center;gap:6px;background:var(--warn-soft);color:var(--warn);font-size:12px;font-weight:600;padding:6px 10px;border-radius:999px}
+.toc{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 8px}
+.toc a{font-size:12px;padding:7px 12px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--ink)}
+.toc a:hover{border-color:var(--brand);color:var(--brand)}
+.section{margin-top:44px}
+.section-head{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
+.section-head h2{font-size:19px}
+.section-head span{font-size:12px;color:var(--sub)}
+.section-desc{color:var(--sub);font-size:13px;line-height:1.7;margin-bottom:18px;max-width:900px}
+.frames{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
+.frame-wrap{width:390px}
+.frame-label{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.vtag{width:24px;height:24px;border-radius:6px;background:var(--brand);color:#fff;font-size:12px;font-weight:700;display:grid;place-items:center}
+.frame-label b{font-size:14px}
+.frame-label small{color:var(--sub);font-size:11px}
+.frame-note{margin-top:10px;font-size:11px;line-height:1.6;color:var(--sub);min-height:34px}
+.phone{width:390px;height:844px;background:var(--card);border:1px solid #D7DBE0;border-radius:26px;position:relative;overflow:hidden;box-shadow:0 2px 10px rgba(16,24,40,.06)}
+.statusbar{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 22px;font-size:12px;font-weight:600;color:var(--ink)}
+.statusbar .sig{display:flex;gap:5px;align-items:center}
+.sig i{display:block;width:14px;height:8px;border:1px solid var(--ink);border-radius:2px;position:relative}
+.sig i::after{content:"";position:absolute;inset:1px;background:var(--ink);width:8px}
+.navbar{height:44px;padding:0 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);background:var(--card);position:relative;z-index:5}
+.navbar .title{font-size:15px;font-weight:600}
+.back{width:26px;height:26px;display:grid;place-items:center;color:var(--ink);font-size:16px}
+.more{width:26px;height:26px;display:grid;place-items:center;color:var(--sub);font-size:14px}
+.scroll{height:756px;overflow:hidden;position:relative}
+.homebar{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:120px;height:4px;border-radius:99px;background:#C9CED6;z-index:20}
+.pad{padding:16px}
+.muted{color:var(--sub)}
+.tiny{font-size:11px}
+.small{font-size:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+.card.soft{background:var(--bg);border-color:var(--line)}
+.sec-title{font-size:13px;font-weight:600;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.btn{display:flex;align-items:center;justify-content:center;height:46px;border-radius:12px;font-size:15px;font-weight:600;background:var(--brand);color:#fff;border:none}
+.btn.ghost{background:var(--card);color:var(--ink);border:1px solid var(--line)}
+.btn.wechat{background:var(--wechat)}
+.btn.block{width:100%}
+.btn.sm{height:34px;font-size:12px;border-radius:9px;padding:0 12px;display:inline-flex}
+.btn-line{height:30px;font-size:11px;padding:0 10px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--ink);display:inline-flex;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 8px;border-radius:999px;background:var(--bg);color:var(--sub);white-space:nowrap}
+.chip.ok{background:var(--brand-soft);color:var(--brand)}
+.chip.wait{background:var(--warn-soft);color:var(--warn)}
+.chip.danger{background:var(--danger-soft);color:var(--danger)}
+.chip.info{background:var(--info-soft);color:var(--info)}
+.chip.wechat{background:var(--wechat-soft);color:#067A43}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.dashed{border-top:1px dashed var(--line);margin:10px 0}
+.money{font-variant-numeric:tabular-nums}
+.opt{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;gap:10px;align-items:flex-start;background:#fff;position:relative}
+.opt+.opt{margin-top:10px}
+.opt.on{border-color:var(--brand);background:var(--brand-soft)}
+.radio{width:18px;height:18px;border-radius:50%;border:1.5px solid #C6CBD2;flex:none;margin-top:2px;display:grid;place-items:center}
+.opt.on .radio{border-color:var(--brand);background:var(--brand)}
+.opt.on .radio::after{content:"";width:6px;height:6px;border-radius:50%;background:#fff}
+.opt .ico{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;flex:none;font-size:14px;font-weight:700}
+.opt .ico.w{background:var(--wechat-soft);color:#067A43}
+.opt .ico.s{background:var(--info-soft);color:var(--info)}
+.opt .ico.p{background:var(--warn-soft);color:var(--warn)}
+.opt .body{flex:1;min-width:0}
+.opt .body strong{font-size:13px;display:block;margin-bottom:2px}
+.opt .body p{font-size:11px;color:var(--sub);line-height:1.5}
+.opt .right{font-size:11px;color:var(--sub);text-align:right;flex:none}
+.tag-rec{position:absolute;top:-8px;right:10px;background:var(--brand);color:#fff;font-size:10px;padding:2px 7px;border-radius:99px}
+.bottom{position:absolute;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:12px 16px 24px;z-index:10}
+.bottom .line{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.total{font-size:18px;font-weight:700;color:var(--danger)}
+.total small{font-size:11px;font-weight:400;color:var(--sub);margin-left:2px}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:#fff;border-radius:20px 20px 0 0;border-top:1px solid var(--line);padding:10px 16px 24px;z-index:12;box-shadow:0 -6px 20px rgba(16,24,40,.06)}
+.handle{width:38px;height:4px;border-radius:99px;background:#D5D9DF;margin:0 auto 12px}
+.seg{display:flex;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+.seg span{flex:1;text-align:center;font-size:12px;padding:7px 0;border-radius:8px;color:var(--sub);font-weight:500}
+.seg span.on{background:#fff;color:var(--brand);font-weight:600;box-shadow:0 1px 2px rgba(16,24,40,.06)}
+.hero{background:var(--brand);color:#fff;padding:16px;position:relative}
+.hero .h-title{font-size:20px;font-weight:700;margin:6px 0 4px}
+.hero .h-sub{font-size:12px;opacity:.88}
+.hero .h-amt{font-size:28px;font-weight:700;margin-top:10px;font-variant-numeric:tabular-nums}
+.hero .h-amt small{font-size:12px;font-weight:400;opacity:.85}
+.stepper{display:flex;align-items:center;gap:0;margin-top:14px}
+.stepper .st{flex:1;text-align:center;position:relative;font-size:9px;color:var(--sub)}
+.stepper .st .dot{width:16px;height:16px;border-radius:50%;background:#E3E6EA;margin:0 auto 5px;border:2px solid #fff;position:relative;z-index:2}
+.stepper .st.done .dot{background:var(--brand)}
+.stepper .st.now .dot{background:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+.stepper .st::before{content:"";position:absolute;top:7px;left:0;right:0;height:2px;background:#E3E6EA;z-index:1}
+.stepper .st:first-child::before{display:none}
+.stepper .st.done::before,.stepper .st.now::before{background:var(--brand-soft)}
+.stepper .st b{display:block;color:var(--ink);font-size:10px;font-weight:600}
+.timeline{position:relative;padding-left:18px}
+.timeline::before{content:"";position:absolute;left:6px;top:4px;bottom:4px;width:2px;background:var(--line)}
+.titem{position:relative;padding-bottom:12px}
+.titem::before{content:"";position:absolute;left:-15px;top:3px;width:8px;height:8px;border-radius:50%;background:#C9CED6;border:2px solid #fff}
+.titem.done::before{background:var(--brand)}
+.titem .t-main{font-size:12px;font-weight:600}
+.titem .t-sub{font-size:10px;color:var(--sub);margin-top:2px}
+.kv{display:flex;justify-content:space-between;font-size:12px;padding:7px 0;gap:12px}
+.kv span:first-child{color:var(--sub);flex:none}
+.kv span:last-child{text-align:right}
+.kv.strong span:last-child{font-weight:600}
+.progress{height:8px;border-radius:99px;background:#EEF0F2;overflow:hidden}
+.progress i{display:block;height:100%;border-radius:99px;background:var(--brand)}
+.progress.big{height:12px}
+.invite{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}
+.invite:last-child{border-bottom:0}
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--brand-soft);color:var(--brand);font-size:12px;font-weight:700;display:grid;place-items:center;flex:none}
+.avatar.gray{background:#EEF0F2;color:var(--sub)}
+.ring{width:112px;height:112px;position:relative;flex:none}
+.ring svg{width:100%;height:100%}
+.ring .num{position:absolute;inset:0;display:grid;place-items:center;text-align:center;line-height:1.1}
+.ring .num b{font-size:26px;display:block}
+.ring .num small{font-size:9px;color:var(--sub)}
+.poster{background:var(--brand);border-radius:16px;padding:18px;color:#fff;position:relative;overflow:hidden}
+.poster .p-kicker{font-size:10px;letter-spacing:.12em;opacity:.85}
+.poster .p-title{font-size:22px;font-weight:700;line-height:1.3;margin-top:6px}
+.poster .p-title em{font-style:normal;background:rgba(255,255,255,.18);padding:0 4px;border-radius:4px}
+.poster .p-note{font-size:10px;opacity:.85;margin-top:6px;line-height:1.5}
+.poster .p-foot{display:flex;align-items:flex-end;justify-content:space-between;margin-top:16px;gap:12px}
+.qr{width:86px;height:86px;background:#fff;border-radius:6px;padding:5px;display:grid;grid-template-columns:repeat(11,1fr);grid-template-rows:repeat(11,1fr);gap:1px}
+.qr b{background:var(--brand);display:block;border-radius:1px}
+.qr b.off{background:transparent}
+.qr-wrap{text-align:center}
+.qr-wrap small{display:block;font-size:9px;color:rgba(255,255,255,.8);margin-top:4px}
+.stamp{position:absolute;right:14px;top:14px;width:58px;height:58px;border-radius:50%;border:2px solid rgba(255,255,255,.7);display:grid;place-items:center;font-size:11px;font-weight:700;text-align:center;line-height:1.2;transform:rotate(8deg)}
+.poster-light{background:var(--brand-soft);border:1px solid #CBE7DA}
+.poster-light .p-title,.poster-light .p-kicker,.poster-light .p-note{color:var(--ink)}
+.poster-light .p-kicker{opacity:.7}
+.poster-light .qr{background:#fff;border:1px solid var(--line)}
+.poster-light .qr b{background:var(--brand)}
+.poster-light .stamp{border-color:var(--brand);color:var(--brand)}
+.poster-light .p-foot small{color:var(--sub)}
+.share-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.mini{font-size:10px;color:var(--sub)}
+.stat{background:var(--bg);border-radius:12px;padding:11px;flex:1}
+.stat b{display:block;font-size:19px;font-weight:700;font-variant-numeric:tabular-nums;margin-top:2px}
+.stat small{font-size:10px;color:var(--sub)}
+.alert{display:flex;gap:8px;padding:9px 10px;border-radius:10px;font-size:10px;line-height:1.5}
+.alert.warn{background:var(--warn-soft);color:var(--warn)}
+.alert.danger{background:var(--danger-soft);color:var(--danger)}
+.alert.info{background:var(--info-soft);color:var(--info)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.table{width:100%;border-collapse:collapse;font-size:10px}
+.table th{text-align:left;color:var(--sub);font-weight:500;padding:7px 4px;border-bottom:1px solid var(--line)}
+.table td{padding:8px 4px;border-bottom:1px solid var(--line);vertical-align:middle}
+.table td:last-child,.table th:last-child{text-align:right}
+.lane{background:var(--bg);border-radius:12px;padding:9px;min-height:196px}
+.lane h4{font-size:10px;color:var(--sub);font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between}
+.lane .item{background:#fff;border:1px solid var(--line);border-radius:9px;padding:8px;margin-bottom:7px}
+.lane .item b{display:block;font-size:10px}
+.lane .item small{font-size:9px;color:var(--sub);display:block;margin-top:2px}
+.bar-chart{display:flex;align-items:flex-end;gap:8px;height:74px;padding-top:6px}
+.bar-chart .bar{flex:1;background:var(--brand-soft);border:1px solid #CBE7DA;border-radius:4px 4px 0 0;position:relative;display:flex;align-items:flex-end;justify-content:center}
+.bar-chart .bar i{display:block;width:100%;background:var(--brand);border-radius:4px 4px 0 0}
+.bar-chart .bar span{position:absolute;bottom:-15px;left:0;right:0;text-align:center;font-size:8px;color:var(--sub)}
+.switch{width:34px;height:19px;border-radius:99px;background:var(--brand);position:relative}
+.switch::after{content:"";position:absolute;width:15px;height:15px;border-radius:50%;background:#fff;right:2px;top:2px}
+.note{background:var(--warn-soft);border-radius:10px;padding:10px 12px;font-size:11px;line-height:1.6;color:var(--warn)}
+.compare{margin-top:18px;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.compare table{width:100%;border-collapse:collapse;font-size:12px}
+.compare th,.compare td{padding:11px 14px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.compare th{background:var(--bg);font-size:12px;color:var(--sub);font-weight:600}
+.compare tr:last-child td{border-bottom:0}
+.compare b{color:var(--brand)}
+footer{margin-top:56px;border-top:1px solid var(--line);padding-top:18px;color:var(--sub);font-size:11px;line-height:1.8}
+@media (max-width:900px){.page{padding:20px 14px 60px}.masthead h1{font-size:21px}.frames{gap:28px}}
+@media (max-width:430px){.page{padding:16px 8px 50px}.frame-wrap{width:374px}.phone{zoom:.9589}.frames{gap:16px}.masthead h1{font-size:20px}.section-head h2{font-size:17px}}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="masthead">
+    <div>
+      <span class="badge-draft">草案 · 未接入生产</span>
+      <h1 style="margin-top:12px">轮胎寄存 v2：支付方式与分享裂变</h1>
+      <p>用于方案评审的静态 mockup。手机视口 390×844；每组页面给出 A/B/C 三种版式。所有金额、订单号、人数均为示意数据，二维码为图案示意、不可扫描。</p>
+    </div>
+    <div class="small muted" style="text-align:right;line-height:1.9">
+      PRD：docs/PRD-tire-payment-referral-v2.md<br>
+      预览端口：<b>52207</b><br>
+      生成日期：2026-11-04
+    </div>
+  </header>
+
+  <nav class="toc">
+    <a href="#pay">1. 支付方式选择</a>
+    <a href="#detail">2. 订单详情</a>
+    <a href="#share">3. 分享页 / 海报</a>
+    <a href="#admin">4. 运营看板</a>
+    <a href="#decide">5. 版式对比与建议</a>
+  </nav>
+
+  <!-- ================= 1. 支付方式 ================= -->
+  <section class="section" id="pay">
+    <div class="section-head"><h2>1. 支付方式选择页</h2><span>下单确认时选择「怎么付」</span></div>
+    <p class="section-desc">三种方式必须同时表达两件事：<b>怎么付</b>（微信 / 到店 / 取货）和<b>什么时候付</b>（预付 / 到店 / 取货）。金额统一展示「基础套餐 + 增值服务」，免单奖励在本页只做抵扣预览，最终以后端结算为准。</p>
+
+    <div class="frames">
+      <!-- 1A -->
+      <div class="frame-wrap">
+        <div class="frame-label"><span class="vtag">A</span><b>全页卡片式</b><small>信息完整</small></div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><div class="sig"><span>5G</span><i></i></div></div>
+          <div class="navbar"><span class="back">‹</span><span class="title">确认寄存</span><span class="more">···</span></div>
+          <div class="scroll">
+            <div class="pad" style="padding-bottom:150px">
+              <div class="card soft" style="margin-bottom:14px">
+                <div class="row"><div><div class="small muted">雪地胎寄存 · 标准套餐</div><div style="font-size:15px;font-weight:600;margin-top:3px">4 条 · 6 个月</div></div><span class="chip ok">含入库拍照</span></div>
+                <div class="dashed"></div>
+                <div class="kv"><span>基础套餐</span><span class="money">¥69.00</span></div>
+                <div class="kv"><span>增值服务（2 项）</span><span class="money">¥20.00</span></div>
+                <div class="kv strong"><span>应付</span><span class="money" style="color:var(--danger);font-size:16px">¥89.00</span></div>
+              </div>
+
+              <div class="sec-title">选择支付方式 <span class="tiny muted">3 种可选</span></div>
+
+              <div class="opt on">
+                <span class="tag-rec">推荐</span>
+                <span class="radio"></span>
+                <span class="ico w">微</span>
+                <div class="body"><strong>微信线上支付</strong><p>下单后立即支付，支付成功才开始受理入库</p></div>
+                <span class="right">预付<br>全额</span>
+              </div>
+              <div class="opt">
+                <span class="radio"></span>
+                <span class="ico s">店</span>
+                <div class="body"><strong>到店支付</strong><p>到店交胎时在前台扫码或现金支付，确认后入库</p></div>
+                <span class="right">到店<br>全额</span>
+              </div>
+              <div class="opt">
+                <span class="radio"></span>
+                <span class="ico p">取</span>
+                <div class="body"><strong>取货时付款</strong><p>先寄存，取货前结清全部费用（含逾期费）</p></div>
+                <span class="right">后付<br>全额</span>
+              </div>
+
+              <div class="note" style="margin-top:14px">到店支付与取货付款需运营端确认到账；未确认前订单不可完成出库。选择即代表同意《寄存服务协议》与退款规则。</div>
+            </div>
+            <div class="bottom">
+              <div class="line"><div class="small muted">合计 <span class="total">¥89.00</span></div><span class="chip info">微信支付 · 预付</span></div>
+              <div class="btn wechat block">微信支付 ¥89.00</div>
+            </div>
+            <div class="homebar"></div>
+          </div>
+        </div>
+        <div class="frame-note">优点：三种方式一次看全，付款时点与后果写清楚。<br>风险：页面偏长，默认项必须明确标注推荐。</div>
+      </div>
+
+      <!-- 1B -->
+      <div class="frame-wrap">
+        <div class="frame-label"><span class="vtag">B</span><b>底部弹层式</b><small>路径最短</small></div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><div class="sig"><span>5G</span><i></i></div></div>
+          <div class="navbar"><span class="back">‹</span><span class="title">确认寄存</span><span class="more">···</span></div>
+          <div class="scroll" style="height:756px">
+            <div class="pad" style="padding-bottom:420px">
+              <div class="card" style="margin-bottom:12px">
+                <div class="row"><div><div style="font-size:14px;font-weight:600">4 条 · 6 个月</div><div class="tiny muted" style="margin-top:3px">雪地胎寄存 · 标准套餐</div></div><b class="money" style="font-size:16px;color:var(--danger)">¥89</b></div>
+                <div class="dashed"></div>
+                <div class="kv"><span>寄存门店</span><span>朝阳路店 · 3 号库位</span></div>
+                <div class="kv"><span>预计取货</span><span>2027-03-15 前后</span></div>
+              </div>
+              <div class="card">
+                <div class="sec-title">分享奖励 <span class="chip ok">奖励待解锁</span></div>
+                <div class="row"><div class="small muted">再邀 1 人完成入库，下次基础套餐免费</div><b class="small">2/3</b></div>
+                <div class="progress" style="margin-top:8px"><i style="width:66.6%"></i></div>
+                <div class="tiny muted" style="margin-top:8px">当前应付 ¥89；奖励发放后可在下次寄存抵扣基础套餐。</div>
+              </div>
+            </div>
+            <div class="sheet">
+              <div class="handle"></div>
+              <div class="row" style="margin-bottom:10px"><b style="font-size:15px">选择支付方式</b><span class="tiny muted">应付 ¥89.00</span></div>
+              <div class="opt on" style="padding:10px">
+                <span class="tag-rec">推荐</span><span class="radio"></span><span class="ico w" style="width:28px;height:28px;font-size:12px">微</span>
+                <div class="body"><strong>微信线上支付</strong><p>立即支付 · 支付后受理</p></div>
+              </div>
+              <div class="opt" style="padding:10px"><span class="radio"></span><span class="ico s" style="width:28px;height:28px;font-size:12px">店</span><div class="body"><strong>到店支付</strong><p>前台确认后入库</p></div></div>
+              <div class="opt" style="padding:10px"><span class="radio"></span><span class="ico p" style="width:28px;height:28px;font-size:12px">取</span><div class="body"><strong>取货时付款</strong><p>取货前结清</p></div></div>
+              <div class="btn wechat block" style="margin-top:12px">确认下单并支付</div>
+              <div class="tiny muted" style="text-align:center;margin-top:8px">可在订单详情内重新支付或修改未支付订单的方式</div>
+            </div>
+            <div class="homebar"></div>
+          </div>
+        </div>
+        <div class="frame-note">优点：下单与支付在一个弹层完成，适合微信内 H5。<br>风险：弹层遮挡金额明细，需确保摘要与实付一致。</div>
+      </div>
+
+      <!-- 1C -->
+      <div class="frame-wrap">
+        <div class="frame-label"><span class="vtag">C</span><b>分段 Tab + 说明面板</b><small>对比清晰</small></div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><div class="sig"><span>5G</span><i></i></div></div>
+          <div class="navbar"><span class="back">‹</span><span class="title">确认寄存</span><span class="more">···</span></div>
+          <div class="scroll">
+            <div class="pad" style="padding-bottom:130px">
+              <div class="row" style="margin-bottom:10px"><div><div class="tiny muted">应付金额</div><div class="total" style="font-size:24px">¥89.00</div></div><span class="chip ok">未使用免单</span></div>
+              <div class="seg" style="margin-bottom:14px"><span class="on">微信线上</span><span>到店支付</span><span>取货付款</span></div>
+
+              <div class="card" style="padding:16px">
+                <div class="row" style="align-items:flex-start">
+                  <div><div style="font-size:16px;font-weight:700">微信线上支付</div><div class="tiny muted" style="margin-top:3px">预付 · 全额 · 即时到账</div></div>
+                  <span class="ico w" style="width:38px;height:38px;border-radius:11px;font-size:16px;background:var(--wechat-soft);color:#067A43;display:grid;place-items:center;font-weight:700">微</span>
+                </div>
+                <div class="dashed"></div>
+                <div class="timeline">
+                  <div class="titem done"><div class="t-main">提交订单</div><div class="t-sub">锁定库位与套餐价格</div></div>
+                  <div class="titem done"><div class="t-main">微信支付 ¥89.00</div><div class="t-sub">调起微信收银台，支付结果以回调为准</div></div>
+                  <div class="titem"><div class="t-main">门店受理并入库</div><div class="t-sub">上传胎号照片后进入寄存中</div></div>
+                  <div class="titem"><div class="t-main">取货时核销出库</div><div class="t-sub">无需再次付款</div></div>
+                </div>
+                <div class="alert info" style="margin-top:10px">支付超时 30 分钟自动取消并释放库位；退款原路退回。</div>
+              </div>
+
+              <div class="card soft" style="margin-top:12px">
+                <div class="row"><span class="small muted">切换方式后付款时点</span><span class="small">到店 / 取货</span></div>
+                <div class="tiny muted" style="margin-top:6px">到店支付：到店交胎时付款，确认后入库。取货付款：先入库，取货前结清。</div>
+              </div>
+            </div>
+            <div class="bottom">
+              <div class="line"><div class="small muted">微信支付 · 预付</div><div class="total">¥89.00</div></div>
+              <div class="btn wechat block">立即支付</div>
+            </div>
+            <div class="homebar"></div>
+          </div>
+        </div>
+        <div class="frame-note">优点：一次只讲一种方式的完整链路，适合新用户理解。<br>风险：切换查看成本高，需记住上次选择并强提示。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 2. 订单详情 ================= -->
+  <section class="section" id="detail">
+    <div class="section-head"><h2>2. 订单详情</h2><span>支付状态 + 分享进度</span></div>
+    <p class="section-desc">详情页承担三件事：当前钱付到哪一步、货走到哪一步、还差几个人解锁免单。未支付订单必须始终有可操作的支付入口；线下支付必须显示「等待门店确认」，不能让用户误以为已付。</p>
+
+    <div class="frames">
+      <!-- 2A -->
+      <div class="frame-wrap">
+        <div class="frame-label"><span class="vtag">A</span><b>状态卡 + 纵向时间线</b><small>信息最全</small></div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><div class="sig"><span>5G</span><i></i></div></div>
+          <div class="navbar"><span class="back">‹</span><span class="title">订单详情</span><span class="more">···</span></div>
+          <div class="scroll">
+            <div class="pad" style="padding-bottom:96px">
+              <div class="card" style="margin-bottom:10px">
+                <div class="row"><div class="tiny muted">订单号 TS202611040018</div><span class="chip wait">待支付 · 剩余 28:14</span></div>
+                <div style="font-size:18px;font-weight:700;margin-top:6px">4 条 · 6 个月</div>
+                <div class="tiny muted" style="margin-top:3px">朝阳路店 · 3 号库位 · 预计 2027-03-15 取货</div>
+                <div class="dashed"></div>
+                <div class="kv"><span>基础套餐</span><span class="money">¥69.00</span></div>
+                <div class="kv"><span>增值服务</span><span class="money">¥20.00</span></div>
+                <div class="kv strong"><span>应付（微信线上 · 预付）</span><span class="money" style="color:var(--danger)">¥89.00</span></div>
+              </div>
+
+              <div class="card soft" style="margin-bottom:10px;padding:10px 14px">
+                <div class="row"><span class="small">等待支付，超时自动取消</span><span class="tiny muted">已付 ¥0.00</span></div>
+              </div>
+
+              <div class="card" style="margin-bottom:10px">
+                <div class="row" style="margin-bottom:8px"><b class="small">分享免单进度</b><span class="chip ok">已邀 2/3</span></div>
+                <div class="progress big"><i style="width:66.6%"></i></div>
+                <div class="row" style="margin-top:8px"><span class="tiny muted">2 位好友已完成入库</span><a class="tiny" href="#share">查看邀请 ›</a></div>
+              </div>
+
+              <div class="card">
+                <div class="sec-title">订单进度</div>
+                <div class="timeline">
+                  <div class="titem done"><div class="t-main">下单成功</div><div class="t-sub">2026-11-04 09:41</div></div>
+                  <div class="titem"><div class="t-main">微信支付</div><div class="t-sub">等待支付，成功后进入门店受理</div></div>
+                  <div class="titem"><div class="t-main">入库 / 取货</div><div class="t-sub">入库采集胎号，取货核销出库</div></div>
+                </div>
+              </div>
+            </div>
+            <div class="bottom"><div class="grid2"><div class="btn ghost" style="font-size:13px">取消订单</div><div class="btn wechat" style="font-size:13px">去支付</div></div></div>
+            <div class="homebar"></div>
+          </div>
+        </div>
+        <div class="frame-note">优点：金额、支付、分享、进度都在首屏可扫读。<br>风险：卡片多，页面较长；倒计时与支付状态必须服务端校准。</div>
+      </div>
+
+      <!-- 2B -->
+      <div class="frame-wrap">
+        <div class="frame-label"><span class="vtag">B</span><b>Hero 横幅 + 横向步骤条</b><small>状态一眼可见</small></div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><div class="sig"><span>5G</span><i></i></div></div>
+          <div class="navbar"><span class="back">‹</span><span class="title">订单详情</span><span class="more">···</span></div>
+          <div class="scroll">
+            <div class="hero">
+              <div class="row"><span class="tiny" style="opacity:.85">TS202611040018</span><span class="tiny" style="background:rgba(255,255,255,.18);padding:2px 8px;border-radius:99px">待支付</span></div>
+              <div class="h-title">还差一步，完成支付</div>
+              <div class="h-sub">微信线上支付 · 支付后门店开始受理</div>
+              <div class="h-amt">¥89.00 <small>含增值 ¥20</small></div>
+              <div class="btn block" style="background:#fff;color:var(--brand);margin-top:12px;height:42px">立即支付</div>
+            </div>
+
+            <div class="pad">
+              <div class="card" style="margin-bottom:12px;padding:12px 14px">
+                <div class="stepper">
+                  <div class="st done"><div class="dot"></div><b>下单</b></div>
+                  <div class="st now"><div class="dot"></div><b>支付</b></div>
+                  <div class="st"><div class="dot"></div><b>入库</b></div>
+                  <div class="st"><div class="dot"></div><b>取货</b></div>
+                </div>
+                <div class="tiny muted" style="margin-top:12px;text-align:center">支付成功后将自动进入「门店受理」</div>
+              </div>
+
+              <div class="card" style="margin-bottom:12px">
+                <div class="row"><b class="small">分享免单</b><span class="chip ok">2/3</span></div>
+                <div class="row" style="margin-top:8px"><span class="tiny muted">再邀 1 人完成入库</span><b class="small">下次基础套餐免费</b></div>
+                <div class="progress" style="margin-top:8px"><i style="width:66.6%"></i></div>
+                <div class="grid2" style="margin-top:10px">
+                  <div class="stat"><small>已邀请</small><b>2</b></div>
+                  <div class="stat"><small>还需</small><b>1</b></div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="kv"><span>门店</span><span>朝阳路店 · 3 号库位</span></div>
+                <div class="kv"><span>寄存周期</span><span>2026-11-04 至 2027-05-04</span></div>
+                <div class="kv"><span>支付方式</span><span><span class="chip info">微信线上</span></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="homebar"></div>
+        </div>
+        <div class="frame-note">优点：当前阶段与待办动作最突出，适合支付失败回流。<br>风险：Hero 颜色代表状态，需同时用文案表达，避免色盲误读。</div>
+      </div>
+
+      <!-- 2C -->
+      <div class="frame-wrap">
+        <div class="frame-label"><span class="vtag">C</span><b>信息清单 + 吸底操作栏</b><small>高频查单</small></div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><div class="sig"><span>5G</span><i></i></div></div>
+          <div class="navbar"><span class="back">‹</span><span class="title">订单详情</span><span class="more">···</span></div>
+          <div class="scroll">
+            <div class="pad" style="padding-bottom:120px">
+              <div class="row" style="margin-bottom:12px">
+                <div><div class="tiny muted">订单状态</div><div style="font-size:20px;font-weight:700">待支付</div></div>
+                <span class="chip wait">剩余 28:14</span>
+              </div>
+
+              <div class="card" style="padding:0;overflow:hidden;margin-bottom:12px">
+                <div style="padding:12px 14px;background:var(--brand-soft)">
+                  <div class="row"><b class="small">支付</b><span class="chip wechat">微信线上</span></div>
+                  <div class="row" style="margin-top:8px"><span class="tiny muted">应付</span><b class="money" style="font-size:18px;color:var(--danger)">¥89.00</b></div>
+                  <div class="row" style="margin-top:4px"><span class="tiny muted">已付</span><span class="tiny">¥0.00</span></div>
+                </div>
+                <div style="padding:12px 14px">
+                  <div class="row"><div class="small">支付单号</div><span class="tiny muted">WX2026110409410001</span></div>
+                  <div class="dashed"></div>
+                  <div class="row"><div class="small">分享免单</div><span class="chip ok">2/3</span></div>
+                  <div class="progress" style="margin-top:8px"><i style="width:66.6%"></i></div>
+                </div>
+              </div>
+
+              <div class="card" style="padding:0;margin-bottom:12px">
+                <div style="padding:12px 14px"><div class="sec-title" style="margin-bottom:2px">订单信息</div></div>
+                <div style="padding:0 14px 10px">
+                  <div class="kv"><span>套餐</span><span>4 条 · 6 个月</span></div>
+                  <div class="kv"><span>基础 / 增值</span><span class="money">¥69 / ¥20</span></div>
+                  <div class="kv"><span>门店</span><span>朝阳路店</span></div>
+                  <div class="kv"><span>库位</span><span>3 号库位</span></div>
+                  <div class="kv"><span>胎号</span><span>待入库采集</span></div>
+                </div>
+              </div>
+
+              <div class="card">
+                <div class="sec-title">进度</div>
+                <div class="row"><span class="tiny muted">下单 09:41</span><span class="tiny muted">支付待完成</span><span class="tiny muted">入库 —</span><span class="tiny muted">取货 —</span></div>
+                <div class="progress" style="margin-top:8px"><i style="width:25%"></i></div>
+              </div>
+            </div>
+            <div class="bottom">
+              <div class="line"><div class="small muted">应付 <b class="money" style="color:var(--danger)">¥89.00</b></div><span class="tiny muted">已邀 2/3</span></div>
+              <div class="grid2"><div class="btn ghost" style="font-size:13px">取消</div><div class="btn wechat" style="font-size:13px">去支付</div></div>
+            </div>
+            <div class="homebar"></div>
+          </div>
+        </div>
+        <div class="frame-note">优点：信息密度高，适合仓管/客服按单号核对。<br>风险：对 C 端用户偏“工具化”，情绪与引导弱。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 3. 分享 ================= -->
+  <section class="section" id="share">
+    <div class="section-head"><h2>3. 分享页 / 海报</h2><span>已邀 N/3 与实际有效人数</span></div>
+    <p class="section-desc">统计口径按草案 A 规则：被邀请人必须是新用户、完成首单并入库，才计入「有效邀请」。页面同时展示<b>已分享人数</b>与<b>有效邀请数</b>，避免用户误以为“转发就算”。</p>
+
+    <div class="frames">
+      <!-- 3A -->
+      <div class="frame-wrap">
+        <div class="frame-label"><span class="vtag">A</span><b>进度环 + 邀请名单</b><small>关系透明</small></div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><div class="sig"><span>5G</span><i></i></div></div>
+          <div class="navbar"><span class="back">‹</span><span class="title">邀请好友</span><span class="more">···</span></div>
+          <div class="scroll">
+            <div class="pad" style="padding-bottom:110px">
+              <div class="card" style="display:flex;gap:14px;align-items:center;margin-bottom:12px">
+                <div class="ring">
+                  <svg viewBox="0 0 100 100" aria-hidden="true">
+                    <circle cx="50" cy="50" r="44" fill="none" stroke="#EEF0F2" stroke-width="8"/>
+                    <circle cx="50" cy="50" r="44" fill="none" stroke="#0B7A53" stroke-width="8" stroke-dasharray="184 277" stroke-linecap="round" transform="rotate(-90 50 50)"/>
+                  </svg>
+                  <div class="num"><b>2<span style="font-size:14px;color:var(--sub)">/3</span></b><small>有效邀请</small></div>
+                </div>
+                <div style="flex:1">
+                  <div style="font-size:15px;font-weight:700">再邀 1 人</div>
+                  <div class="tiny muted" style="margin-top:4px;line-height:1.6">下次寄存基础套餐（¥69）免单，增值服务不参与。</div>
+                  <span class="chip ok" style="margin-top:8px">奖励 12 个月内有效</span>
+                </div>
+              </div>
+
+              <div class="card" style="margin-bottom:12px">
+                <div class="sec-title">邀请记录 <span class="tiny muted">有效 2 · 待完成 1</span></div>
+                <div class="invite"><span class="avatar">李</span><div style="flex:1"><b class="small">李**</b><div class="tiny muted">尾号 8821 · 已入库</div></div><span class="chip ok">已计入</span></div>
+                <div class="invite"><span class="avatar">王</span><div style="flex:1"><b class="small">王**</b><div class="tiny muted">尾号 9034 · 已入库</div></div><span class="chip ok">已计入</span></div>
+                <div class="invite"><span class="avatar gray">?</span><div style="flex:1"><b class="small">待邀请好友</b><div class="tiny muted">完成首单并入库后计入</div></div><span class="chip">待完成</span></div>
+              </div>
+
+              <div class="card soft">
+                <div class="small"><b>规则摘要</b></div>
+                <div class="tiny muted" style="margin-top:6px;line-height:1.7">仅新用户首单有效；同一手机号/微信/设备只计 1 次；退款或取消将回滚。每年最多发放 4 次免单。</div>
+              </div>
+            </div>
+            <div class="bottom">
+              <div class="btn block">邀请第 3 位好友</div>
+              <div class="tiny muted" style="text-align:center;margin-top:6px">分享到微信 · 复制专属链接</div>
+            </div>
+            <div class="homebar"></div>
+          </div>
+        </div>
+        <div class="frame-note">优点：用户能看懂“还差谁”，客服也便于核对。<br>风险：名单需脱敏；被邀请人状态必须滞后一致，避免刷单质疑。</div>
+      </div>
+
+      <!-- 3B -->
+      <div class="frame-wrap">
+        <div class="frame-label"><span class="vtag">B</span><b>海报卡 + 二维码</b><small>便于转发</small></div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><div class="sig"><span>5G</span><i></i></div></div>
+          <div class="navbar"><span class="back">‹</span><span class="title">生成海报</span><span class="more">···</span></div>
+          <div class="scroll">
+            <div class="pad" style="padding-bottom:120px">
+              <div class="poster">
+                <div class="stamp">已邀<br>2/3</div>
+                <div class="p-kicker">TIRE STORAGE · 邀请有礼</div>
+                <div class="p-title">再邀 1 人<br>下次寄存<em>免单</em></div>
+                <div class="p-note">好友完成首单并入库后生效<br>基础套餐 ¥69 · 增值服务除外</div>
+                <div class="p-foot">
+                  <div class="qr-wrap">
+                    <div class="qr" data-qr="a"></div>
+                    <small>长按识别 · 二维码示意</small>
+                  </div>
+                  <div style="text-align:right">
+                    <div class="tiny" style="opacity:.85">我的邀请码</div>
+                    <div style="font-size:18px;font-weight:700;letter-spacing:.08em">TS8K2M</div>
+                    <div class="tiny" style="opacity:.75;margin-top:2px">仅限新用户首单</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="card" style="margin-top:12px">
+                <div class="row"><b class="small">分享统计</b><span class="tiny muted">数据更新至 09:41</span></div>
+                <div class="grid3" style="margin-top:10px">
+                  <div class="stat"><small>已分享</small><b>5</b></div>
+                  <div class="stat"><small>有效邀请</small><b>2</b></div>
+                  <div class="stat"><small>转化率</small><b>40%</b></div>
+                </div>
+                <div class="tiny muted" style="margin-top:8px;line-height:1.6">分享人数按点击分享/打开链接去重统计；有效邀请按入库订单统计。</div>
+              </div>
+
+              <div class="note" style="margin-top:12px">海报由客户端 Canvas 生成并保存相册，不依赖服务端图片合成；二维码内容为邀请链接短码，过期可刷新。</div>
+            </div>
+            <div class="bottom">
+              <div class="grid2"><div class="btn ghost">保存海报</div><div class="btn">分享到微信</div></div>
+            </div>
+            <div class="homebar"></div>
+          </div>
+        </div>
+        <div class="frame-note">优点：转发物料完整，适合群聊与朋友圈。<br>风险：海报上的“2/3”会过期，需提示重新生成；二维码需短链服务与风控。</div>
+      </div>
+
+      <!-- 3C -->
+      <div class="frame-wrap">
+        <div class="frame-label"><span class="vtag">C</span><b>故事式步骤 + 复制链接</b><small>轻量引导</small></div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><div class="sig"><span>5G</span><i></i></div></div>
+          <div class="navbar"><span class="back">‹</span><span class="title">邀请好友</span><span class="more">···</span></div>
+          <div class="scroll">
+            <div class="pad" style="padding-bottom:110px">
+              <div style="text-align:center;padding:10px 0 16px">
+                <div class="tiny muted">当前免单进度</div>
+                <div style="font-size:34px;font-weight:800;margin-top:4px">2<span style="font-size:16px;color:var(--sub);font-weight:500"> / 3 人</span></div>
+                <div class="progress big" style="margin-top:10px"><i style="width:66.6%"></i></div>
+                <div class="tiny muted" style="margin-top:8px">还差 1 位好友完成入库</div>
+              </div>
+
+              <div class="card" style="margin-bottom:12px">
+                <div class="timeline">
+                  <div class="titem done"><div class="t-main">分享邀请链接</div><div class="t-sub">好友通过你的链接下单</div></div>
+                  <div class="titem done"><div class="t-main">好友完成首单并入库</div><div class="t-sub">系统自动计入 1 位有效邀请</div></div>
+                  <div class="titem"><div class="t-main">集满 3 位，发放免单</div><div class="t-sub">奖励进入账户，可用于下一单基础套餐</div></div>
+                </div>
+              </div>
+
+              <div class="card soft" style="margin-bottom:12px">
+                <div class="row"><div><div class="small"><b>我的邀请链接</b></div><div class="tiny muted" style="margin-top:2px;word-break:break-all">https://www.joho.cn/tire/#/pages/invite?code=TS8K2M</div></div></div>
+                <div class="btn ghost block" style="margin-top:10px;height:38px;font-size:13px">复制链接</div>
+              </div>
+
+              <div class="grid2">
+                <div class="card" style="padding:12px"><div class="tiny muted">已分享</div><b style="font-size:20px">5 人</b></div>
+                <div class="card" style="padding:12px"><div class="tiny muted">有效邀请</div><b style="font-size:20px;color:var(--brand)">2 人</b></div>
+              </div>
+            </div>
+            <div class="bottom">
+              <div class="btn block">生成专属海报</div>
+            </div>
+            <div class="homebar"></div>
+          </div>
+        </div>
+        <div class="frame-note">优点：链路解释清楚，适合首次参与的年轻用户。<br>风险：视觉冲击弱，分享转化可能低于海报版。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 4. 运营看板 ================= -->
+  <section class="section" id="admin">
+    <div class="section-head"><h2>4. 运营端：到账确认与分享统计</h2><span>Strapi 插件内新增面板</span></div>
+    <p class="section-desc">运营端要解决两个现实问题：线下收银谁确认、退款谁复核。看板以 390×844 移动视口示意，实际在 Strapi Admin 内以同结构响应式展开；所有资金操作都必须留操作人、时间、凭证与备注。</p>
+
+    <div class="frames">
+      <!-- 4A -->
+      <div class="frame-wrap">
+        <div class="frame-label"><span class="vtag">A</span><b>KPI + 待办流</b><small>前台/仓管处理</small></div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><div class="sig"><span>5G</span><i></i></div></div>
+          <div class="navbar"><span class="back">‹</span><span class="title">支付与分享</span><span class="more">···</span></div>
+          <div class="scroll">
+            <div class="pad">
+              <div class="grid3" style="margin-bottom:12px">
+                <div class="stat"><small>今日到账</small><b>¥3,480</b></div>
+                <div class="stat"><small>待确认</small><b style="color:var(--warn)">6</b></div>
+                <div class="stat"><small>有效邀请</small><b style="color:var(--brand)">18</b></div>
+              </div>
+
+              <div class="card" style="margin-bottom:12px">
+                <div class="sec-title">待确认到账 <span class="chip wait">6 笔</span></div>
+                <div class="invite" style="align-items:flex-start">
+                  <span class="avatar">TS</span>
+                  <div style="flex:1"><b class="small">TS202611040021 · 到店支付</b><div class="tiny muted">朝阳路店 · 王** · ¥89.00 · 10:02 提交</div></div>
+                  <div style="display:flex;flex-direction:column;gap:5px"><span class="btn-line" style="border-color:var(--brand);color:var(--brand)">确认</span><span class="btn-line">驳回</span></div>
+                </div>
+                <div class="invite" style="align-items:flex-start">
+                  <span class="avatar">TS</span>
+                  <div style="flex:1"><b class="small">TS202611040019 · 取货付款</b><div class="tiny muted">朝阳路店 · 陈** · ¥158.00 · 09:55 申请出库</div></div>
+                  <div style="display:flex;flex-direction:column;gap:5px"><span class="btn-line" style="border-color:var(--brand);color:var(--brand)">确认</span><span class="btn-line">驳回</span></div>
+                </div>
+              </div>
+
+              <div class="card" style="margin-bottom:12px">
+                <div class="sec-title">退款复核 <span class="chip danger">2 笔待审</span></div>
+                <div class="row"><div><b class="small">TS202611030077</b><div class="tiny muted">微信退款 ¥89.00 · 发起人 李**</div></div><span class="btn-line">去复核</span></div>
+                <div class="dashed"></div>
+                <div class="row"><div><b class="small">TS202611020103</b><div class="tiny muted">线下退款 ¥50.00 · 需上传凭证</div></div><span class="btn-line">去复核</span></div>
+              </div>
+
+              <div class="card soft">
+                <div class="sec-title">分享概览 <span class="tiny muted">本周</span></div>
+                <div class="kv"><span>分享人数</span><span>126</span></div>
+                <div class="kv"><span>有效邀请</span><span>18</span></div>
+                <div class="kv"><span>转化率</span><span>14.3%</span></div>
+                <div class="kv"><span>免单发放 / 使用</span><span>5 / 2</span></div>
+              </div>
+            </div>
+            <div class="homebar"></div>
+          </div>
+        </div>
+        <div class="frame-note">优点：把“该我处理的事”放首屏，适合前台与仓管。<br>风险：退款金额阈值与双人复核需在服务端强制，不能只靠 UI。</div>
+      </div>
+
+      <!-- 4B -->
+      <div class="frame-wrap">
+        <div class="frame-label"><span class="vtag">B</span><b>流水台账 + 分享统计条</b><small>对账优先</small></div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><div class="sig"><span>5G</span><i></i></div></div>
+          <div class="navbar"><span class="back">‹</span><span class="title">支付台账</span><span class="more">···</span></div>
+          <div class="scroll">
+            <div class="pad" style="padding-bottom:8px">
+              <div class="row" style="margin-bottom:10px">
+                <span class="chip">全部</span><span class="chip">微信</span><span class="chip">到店</span><span class="chip">取货</span><span class="chip">已退款</span>
+              </div>
+              <div class="card" style="padding:10px 8px;margin-bottom:10px">
+                <table class="table">
+                  <thead><tr><th>时间</th><th>订单</th><th>方式</th><th>金额</th><th>状态</th></tr></thead>
+                  <tbody>
+                    <tr><td>10:02</td><td>…0021</td><td>到店</td><td>¥89.00</td><td><span class="chip wait">待确认</span></td></tr>
+                    <tr><td>09:58</td><td>…0018</td><td>微信</td><td>¥89.00</td><td><span class="chip ok">已到账</span></td></tr>
+                    <tr><td>09:55</td><td>…0019</td><td>取货</td><td>¥158.00</td><td><span class="chip wait">待确认</span></td></tr>
+                    <tr><td>09:31</td><td>…0077</td><td>微信</td><td>¥69.00</td><td><span class="chip danger">退款中</span></td></tr>
+                    <tr><td>09:12</td><td>…0103</td><td>到店</td><td>¥50.00</td><td><span class="chip">已退款</span></td></tr>
+                  </tbody>
+                </table>
+                <div class="tiny muted" style="margin-top:8px">合计到账 ¥336.00 · 待确认 ¥247.00 · 退款 ¥119.00</div>
+              </div>
+
+              <div class="card" style="margin-bottom:10px">
+                <div class="sec-title">分享统计 <span class="tiny muted">今日</span></div>
+                <div class="row"><span class="small muted">分享人数 / 有效邀请 / 转化率</span><span class="small"><b>21 / 6 / 28.6%</b></span></div>
+                <div class="progress" style="margin-top:8px"><i style="width:28.6%"></i></div>
+                <div class="tiny muted" style="margin-top:6px">有效邀请仅统计新用户首单入库，退款自动回滚。</div>
+              </div>
+
+              <div class="card">
+                <div class="sec-title">导出</div>
+                <div class="grid2"><div class="btn ghost" style="height:36px;font-size:12px">导出 CSV</div><div class="btn ghost" style="height:36px;font-size:12px">对账单</div></div>
+                <div class="tiny muted" style="margin-top:8px">导出含支付单号、渠道流水号、订单号、操作人。</div>
+              </div>
+            </div>
+            <div class="homebar"></div>
+          </div>
+        </div>
+        <div class="frame-note">优点：字段贴近财务对账习惯，可直接映射银行/微信账单。<br>风险：小屏表格拥挤，正式后台应改为宽表 + 固定列。</div>
+      </div>
+
+      <!-- 4C -->
+      <div class="frame-wrap">
+        <div class="frame-label"><span class="vtag">C</span><b>三段流水线 + 风控告警</b><small>资金监控</small></div>
+        <div class="phone">
+          <div class="statusbar"><span>9:41</span><div class="sig"><span>5G</span><i></i></div></div>
+          <div class="navbar"><span class="back">‹</span><span class="title">资金与风控</span><span class="more">···</span></div>
+          <div class="scroll">
+            <div class="pad">
+              <div class="grid3" style="margin-bottom:10px">
+                <div class="lane">
+                  <h4>待确认 <span>6</span></h4>
+                  <div class="item"><b>¥89 到店</b><small>…0021 · 10:02</small></div>
+                  <div class="item"><b>¥158 取货</b><small>…0019 · 09:55</small></div>
+                  <div class="item"><b>¥69 到店</b><small>…0044 · 09:40</small></div>
+                </div>
+                <div class="lane">
+                  <h4>已到账 <span>12</span></h4>
+                  <div class="item"><b>¥89 微信</b><small>…0018 · 09:58</small></div>
+                  <div class="item"><b>¥120 微信</b><small>…0012 · 09:22</small></div>
+                  <div class="item"><b>¥69 到店</b><small>…0009 · 09:05</small></div>
+                </div>
+                <div class="lane">
+                  <h4>退款 <span>2</span></h4>
+                  <div class="item"><b>¥69 退款中</b><small>…0077 · 复核中</small></div>
+                  <div class="item"><b>¥50 已退款</b><small>…0103 · 09:12</small></div>
+                </div>
+              </div>
+
+              <div class="card" style="margin-bottom:10px">
+                <div class="sec-title">分享趋势 <span class="tiny muted">近 7 天</span></div>
+                <div class="bar-chart">
+                  <div class="bar" style="height:34%"><i style="height:100%"></i><span>28</span></div>
+                  <div class="bar" style="height:46%"><i style="height:100%"></i><span>29</span></div>
+                  <div class="bar" style="height:58%"><i style="height:100%"></i><span>30</span></div>
+                  <div class="bar" style="height:72%"><i style="height:100%"></i><span>31</span></div>
+                  <div class="bar" style="height:50%"><i style="height:100%"></i><span>01</span></div>
+                  <div class="bar" style="height:86%"><i style="height:100%"></i><span>02</span></div>
+                  <div class="bar" style="height:100%"><i style="height:100%"></i><span>03</span></div>
+                </div>
+              </div>
+
+              <div class="alert danger" style="margin-bottom:8px">风控：同一设备号 3 个账号领取奖励，已自动冻结 1 笔免单。</div>
+              <div class="alert warn" style="margin-bottom:8px">待处理：2 笔退款超过 24 小时未复核，需升级至 tire-admin。</div>
+              <div class="alert info">提示：线下收款需上传收据照片；无凭证的“确认”将被审计标记。</div>
+            </div>
+            <div class="homebar"></div>
+          </div>
+        </div>
+        <div class="frame-note">优点：把资金状态与异常集中，适合管理员每日巡检。<br>风险：三列在手机上过窄，正式版应桌面端呈现并支持钻取。</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 5. 建议 ================= -->
+  <section class="section" id="decide">
+    <div class="section-head"><h2>5. 版式对比与建议</h2><span>供确认后进入实现</span></div>
+    <div class="compare">
+      <table>
+        <thead><tr><th style="width:18%">页面</th><th>推荐</th><th>理由</th><th>需要避免</th></tr></thead>
+        <tbody>
+          <tr><td>支付方式</td><td><b>C</b>（Tab + 面板），次选 A</td><td>三种方式的差异核心在“什么时候付”，C 能逐条解释链路；A 适合作为兜底全量展示。</td><td>不要把三种方式只写成一行单选，用户无法判断未付款会不会入库。</td></tr>
+          <tr><td>订单详情</td><td><b>B</b>（Hero + 步骤条），次选 A</td><td>支付失败回流时，首屏需要明确的“下一步动作”；B 的待办最突出。</td><td>不要只显示“未支付”而不给倒计时与支付入口。</td></tr>
+          <tr><td>分享落地</td><td><b>A</b>（进度环 + 名单）；物料用 B</td><td>A 解释“还差谁”，B 负责转发；两者组合覆盖转化与传播。</td><td>不要把“分享次数”直接当成“有效邀请”。</td></tr>
+          <tr><td>运营看板</td><td><b>A</b>（待办流）+ B 台账</td><td>仓管先处理待确认，财务再对对账台账；C 适合管理员巡检。</td><td>不要允许无凭证确认到账、单人退款。</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="note" style="margin-top:16px">本页为静态 mockup，不含真实支付、分享或后台接口；所有交互仅用于评审。方案确认后再按 PRD 进入实现。</div>
+  </section>
+
+  <footer>
+    轮胎寄存 v2 支付与分享裂变 · Mockup 草案 · 2026-11-04<br>
+    端口 52207 · 数据均为示意 · 二维码不可扫描 · 未提交、未部署任何生产代码
+  </footer>
+</div>
+
+<script>
+(function(){
+  function isOn(x,y){
+    var s=((x*7+y*13+((x*y)%5))%11);
+    return s<4;
+  }
+  document.querySelectorAll('.qr').forEach(function(qr){
+    var seed=qr.getAttribute('data-qr')==='b'?3:0;
+    for(var y=0;y<11;y++){
+      for(var x=0;x<11;x++){
+        var b=document.createElement('b');
+        var finder=((x<4&&y<4)||(x>6&&y<4)||(x<4&&y>6));
+        var on=finder?((x===0||x===3||y===0||y===3||(x===1&&y===1)||(x===2&&y===1)||(x===1&&y===2))):isOn(x+seed,y);
+        if(!on)b.className='off';
+        qr.appendChild(b);
+      }
+    }
+  });
+})();
+</script>
+</body>
+</html>

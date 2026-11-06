@@ -1,0 +1,46 @@
+/**
+ * 设计令牌：冰雪蓝 + 暖橙（规格 §11.2）
+ * 尺寸按 rpx，设计基准 750；颜色统一走 CSS 变量，组件内直接 var(--xxx)
+ */
+:root {
+  --color-primary: #2563eb;
+  --color-primary-soft: #dbeafe;
+  --color-primary-text: #1e3a8a;
+  --color-primary-deep: #1d4ed8;
+  --color-accent: #e0523f;
+  --color-accent-soft: #fdecea;
+  --color-bg: #f5f7fa;
+  --color-surface: #ffffff;
+  --color-text: #171717;
+  --color-text-muted: #52525b;
+  --color-border: rgba(23, 23, 23, 0.12);
+  --color-border-soft: rgba(37, 99, 235, 0.14);
+  --color-success: #15803d;
+  --color-success-soft: #e7f6ec;
+  --color-warning: #b45309;
+
+  --radius-sm: 16rpx;
+  --radius-card: 24rpx;
+  --radius-pill: 999rpx;
+
+  --shadow-card: 0 8rpx 28rpx rgba(30, 58, 138, 0.06);
+  --shadow-float: 0 -8rpx 24rpx rgba(30, 58, 138, 0.08);
+
+  --space-page: 24rpx;
+  --font-title: 40rpx;
+  --font-section: 32rpx;
+  --font-body: 28rpx;
+  --font-small: 24rpx;
+  --font-tiny: 20rpx;
+}
+
+/* SCSS 变量仅作为编译期别名，页面样式统一使用上面的 CSS 变量 */
+$color-primary: #2563eb;
+$color-primary-soft: #dbeafe;
+$color-primary-text: #1e3a8a;
+$color-accent: #e0523f;
+$color-bg: #f5f7fa;
+$color-surface: #ffffff;
+$color-text: #171717;
+$color-text-muted: #52525b;
+$color-border: rgba(23, 23, 23, 0.12);
